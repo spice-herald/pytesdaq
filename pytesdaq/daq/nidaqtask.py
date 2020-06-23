@@ -211,7 +211,7 @@ class NITask(Task):
 
 
         # fill useful container
-        self._nb_samples = config_dict['nb_samples']
+        self._nb_samples = int(config_dict['nb_samples'])
         self._nb_channels = len(channel_list)
 
 
@@ -221,7 +221,10 @@ class NITask(Task):
 
 
         # sampling rate / trigger mode (continuous vs finite)
-        buffer_length = int(config_dict['sample_rate'])
+        buffer_length = self._nb_samples
+        if config_dict['trigger_type']==1:
+            buffer_length = int(config_dict['sample_rate'])
+
         if 'buffer_length' in config_dict:
             buffer_length =config_dict['buffer_length']
                
@@ -231,11 +234,12 @@ class NITask(Task):
         else:
             mode = nidaqmx.constants.AcquisitionType.FINITE
 
-                
+
         self.timing.cfg_samp_clk_timing(int(config_dict['sample_rate']),
                                         sample_mode=mode,
                                         samps_per_chan=buffer_length)
-       
+    
+                   
 
 
         # low pass filter (PCI-6120 only)
@@ -327,7 +331,7 @@ class NITask(Task):
             print('ERROR: "read_single_event" only for finite data, not continuous!')
             return
 
-                            
+                    
         # start task
         self.start()
         
@@ -335,9 +339,10 @@ class NITask(Task):
         run_continue = True
         while(run_continue):
             run_continue = not self.is_task_done()
-            time.sleep(0.01)   
+            time.sleep(0.005)   
 
         self.stop()
+        
         if do_clear_task:
             self.clear_task()
         
@@ -367,10 +372,8 @@ class NITask(Task):
                 self._ni_reader.read_int16(self._data_array,number_of_samples_per_channel=self._nb_samples,
                                            timeout=nidaqmx.constants.WAIT_INFINITELY)
                 
+
             self._event_counter+=1
-            print(self._data_array)
-            if self._is_continuous and  self._event_counter==3:
-                self.stop()
 
         except nidaqmx.errors.DaqWarning as warn:
             print('WARNING: ' + str(warn))
