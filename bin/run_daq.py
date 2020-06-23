@@ -123,29 +123,29 @@ if __name__ == "__main__":
     # ========================
     # Run DAQ
     # ======================== 
-    daq = daq.DAQ(driver_name = daq_driver,
-                  facility = facility,
-                  verbose = verbose)
-
+    mydaq = daq.DAQ(driver_name = daq_driver,
+                    facility = facility,
+                    verbose = verbose)
+    
     # process lock 
     if disable_lock:
-        daq.lock_daq = False
+        mydaq.lock_daq = False
 
     # log file
     if log_file:
-        daq.log_file = log_file
+        mydaq.log_file = log_file
         
     # configuration
-    daq.set_adc_config_from_dict(adc_config)
+    mydaq.set_adc_config_from_dict(adc_config)
     if det_config:
-        daq.set_detector_config(det_config)
+        mydaq.set_detector_config(det_config)
 
     # run
-    success = daq.run(run_time, run_type, run_comment)
+    success = mydaq.run(run_time, run_type, run_comment)
   
     if (success):
         print('Data taking done successfully!')
 
-    daq.clear()  
+    mydaq.clear()  
 
 
