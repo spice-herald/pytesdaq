@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
     
     if (argc != 2) {
         cout << "WIN\tError: run the program as follows" << endl;
-        cout << "\t\t\t.\\sc_setIb.exe Ib_new" << endl;
+        cout << "\t\t\t.\\sc_setIaux.exe Iaux_new mode [mode: 0 for low / 1 for high]" << endl;
         return 1;
     }
 
@@ -22,8 +22,7 @@ int main(int argc, char** argv) {
     // Connect to electronics
     MA_initUSB(&error, baud, timeout);
     errorout(error);
-    
-    setIb(channel, error, stod(argv[1]));
+    setIaux(channel, error, stod(argv[1]), stod(argv[2]));
     
     MA_closeUSB(&error);
     errorout(error);

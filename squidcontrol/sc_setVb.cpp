@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
     
     if (argc != 2) {
         cout << "WIN\tError: run the program as follows" << endl;
-        cout << "\t\t\t.\\sc_setIb.exe Ib_new" << endl;
+        cout << "\t\t\t.\\sc_setVb.exe Vb_new" << endl;
         return 1;
     }
 
@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     MA_initUSB(&error, baud, timeout);
     errorout(error);
     
-    setIb(channel, error, stod(argv[1]));
+    setVb(channel, error, stod(argv[1]));
     
     MA_closeUSB(&error);
     errorout(error);

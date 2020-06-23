@@ -4,7 +4,7 @@
 #include <chrono>
 #include <string>
 #include "magsv.h"
-#include "squidcontrol_functions.cpp"
+#include "sc_functions.cpp"
 
 using namespace std;
 
