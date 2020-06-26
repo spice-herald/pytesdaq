@@ -7,7 +7,7 @@ import walrus as wsredis
 import struct
 
 
-class RedisCore(object):
+class RedisCore:
     """
     TBD
     """
@@ -16,10 +16,10 @@ class RedisCore(object):
         """
         Args:
         """
-        self.cnx = None
-        self.host = None
-        self.port = None
-        self.password = None
+        self._cnx = None
+        self._host = None
+        self._port = None
+        self._password = None
  
 
 
@@ -32,9 +32,9 @@ class RedisCore(object):
         if use_config:
             self._extract_redis_info()
 
-        if self.cnx is None:
-            self.cnx = wsredis.Database(host=self.host,
-                                        port=self.port,
+        if self._cnx is None:
+            self._cnx = wsredis.Database(host=self._host,
+                                        port=self._port,
                                         db=0)
         
    
@@ -44,7 +44,7 @@ class RedisCore(object):
         """
         TDB
         """
-        if self.cnx is None:
+        if self._cnx is None:
             self.connect()
 
         table_dict = dict()
@@ -56,7 +56,7 @@ class RedisCore(object):
 
         try:
             
-            hash_table =  self.cnx.Hash(hash_name)
+            hash_table =  self._cnx.Hash(hash_name)
             hash_table.update(table_dict)
         except:
             pass
@@ -67,7 +67,7 @@ class RedisCore(object):
         TBD
         """
 
-        if self.cnx is None:
+        if self._cnx is None:
             self.connect()
             
         val = []
@@ -89,7 +89,7 @@ class RedisCore(object):
         TBD
         """
 
-        if self.cnx is None:
+        if self._cnx is None:
             self.connect()
         
         if isinstance(keys, str):
@@ -97,7 +97,7 @@ class RedisCore(object):
 
         output_dict = dict()
         try:
-            hash_table =  self.cnx.Hash(hash_name)
+            hash_table =  self._cnx.Hash(hash_name)
             if keys:
                 for key in keys:
                     vals = hash_table.search(key)
@@ -118,7 +118,7 @@ class RedisCore(object):
         """
         TBD
         """
-        if self.cnx is None:
+        if self._cnx is None:
             self.connect()
         
 
@@ -144,7 +144,7 @@ class RedisCore(object):
         """
         TBD
         """
-        if self.cnx is None:
+        if self._cnx is None:
             self.connect()
         
         data_array = []
@@ -174,9 +174,9 @@ class RedisCore(object):
     def _extract_redis_info(self):
 
         info = config.get_redis_info()
-        self.host = info["host"]
-        self.port = info["port"]
-        self.password = info["password"]
+        self._host = info["host"]
+        self._port = info["port"]
+        self._password = info["password"]
       
     
 
