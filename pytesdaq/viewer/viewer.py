@@ -8,7 +8,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as NavigationToolbar
 from matplotlib.figure import Figure
 from pytesdaq.viewer import readout
-
+from glob import glob
+import os
 
 class MainWindow(QtWidgets.QMainWindow):
     
@@ -16,6 +17,14 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         
        
+
+        # initialize attribute
+        self._data_source = 'redis'
+        self._file_list = list()
+        self._select_hdf5_dir = False
+        self._default_data_dir = '/data/analysis'
+
+
         # initalize main window
         self.setWindowModality(QtCore.Qt.NonModal)
         self.resize(900, 700)
@@ -37,30 +46,32 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
         # setup frames
-        self._setup_main_frame()
-        self._setup_title_frame()
-        self._setup_control_frame()
-        self._setup_display_frame()
-        self._setup_channel_frame()
-        self._setup_tools_frame()
+        self._init_main_frame()
+        self._init_title_frame()
+        self._init_control_frame()
+        self._init_display_frame()
+        self._init_channel_frame()
+        self._init_tools_frame()
+
+        # temporary
+        self._tools_frame.setEnabled(False)
         self.show()
         
 
         # run control
         self._is_running = False
         self._stop_request = False
-        self._data_source = 'niadc'
+   
 
-
-        # initialize readout
+         # initialize readout
         self._readout = []
         self.initialize_readout()
 
 
 
     def initialize_readout(self):
-        self._readout = readout.Readout(data_source = self._data_source)
-        self._readout.register_ui(self._axes,self._canvas,
+        self._readout = readout.Readout()
+        self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
                                   self._channels_color_map)
         
     
@@ -83,20 +94,103 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._is_running:
             self._readout.stop_run()
             self._is_running=False
-            self.statusBar().showMessage('Display Stopped')
+            self.statusBar().showMessage("Display Stopped")
+            
         else:
-            self.statusBar().showMessage('Running...')
+           
+            if self._data_source  == 'niadc':
+                status = self._readout.configure('niadc',adc_name="adc1",channel_list=[0,1,2],
+                                        sample_rate=1250000)
+
+                # error
+                if isinstance(status,str):
+                    self.statusBar().showMessage(status)
+                    return
+
+            elif self._data_source  == 'hdf5':
+                
+                # check selection done
+                if not self._file_list:
+                    self.statusBar().showMessage("WARNING: No files selected!")  
+                    return
+
+                status = self._readout.configure('hdf5', file_list = self._file_list)
+
+                # error
+                if isinstance(status,str):
+                    self.statusBar().showMessage(status)
+                    return
+            
+            else:
+                self.statusBar().showMessage("WARNING: Redis not implemented")  
+                return
+
+            self.statusBar().showMessage("Running...")
             self._is_running=True
-            self._readout.configure(adc_name='adc1',channel_list=[0,1,2],
-                                    sample_rate=1250000)
             self._readout.run(do_plot=True)
+
+
             
+    def _handle_source_selection(self):
+        
+        # get source
+        data_source = str(self._source_combobox.currentText())
+        
+        # select tab
+        if data_source== "Redis":
+            self._data_source  = 'redis'
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"redisTab"))
+        elif data_source== "HDF5":
+            self._data_source  = 'hdf5'
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"hdf5Tab"))
+        elif data_source== "ADC Device":
+            self._data_source  = 'niadc'
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"deviceTab"))
+        else:
+            print("WARNING: Unknown selection")
+
+
+
+    def _handle_hdf5_selection_type(self):
+
+        if self._hdf5_dir_radiobutton.isChecked():
+            self._select_hdf5_dir = True
+        else:
+            self._select_hdf5_dir = False
+                
+
+    def _handle_hdf5_selection(self):
+        """
+        Handle hdf5 selection. 
+        Called when clicking on select HDF5
+        """
+        options = QtWidgets.QFileDialog.Options()
+        options |= QtWidgets.QFileDialog.DontUseNativeDialog
+
+        files = list()
+        if not self._select_hdf5_dir:
+            files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,"Select File (s)",self._default_data_dir,
+                                                              "HDF5 Files (*.hdf5)", 
+                                                              options=options)
+        else:
+            options |= QtWidgets.QFileDialog.ShowDirsOnly  | QtWidgets.QFileDialog.DontResolveSymlinks
             
+            dir = QtWidgets.QFileDialog.getExistingDirectory(self,"Select Directory",self._default_data_dir,
+                                                     options=options)
+                                 
+
+            if os.path.isdir(dir):
+                files = glob(dir+'/*_F*.hdf5')
+
+        if not files:
+            self.statusBar().showMessage('No file have been selected!')
+        else:
+            self.statusBar().showMessage('Number of files selected = ' + str(len(files)))
+            self._file_list = files
+            self._file_list.sort()
 
 
-
-
-    def _setup_main_frame(self):
+    def _init_main_frame(self):
         
        
         # add main widget
@@ -111,7 +205,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.statusBar().showMessage('Status information')
         
 
-    def _setup_title_frame(self):
+    def _init_title_frame(self):
 
         # add title frame
         self._title_frame = QtWidgets.QFrame(self._central_widget)
@@ -181,7 +275,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._status_textbox.setText("  Stopped")
         '''
 
-    def _setup_control_frame(self):
+
+
+    def _init_control_frame(self):
         
         # add control frame
         self._control_frame = QtWidgets.QFrame(self._central_widget)
@@ -211,7 +307,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source_tabs.setTabBarAutoHide(False)
         self._data_source_tabs.setObjectName("sourceTabs")
 
+        # ---------
         # Redis tab
+        # ---------
         self._redis_tab = QtWidgets.QWidget()
         font = QtGui.QFont()
         font.setStrikeOut(False)
@@ -223,25 +321,64 @@ class MainWindow(QtWidgets.QMainWindow):
         self._redis_tab.setObjectName("redisTab")
         self._data_source_tabs.addTab(self._redis_tab, "Redis")
 
+        # --------
         # HDF5 tab
+        # --------
         self._hdf5_tab = QtWidgets.QWidget()
         self._hdf5_tab.setEnabled(True)
         self._hdf5_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
         self._hdf5_tab.setObjectName("hdf5Tab")
         self._data_source_tabs.addTab(self._hdf5_tab, "HDF5")
+        
+        
+        self._hdf5_file_radiobutton =  QtWidgets.QRadioButton(self._hdf5_tab)
+        self._hdf5_file_radiobutton.setGeometry(QtCore.QRect(120, 40, 101, 25))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self._hdf5_file_radiobutton.setFont(font)
+        self._hdf5_file_radiobutton.setText("Files")
+        self._hdf5_file_radiobutton.setChecked(True)
 
+        self._hdf5_dir_radiobutton =  QtWidgets.QRadioButton(self._hdf5_tab)
+        self._hdf5_dir_radiobutton.setGeometry(QtCore.QRect(120, 65, 101, 25))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self._hdf5_dir_radiobutton.setFont(font)
+        self._hdf5_dir_radiobutton.setText("Directory")
+        
+
+
+
+        self._hdf5_select_button = QtWidgets.QPushButton(self._hdf5_tab)
+        self._hdf5_select_button.setGeometry(QtCore.QRect(36, 32, 71, 65))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self._hdf5_select_button.setFont(font)
+        self._hdf5_select_button.setStyleSheet("background-color: rgb(162, 162, 241);")
+        self._hdf5_select_button.setObjectName("fileSelectButton")
+        self._hdf5_select_button.setText("Select \n" "Files/Dir")
+       
+
+
+        
+        # -------------
         # NI device tab
+        # -------------
         self._niadc_tab = QtWidgets.QWidget()
         self._niadc_tab.setEnabled(True)
         self._niadc_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
         self._niadc_tab.setObjectName("deviceTab")
-        self._data_source_tabs.addTab(self._niadc_tab, "NIADC")
+        self._data_source_tabs.addTab(self._niadc_tab, "ADC Device")
 
 
-
+        # -----------------
         # source selection combox box
+        # -----------------
         self._source_combobox = QtWidgets.QComboBox(self._control_frame)
-        self._source_combobox.setGeometry(QtCore.QRect(10, 36, 87, 23))
+        self._source_combobox.setGeometry(QtCore.QRect(10, 36, 110, 23))
         font = QtGui.QFont()
         font.setBold(False)
         font.setWeight(50)
@@ -249,23 +386,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self._source_combobox.setObjectName("sourceComboBox")
         self._source_combobox.addItem("Redis")
         self._source_combobox.addItem("HDF5")
-        self._source_combobox.addItem("NI ADC")
+        self._source_combobox.addItem("ADC Device")
 
         # combo box label
         source_label = QtWidgets.QLabel(self._control_frame)
-        source_label.setGeometry(QtCore.QRect(12, 16, 59, 15))
+        source_label.setGeometry(QtCore.QRect(12, 16, 100, 15))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
         source_label.setFont(font)
         source_label.setObjectName("sourceLabel")
-        source_label.setText("Source:")
+        source_label.setText("Data Source:")
 
 
-
-        # display control button
+        # --------------
+        # display control
+        # --------------
         self._display_control_button = QtWidgets.QPushButton(self._control_frame)
-        self._display_control_button.setGeometry(QtCore.QRect(136, 12, 91, 65))
+        self._display_control_button.setGeometry(QtCore.QRect(142, 12, 91, 65))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -274,13 +412,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._display_control_button.setObjectName("displayControlButton")
         self._display_control_button.setText("Display \n" "Waveform")
     
+        
 
-
-        # connect buttobs
+        # ---------------
+        # connect buttons
+        # ---------------
         self._display_control_button.clicked.connect(self._handle_display)
-
-
-    def _setup_display_frame(self):
+        self._hdf5_select_button.clicked.connect(self._handle_hdf5_selection)
+        self._hdf5_dir_radiobutton.toggled.connect(self._handle_hdf5_selection_type)
+        self._source_combobox.activated.connect(self._handle_source_selection)
+       
+        
+    def _init_display_frame(self):
 
 
         # frame
@@ -314,7 +457,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
 
-    def _setup_channel_frame(self):
+    def _init_channel_frame(self):
         
         # channel frame
         self._channel_frame = QtWidgets.QFrame(self._central_widget)
@@ -373,7 +516,7 @@ class MainWindow(QtWidgets.QMainWindow):
             button.setObjectName("chanButton_" + str(ichan))
             self._channel_buttons[ichan] = button
 
-    def _setup_tools_frame(self):
+    def _init_tools_frame(self):
         
         # create frame
         self._tools_frame = QtWidgets.QFrame(self._central_widget)

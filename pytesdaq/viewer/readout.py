@@ -1,22 +1,22 @@
+import time
 import numpy as np
+from PyQt5.QtCore import QCoreApplication
+from matplotlib import pyplot as plt
 import pytesdaq.daq as daq
 import pytesdaq.config.settings as settings
 from pytesdaq.utils import  arg_utils
-import numpy as np
-from PyQt5.QtCore import QCoreApplication
-import time
-from matplotlib import pyplot as plt
-
+import pytesdaq.io.redis as redis
+import pytesdaq.io.hdf5 as hdf5
 
 class Readout:
     
-    def __init__(self,data_source='redis'):
+    def __init__(self):
             
         
         #self._web_scope = web_scope
 
         # data source: 
-        self._data_source = data_source
+        self._data_source = 'redis'
 
 
         # initialize db/adc
@@ -33,46 +33,44 @@ class Readout:
         self._data_config = dict()
 
         # qt UI
-        self._is_qt = False
+        self._is_qt_ui = False
         self._axes=[]
         self._canvas = []
+        self._status_bar = []
         self._colors = dict()
         #self._colors = ['k','r','b','g','m','c','y','r']
         
 
 
-    def register_ui(self,axes,canvas,colors):
-        self._is_qt = True
+    def register_ui(self,axes,canvas,status_bar,colors):
+        self._is_qt_ui = True
         self._axes = axes
         self._canvas = canvas
+        self._status_bar = status_bar
 
         # need to divide by 255
         for key,value in colors.items():
             color = (value[0]/255, value[1]/255,value[2]/255)
             self._colors[key] = color
   
-        
 
 
-    def configure(self,adc_name = str(), channel_list=[],
+
+    def configure(self,data_source, adc_name = str(), channel_list=[],
                   sample_rate=[], trace_length=[],
-                  voltage_min=[], voltage_max=[],
-                  trigger_type=[]):
+                  voltage_min=[], voltage_max=[],trigger_type=[],
+                  file_list=[]):
         
+
         
         # check if running
         if self._is_running:
             print('WARNING: Need to stop display first')
             return False
-
-
-
-
-        # check
-        if not channel_list or not adc_name:
-            error_msg = 'ERROR: Missing channel list or adc name!'
-            return error_msg
             
+        # data source 
+        self._data_source = data_source
+
 
 
         # read configuration file
@@ -81,6 +79,11 @@ class Readout:
 
         # NI ADC source
         if self._data_source == 'niadc':
+
+            # check
+            if not channel_list or not adc_name:
+                error_msg = 'ERROR: Missing channel list or adc name!'
+                return error_msg
 
             # instantiate daq
             self._daq  = daq.DAQ(driver_name = 'pydaqmx',verbose = False)
@@ -112,11 +115,7 @@ class Readout:
             adc_config[adc_name] =  self._data_config
             self._daq.set_adc_config_from_dict(adc_config)
 
-
-    
-
-
-
+  
         # Redis
         elif self._data_source == 'redis':
 
@@ -126,9 +125,15 @@ class Readout:
         
         # hdf5
         elif self._data_source == 'hdf5':
-            print('HDF5...')
-            pass
 
+            if not file_list:
+                error_msg = 'ERROR from readout: No files provided'
+                return error_msg
+
+            self._hdf5 = hdf5.H5Core()
+            self._hdf5.set_files(file_list)
+            
+      
     
         return True
 
@@ -167,13 +172,26 @@ class Readout:
         while (not self._do_stop_run):
             
             # event QT process
-            if self._is_qt:
+            if self._is_qt_ui:
                 QCoreApplication.processEvents()
                 
 
             # get traces
             if self._data_source == 'niadc':
                 self._daq.read_single_event(self._data_array, do_clear_task=False)
+
+            elif self._data_source == 'hdf5':
+                self._data_array, self._data_config = self._hdf5.read_event(include_metadata=True,adc_name='adc1')
+
+                if isinstance(self._data_array,str):
+                    if self._is_qt_ui:
+                        self._status_bar.showMessage('INFO: ' + self._data_array)
+                    break
+                self._data_config['channel_list'] = self._data_config['adc_channel_indices']
+
+                if 'event_num' in self._data_config and self._is_qt_ui:
+                    self._status_bar.showMessage('INFO: EventNumber = ' + str(self._data_config['event_num']))
+            
             else:
                 print('Not implemented')
                 
