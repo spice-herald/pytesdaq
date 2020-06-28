@@ -666,7 +666,7 @@ class Control:
                 else:
                     param_val= 1
 
-            elif self._squid_controller=='magicon':
+            elif self._squid_controller=='magnicon':
                 print('Magnicon')
             else:
                 print('ERROR: Unknow SQUID controller "' + 
@@ -747,7 +747,7 @@ class Control:
                 elif param_name == 'signal_gen_tes_connected':
                     feb.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
-        elif self._squid_controller=='magicon' and not self._dummy_mode:
+        elif self._squid_controller=='magnicon' and not self._dummy_mode:
             # Magnicon
             print('Magnicon')
             
