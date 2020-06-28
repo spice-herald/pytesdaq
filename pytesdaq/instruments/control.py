@@ -210,7 +210,7 @@ class Control:
         return True  
             
 
-    def set_feelback_polarity(self, do_invert, 
+    def set_feedback_polarity(self, do_invert, 
                                    tes_channel=str(),
                                    detector_channel= str(),
                                    adc_id=str(), adc_channel=str()):
