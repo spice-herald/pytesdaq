@@ -486,3 +486,24 @@ class Config:
 
         return info
 
+
+
+    def get_magnicon_connection_info(self):
+        """
+        Returns a dictionary with the magnicon SSH connection info
+        """
+        info = dict()
+
+        try:
+            info['hostname'] = self._get_setting('magnicon', 'hostname')
+            info['username'] = self._get_setting('magnicon', 'username')
+            info['port'] = self._get_setting('magnicon', 'port')
+            info['rsa_key'] = self._get_setting('magnicon', 'rsa_key')
+            info['log_file'] = self._get_setting('magnicon', 'log_file')
+        except:
+            print('ERROR: Could not get complete connection info for Magnicon')
+
+        return info
+
+
+
