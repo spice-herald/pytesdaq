@@ -207,7 +207,7 @@ class Remote(object):
 
 
 
-    def close_session(self):
+    def close_connection(self):
         """
         Close ssh session
         """
@@ -234,7 +234,7 @@ class Remote(object):
             traceback.print_exc()
             print('Closing connection to ' + self._hostname)
             try:
-                self.close_session()
+                self.close_connection()
             except:
                 pass
             return 0
@@ -256,7 +256,7 @@ class Remote(object):
                     if len(x) == 0:
                         sys.stdout.write("*** Received EOF from %s. Closing session. ***" % self._hostname)
                         sys.stdout.flush()
-                        self.close_session()
+                        self.close_connection()
                         return 'EOF'
                     else:
                         return x
@@ -267,7 +267,7 @@ class Remote(object):
             traceback.print_exc()
             print('Closing connection to ' + self._hostname)
             try:
-                self.close_session()
+                self.close_connection()
             except:
                 pass
             return ''
