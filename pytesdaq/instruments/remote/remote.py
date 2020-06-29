@@ -211,9 +211,13 @@ class Remote(object):
         """
         Close ssh session
         """
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._oldtty)
-        self._channel.close()
-        self._transport.close()
+
+        try:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._oldtty)
+            self._channel.close()
+            self._transport.close()
+        except:
+            pass
 
 
 
@@ -222,6 +226,15 @@ class Remote(object):
         Send a command to the remote computer. Append '\n' to the command
         if not present. Returns number of bytes sent.
         """
+
+        if not self._transport.is_active():
+            print('ERROR: Cannot send command. Transport not active.')
+            print('Closing connection to ' + self._hostname)
+            try:
+                self.close_connection()
+            except:
+                pass
+            return 0
 
         if command[-1] != '\n':
             command = command + '\n'
@@ -247,6 +260,13 @@ class Remote(object):
         Returns the string "EOF" if the connection is terminated. (not an actual EOF character)
         Returns the string "" if no output is recevied.
         """
+
+
+        if not self._transport.is_active():
+            print('ERROR: Cannot send command. Transport not active.')
+            print('Closing connection to ' + self._hostname)
+            try:
+                self.close_connection()                                                                                                                                   except:                                                                                                                                                           pass                                                                                                                                                      return 0
 
         try:
             r, w, e = select.select([self._channel, sys.stdin], [], [], 0.1)
