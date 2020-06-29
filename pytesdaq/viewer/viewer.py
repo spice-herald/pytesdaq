@@ -95,6 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._readout.stop_run()
             self._is_running=False
             self.statusBar().showMessage("Display Stopped")
+            self._set_display_button(False)
             
         else:
            
@@ -126,6 +127,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
             self.statusBar().showMessage("Running...")
+
+            
+
+            # run 
+            self._set_display_button(True)
             self._is_running=True
             self._readout.run(do_plot=True)
 
@@ -139,13 +145,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # select tab
         if data_source== "Redis":
             self._data_source  = 'redis'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"redisTab"))
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
+                                                                                     "redisTab"))
         elif data_source== "HDF5":
             self._data_source  = 'hdf5'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"hdf5Tab"))
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
+                                                                                     "hdf5Tab"))
         elif data_source== "ADC Device":
             self._data_source  = 'niadc'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,"deviceTab"))
+            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
+                                                                                     "deviceTab"))
         else:
             print("WARNING: Unknown selection")
 
@@ -170,13 +179,11 @@ class MainWindow(QtWidgets.QMainWindow):
         files = list()
         if not self._select_hdf5_dir:
             files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,"Select File (s)",self._default_data_dir,
-                                                              "HDF5 Files (*.hdf5)", 
-                                                              options=options)
+                                                              "HDF5 Files (*.hdf5)", options=options)
         else:
             options |= QtWidgets.QFileDialog.ShowDirsOnly  | QtWidgets.QFileDialog.DontResolveSymlinks
-            
-            dir = QtWidgets.QFileDialog.getExistingDirectory(self,"Select Directory",self._default_data_dir,
-                                                     options=options)
+            dir = QtWidgets.QFileDialog.getExistingDirectory(self,"Select Directory",
+                                                             self._default_data_dir,options=options)
                                  
 
             if os.path.isdir(dir):
@@ -306,7 +313,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source_tabs.setTabsClosable(False)
         self._data_source_tabs.setTabBarAutoHide(False)
         self._data_source_tabs.setObjectName("sourceTabs")
-
+       
         # ---------
         # Redis tab
         # ---------
@@ -578,9 +585,16 @@ class MainWindow(QtWidgets.QMainWindow):
         print("Exiting Pulse Display UI")
         
 
-
+    def _set_display_button(self,do_run):
         
-
+        if do_run:
+            self._display_control_button.setStyleSheet("background-color: rgb(0, 255, 0);")
+            self._display_control_button.setText("Stop \n" "Display")
+        else:
+            self._display_control_button.setStyleSheet("background-color: rgb(255, 0, 0);")
+            self._display_control_button.setText("Display \n" "Waveform")
+        
+        
 
 
 
