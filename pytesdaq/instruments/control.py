@@ -49,9 +49,24 @@ class Control:
                 self._feb_inst = feb.FEB(address)
             else:
                 print('ERROR: Unable to find GPIB address')
-            
-        
 
+    	# Magnicon
+        if self._squid_controller == 'magnicon' and not self._dummy_mode:
+            ssh_conn_info = self._config.get_ssh_connection_info()
+            if ssh_conn_info:
+                if self._verbose:
+                    print('SSH connection info for Magnicon:')
+                    print('Hostname:', ssh_conn_info['hostname'])
+                    print('Username:', ssh_conn_info['username'])
+                    print('Port:', ssh_conn_info['port'])
+                    print('RSA key:', ssh_conn_info['rsa_key'])
+                    print('Log file', ssh_conn_info['log_file'])
+            self._remote = remote.Remote(hostname=ssh_conn_info['hostname'],
+                                         port=ssh_conn_info['port'],
+                                         username=ssh_conn_info['username'],
+                                         auth_method='rsa',
+                                         auth_val=ssh_conn_info['rsa_key'],
+                                         log_file=ssh_conn_info['log_file'])
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
@@ -667,9 +682,52 @@ class Control:
                     param_val= 1
 
             elif self._squid_controller=='magnicon':
-                print('Magnicon')
+
+                if self._verbose:
+                    print('Getting setting "' + param_name + '" from Magnicon')
+                    print('(channel = ' + str(controller_channel) + ')')
+
+                if not self._dummy_mode:
+                    if param_name == 'tes_bias':
+                        # param_val = magnicon.get_phonon_qet_bias(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'squid_bias':
+                        # param_val = magnicon.get_phonon_squid_bias(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'lock_point':
+                        # param_val = magnicon.get_phonon_lock_point(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'feedback_gain':
+                        # param_val = magnicon.get_phonon_feedback_gain(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'output_offset':
+                        # param_val = magnicon.get_phonon_offset(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'output_gain':
+                        # param_val = magnicon.get_phonon_output_gain(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'feedback_polarity':
+                        # param_val = magnicon.get_phonon_feedback_polarity(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'feedback_open':
+                        # param_value = magnicon.is_phonon_feedback_open(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'source_preamp':
+                        # param_val = magnicon.is_phonon_source_preamp(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'signal_gen_feedback_connection':
+                        # param_val = magnicon.is_signal_generator_feedback_connected(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    elif param_name == 'signal_gen_tes_connection':
+                        # param_val = magnicon.is_signal_generator_tes_connected(controller_channel)
+                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    else:
+                        pass
+                else:
+                    param_val= 1
+
             else:
-                print('ERROR: Unknow SQUID controller "' + 
+                print('ERROR: Unknown SQUID controller "' + 
                       self._squid_controller + '"!')
 
         else:
