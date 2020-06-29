@@ -18,7 +18,7 @@ class Remote(object):
     Use ssh connection to remote computer, using Python paramiko library
     """
 
-    def __init__(self, hostname='', port=22, username='', auth_method='rsa', auth_val='', log_file='')
+    def __init__(self, hostname='', port=22, username='', auth_method='rsa', auth_val='', log_file=''):
         """
         Initialize class with hostname, port, username,
         authentication method (rsa, dss, or password),
@@ -113,7 +113,8 @@ class Remote(object):
             key = paramiko.DSSKey.from_private_key_file(self._rsa_key)
         except paramiko.PasswordRequiredException:
             password = getpass.getpass("DSS key password: ")
-            key = paramiko.RSAKey.from_private_key_file(self._rsa_key, password)                                                                                      transport.auth_publickey(self._username, key)                                                                                                         
+            key = paramiko.RSAKey.from_private_key_file(self._rsa_key, password)
+        transport.auth_publickey(self._username, key)
         if not transport.is_authenticated():
             print("*** Authentication failed.")
             transport.close()
@@ -248,7 +249,7 @@ class Remote(object):
         """
 
         try:
-            r, w, e = select.select([self._channel], [], [])
+            r, w, e = select.select([self._channel, sys.stdin], [], [], 0.1)
             if self._channel in r:
                 try:
                     x = u(self._channel.recv(1024))
@@ -368,7 +369,7 @@ class Remote(object):
 
 
 
-    def set_auth_method(self, auth_method)
+    def set_auth_method(self, auth_method):
         """
         Set authentication method
         """
@@ -376,7 +377,7 @@ class Remote(object):
 
 
 
-    def set_auth_value(self, auth_value)
+    def set_auth_value(self, auth_value):
         """
         Set authentication value (RSA key DSS key, or password)
         If you want to set the password in secret text, don't use this
@@ -392,7 +393,7 @@ class Remote(object):
 
 
 
-    def set_rsa_key(self, rsa_key)
+    def set_rsa_key(self, rsa_key):
         """
         Set RSA key
         """
@@ -400,7 +401,7 @@ class Remote(object):
 
 
 
-    def set_dss_key(self, dss_key)
+    def set_dss_key(self, dss_key):
         """
         Set DSS key
         """
@@ -408,7 +409,7 @@ class Remote(object):
 
 
 
-    def set_password(self, secret=True, password='')
+    def set_password(self, secret=True, password=''):
         """
         Set password
         If secret = True, the user will be asked to provide it manually
