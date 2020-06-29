@@ -202,7 +202,7 @@ class Readout:
         # clear
         if self._data_source == 'niadc':
             self._daq.clear()    
-
+        self._is_running = False
 
 
 
