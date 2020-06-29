@@ -210,7 +210,7 @@ class Control:
         return True  
             
 
-    def set_feelback_polarity(self, do_invert, 
+    def set_feedback_polarity(self, do_invert, 
                                    tes_channel=str(),
                                    detector_channel= str(),
                                    adc_id=str(), adc_channel=str()):
@@ -666,7 +666,7 @@ class Control:
                 else:
                     param_val= 1
 
-            elif self._squid_controller=='magicon':
+            elif self._squid_controller=='magnicon':
                 print('Magnicon')
             else:
                 print('ERROR: Unknow SQUID controller "' + 
@@ -747,7 +747,7 @@ class Control:
                 elif param_name == 'signal_gen_tes_connected':
                     feb.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
-        elif self._squid_controller=='magicon' and not self._dummy_mode:
+        elif self._squid_controller=='magnicon' and not self._dummy_mode:
             # Magnicon
             print('Magnicon')
             
