@@ -8,6 +8,7 @@ import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connections
+import pytesdaq.utils.remote as remote
 from math import nan
 
 
@@ -52,21 +53,21 @@ class Control:
 
     	# Magnicon
         if self._squid_controller == 'magnicon' and not self._dummy_mode:
-            ssh_conn_info = self._config.get_ssh_connection_info()
-            if ssh_conn_info:
+            mag_conn_info = self._config.get_magnicon_connection_info()
+            if mag_conn_info:
                 if self._verbose:
                     print('SSH connection info for Magnicon:')
-                    print('Hostname:', ssh_conn_info['hostname'])
-                    print('Username:', ssh_conn_info['username'])
-                    print('Port:', ssh_conn_info['port'])
-                    print('RSA key:', ssh_conn_info['rsa_key'])
-                    print('Log file', ssh_conn_info['log_file'])
-            self._remote = remote.Remote(hostname=ssh_conn_info['hostname'],
-                                         port=ssh_conn_info['port'],
-                                         username=ssh_conn_info['username'],
+                    print('Hostname:', mag_conn_info['hostname'])
+                    print('Username:', mag_conn_info['username'])
+                    print('Port:', mag_conn_info['port'])
+                    print('RSA key:', mag_conn_info['rsa_key'])
+                    print('Log file', mag_conn_info['log_file'])
+            self._remote = remote.Remote(hostname=mag_conn_info['hostname'],
+                                         port=mag_conn_info['port'],
+                                         username=mag_conn_info['username'],
                                          auth_method='rsa',
-                                         auth_val=ssh_conn_info['rsa_key'],
-                                         log_file=ssh_conn_info['log_file'])
+                                         auth_val=mag_conn_info['rsa_key'],
+                                         log_file=mag_conn_info['log_file'])
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
