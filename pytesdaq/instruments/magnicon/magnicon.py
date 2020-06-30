@@ -17,16 +17,21 @@ class Magnicon(object):
         self._channel_list = channel_list
         self._default_active = default_active
         self._reset_active = reset_active
-        self._conn_info = conn_info
-        self._remote_inst = remote_inst
 
+        if conn_info is None:
+            self._conn_info = {'hostname': '',
+                               'username': '',
+                               'port': 0,
+                               'rsa_key': '',
+                               'log_file': '',
+                               'exe_location': ''}
+        else:
+            self._conn_info = conn_info
 
-
-    def get_exe_location(self):
-        """
-        Get location of controller executables
-        """
-        return self._conn_info['exe_location']
+        if isinstance(remote_inst, remote.Remote):
+            self._remote_inst = remote_inst
+        else:
+            self._remote_inst = remote.Remote()
 
 
 
@@ -68,14 +73,6 @@ class Magnicon(object):
         Dictionary with minimum keys hostname, username, port, RSA key, log file, executable location
         """
         return self._conn_info
-
-
-
-    def set_exe_location(self, exe_location):
-        """
-        Set location of controller executables
-        """
-        self._conn_info['exe_location'] = exe_location
 
 
 
