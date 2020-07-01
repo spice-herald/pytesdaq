@@ -9,7 +9,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as Navigati
 from matplotlib.figure import Figure
 from pytesdaq.viewer import readout
 from glob import glob
-import os
+import os,time
 
 class MainWindow(QtWidgets.QMainWindow):
     
@@ -59,6 +59,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # temporary
         self._tools_frame.setEnabled(False)
+        
+        # show
         self.show()
         
 
@@ -78,6 +80,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
                                   self._channels_color_map)
         
+
     
     def closeEvent(self,event):
         """
@@ -85,6 +88,16 @@ class MainWindow(QtWidgets.QMainWindow):
         superse base class
         """
 
+               
+        if self._is_running:
+            self._readout.stop_run()
+            
+            # wait (needed?)
+            for ii in range(10):
+                time.sleep(0.01)
+                
+        
+            
         print("Exiting Pulse Display UI")
         
 
@@ -115,19 +128,34 @@ class MainWindow(QtWidgets.QMainWindow):
             
         else:
 
+            adc_name = 'adc1'
+            device = self._device_combobox.currentText()
+            if device[0:2] == 'NI':
+               adc_name =  device.split()
+               adc_name = adc_name[1].lower()
+                        
 
-            # disable
-            self._data_source_tabs.setEnabled(False)
-            self._source_combobox.setEnabled(False)
 
 
             if self._data_source  == 'niadc':
                 
+                # get sample rate:
+                sample_rate = int(self._sample_rate_spinbox.value())
+           
+                # get trace length
+                trace_length = float(int(self._trace_length_spinbox.value()))
+        
+                # voltage min:
+                voltage_min = int(self._voltage_min_combobox.currentText())
+                voltage_max = int(self._voltage_max_combobox.currentText())
+             
+
                 # get all channels
                 channel_list = list(range(8))
-                status = self._readout.configure('niadc',adc_name="adc1",channel_list=channel_list,
-                                                 sample_rate=1250000)
-
+                status = self._readout.configure('niadc',adc_name=adc_name,channel_list=channel_list,
+                                                 sample_rate=sample_rate, trace_length=trace_length,
+                                                 voltage_min=voltage_min, voltage_max=voltage_max)
+                
                 # error
                 if isinstance(status,str):
                     self.statusBar().showMessage(status)
@@ -156,6 +184,12 @@ class MainWindow(QtWidgets.QMainWindow):
             # status bar
             self.statusBar().showMessage("Running...")
           
+
+            # disable 
+            self._data_source_tabs.setEnabled(False)
+            self._source_combobox.setEnabled(False)
+
+
             # run 
             self._set_display_button(True)
             self._is_running=True
@@ -168,6 +202,11 @@ class MainWindow(QtWidgets.QMainWindow):
             # status bar
             self.statusBar().showMessage("Run stopped...")
           
+
+
+        
+        
+
 
   
     def _handle_source_selection(self):
@@ -194,7 +233,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self._data_source_tabs.setCurrentWidget(self._hdf5_tab)
 
-        elif data_source== "ADC Device":
+        elif data_source== "Device":
             self._data_source  = 'niadc'
 
             self._redis_tab.setEnabled(False)
@@ -330,6 +369,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._device_combobox = QtWidgets.QComboBox(self._title_frame)
         self._device_combobox.setGeometry(QtCore.QRect(470, 16, 93, 29))
         self._device_combobox.setObjectName("deviceComboBox")
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(50)
+        self._device_combobox.setFont(font)
+        #self._device_combobox.setStyleSheet("background-color: rgb(226, 255, 219);")
+        self._device_combobox.addItem("NI ADC1")
+
+
 
         # device label
         device_label = QtWidgets.QLabel(self._title_frame)
@@ -412,8 +459,81 @@ class MainWindow(QtWidgets.QMainWindow):
         self._niadc_tab.setEnabled(True)
         self._niadc_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
         self._niadc_tab.setObjectName("deviceTab")
-        self._data_source_tabs.addTab(self._niadc_tab, "ADC Device")
+        self._data_source_tabs.addTab(self._niadc_tab, "Device")
       
+
+        # Trace length
+        trace_length_label = QtWidgets.QLabel(self._niadc_tab)
+        trace_length_label.setGeometry(QtCore.QRect(5, 5, 131, 37))
+        trace_length_label.setFont(font)
+        trace_length_label.setText("Length [ms]")
+
+        self._trace_length_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
+        self._trace_length_spinbox.setGeometry(QtCore.QRect(5, 35, 95, 21))
+        self._trace_length_spinbox.setMaximum(100000)
+        self._trace_length_spinbox.setProperty("value", 10)
+        self._trace_length_spinbox.setObjectName("traceLengthSpinBox")
+        
+        # Sample Rate
+        sample_rate_label = QtWidgets.QLabel(self._niadc_tab)
+        sample_rate_label.setGeometry(QtCore.QRect(5, 60, 131, 37))
+        sample_rate_label.setFont(font)
+        sample_rate_label.setText("SampleRate [Hz]")
+        
+        self._sample_rate_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
+        self._sample_rate_spinbox.setGeometry(QtCore.QRect(5, 90, 95, 21))
+        self._sample_rate_spinbox.setMaximum(3500000)
+        self._sample_rate_spinbox.setProperty("value", 1250000)
+        self._sample_rate_spinbox.setObjectName("sampleRateSpinBox")
+        
+
+        # separator
+        
+        separator = QtWidgets.QFrame(self._niadc_tab)
+        separator.setFrameShape(QtWidgets.QFrame.VLine)
+        separator.setFrameShadow(QtWidgets.QFrame.Sunken)
+        separator.setGeometry(QtCore.QRect(127, 10, 2, 110))
+      
+    
+
+        # voltage range
+
+        # Trace length
+        voltage_label = QtWidgets.QLabel(self._niadc_tab)
+        voltage_label.setGeometry(QtCore.QRect(150, 20, 100, 30))
+        voltage_label.setFont(font)
+        voltage_label.setText("Voltage [V]")
+
+        self._voltage_min_combobox = QtWidgets.QComboBox(self._niadc_tab)
+        self._voltage_min_combobox.setGeometry(QtCore.QRect(176, 50, 54, 23))
+        self._voltage_min_combobox.setFont(font)
+        self._voltage_min_combobox.addItem("-1")
+        self._voltage_min_combobox.addItem("-2")
+        self._voltage_min_combobox.addItem("-5")
+        self._voltage_min_combobox.addItem("-10")
+        self._voltage_min_combobox.setCurrentIndex(3)
+
+        self._voltage_max_combobox = QtWidgets.QComboBox(self._niadc_tab)
+        self._voltage_max_combobox.setGeometry(QtCore.QRect(176, 75, 54, 23))
+        self._voltage_max_combobox.setFont(font)
+        self._voltage_max_combobox.addItem("+1")
+        self._voltage_max_combobox.addItem("+2")
+        self._voltage_max_combobox.addItem("+5")
+        self._voltage_max_combobox.addItem("+10")
+        self._voltage_max_combobox.setCurrentIndex(3)
+
+        # Trace length
+        voltage_min_label = QtWidgets.QLabel(self._niadc_tab)
+        voltage_min_label.setGeometry(QtCore.QRect(143, 45, 31, 30))
+        voltage_min_label.setFont(font)
+        voltage_min_label.setText("Min:")
+
+        voltage_max_label = QtWidgets.QLabel(self._niadc_tab)
+        voltage_max_label.setGeometry(QtCore.QRect(140, 71, 32, 30))
+        voltage_max_label.setFont(font)
+        voltage_max_label.setText("Max:")
+
+    
 
         # --------
         # HDF5 tab
@@ -488,7 +608,7 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setWeight(50)
         self._source_combobox.setFont(font)
         self._source_combobox.setObjectName("sourceComboBox")
-        self._source_combobox.addItem("ADC Device")
+        self._source_combobox.addItem("Device")
         self._source_combobox.addItem("HDF5")
         self._source_combobox.addItem("Redis")
 
@@ -687,9 +807,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lpfilter_spinbox.setMaximum(500)
         self._lpfilter_spinbox.setObjectName("lpFilterSpinBox")
       
-
-    def closeEvent(self,event):
-        print("Exiting Pulse Display UI")
         
 
     def _set_display_button(self,do_run):

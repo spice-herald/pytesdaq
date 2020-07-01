@@ -164,10 +164,9 @@ class NITask(Task):
 
 
     def clear_task(self):
-        self.stop()
         self.close()
         self._is_run_configured = False
-
+    
 
     def _configure_run(self):
 
