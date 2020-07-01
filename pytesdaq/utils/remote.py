@@ -18,7 +18,7 @@ class Remote(object):
     Use ssh connection to remote computer, using Python paramiko library
     """
 
-    def __init__(self, hostname='', port=22, username='', auth_method='rsa', auth_val='', log_file=''):
+    def __init__(self, hostname='', port=22, username='', auth_method='rsa', auth_val='', log_file='demo.log'):
         """
         Initialize class with hostname, port, username,
         authentication method (rsa, dss, or password),
@@ -266,7 +266,10 @@ class Remote(object):
             print('ERROR: Cannot send command. Transport not active.')
             print('Closing connection to ' + self._hostname)
             try:
-                self.close_connection()                                                                                                                                   except:                                                                                                                                                           pass                                                                                                                                                      return 0
+                self.close_connection()
+            except:
+                pass
+            return 0
 
         try:
             r, w, e = select.select([self._channel, sys.stdin], [], [], 0.1)
@@ -294,6 +297,18 @@ class Remote(object):
 
 
 
+    def check_transport_active(self):
+        """
+        Check if transport is active.
+        Return False if transport is not a Paramiko Transport object.
+        """
+        try:
+            return self._transport.is_active()
+        except:
+            return False
+
+
+        
     def get_hostname(self):
         """
         Get hostname
@@ -347,6 +362,14 @@ class Remote(object):
         Get Paramiko log file
         """
         return self._log_file
+
+
+
+    def get_transport(self):
+        """
+        Get Paramiko transport object
+        """
+        return self._transport
 
 
 
@@ -455,4 +478,13 @@ class Remote(object):
         Set Paramiko transport object
         """
         self._transport = transport
+
+
+
+    def set_channel(self, channel):
+        """
+        Set Paramiko SSH channel
+        """
+        self._channel = channel
+
 
