@@ -19,7 +19,7 @@ class MainWindow(QtWidgets.QMainWindow):
        
 
         # initialize attribute
-        self._data_source = 'redis'
+        self._data_source = 'niadc'
         self._file_list = list()
         self._select_hdf5_dir = False
         self._default_data_dir = '/data/analysis'
@@ -44,6 +44,10 @@ class MainWindow(QtWidgets.QMainWindow):
                                     6:(255, 207, 32),
                                     7:(121, 121, 121)}
         
+
+
+        # channel list
+        self._channel_list = list()
 
         # setup frames
         self._init_main_frame()
@@ -90,18 +94,39 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Handle display. Called when clicking on display waveform 
         """
-        self.statusBar().showMessage('Display Stopped')
+
+
         if self._is_running:
+
+            # Stop run
             self._readout.stop_run()
             self._is_running=False
-            self.statusBar().showMessage("Display Stopped")
+
+            # change button display
             self._set_display_button(False)
+
+            # enable
+            self._data_source_tabs.setEnabled(True)
+            self._source_combobox.setEnabled(True)
+
+            # status bar
+            self.statusBar().showMessage("Display Stopped")
+          
             
         else:
-           
+
+
+            # disable
+            self._data_source_tabs.setEnabled(False)
+            self._source_combobox.setEnabled(False)
+
+
             if self._data_source  == 'niadc':
-                status = self._readout.configure('niadc',adc_name="adc1",channel_list=[0,1,2],
-                                        sample_rate=1250000)
+                
+                # get all channels
+                channel_list = list(range(8))
+                status = self._readout.configure('niadc',adc_name="adc1",channel_list=channel_list,
+                                                 sample_rate=1250000)
 
                 # error
                 if isinstance(status,str):
@@ -126,17 +151,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.statusBar().showMessage("WARNING: Redis not implemented")  
                 return
 
+
+
+            # status bar
             self.statusBar().showMessage("Running...")
-
-            
-
+          
             # run 
             self._set_display_button(True)
             self._is_running=True
             self._readout.run(do_plot=True)
 
+            # enable
+            self._data_source_tabs.setEnabled(True)
+            self._source_combobox.setEnabled(True)
 
-            
+            # status bar
+            self.statusBar().showMessage("Run stopped...")
+          
+
+  
     def _handle_source_selection(self):
         
         # get source
@@ -145,16 +178,31 @@ class MainWindow(QtWidgets.QMainWindow):
         # select tab
         if data_source== "Redis":
             self._data_source  = 'redis'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
-                                                                                     "redisTab"))
+
+            self._redis_tab.setEnabled(True)
+            self._hdf5_tab.setEnabled(False)
+            self._niadc_tab.setEnabled(False)
+            
+            self._data_source_tabs.setCurrentWidget(self._redis_tab)
+
         elif data_source== "HDF5":
             self._data_source  = 'hdf5'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
-                                                                                     "hdf5Tab"))
+            
+            self._redis_tab.setEnabled(False)
+            self._hdf5_tab.setEnabled(True)
+            self._niadc_tab.setEnabled(False)
+
+            self._data_source_tabs.setCurrentWidget(self._hdf5_tab)
+
         elif data_source== "ADC Device":
             self._data_source  = 'niadc'
-            self._data_source_tabs.setCurrentWidget(self._data_source_tabs.findChild(QtWidgets.QWidget,
-                                                                                     "deviceTab"))
+
+            self._redis_tab.setEnabled(False)
+            self._hdf5_tab.setEnabled(False)
+            self._niadc_tab.setEnabled(True)
+
+            self._data_source_tabs.setCurrentWidget(self._niadc_tab)
+
         else:
             print("WARNING: Unknown selection")
 
@@ -195,6 +243,47 @@ class MainWindow(QtWidgets.QMainWindow):
             self.statusBar().showMessage('Number of files selected = ' + str(len(files)))
             self._file_list = files
             self._file_list.sort()
+
+
+
+    def _handle_channel(self):
+        """
+        Handle channel buttons selection (Signal/Slot connection)
+        """
+
+        # get sender
+        button = self.sender()
+
+        # get channel number
+        object_name = str(button.objectName())
+        name_split =  object_name.split('_')
+        channel_num = int(name_split[1])
+
+        # change color
+        if button.isChecked():
+            # change color
+            button.setStyleSheet("background-color: rgb(226, 255, 219);")
+
+            # remove from list
+            if self._channel_list and channel_num in self._channel_list:
+                self._channel_list.remove(channel_num)
+        else:
+
+            # change color
+            color = self._channels_color_map[channel_num]
+            color_str = "rgb(" + str(color[0]) + "," + str(color[1]) + "," + str(color[2]) + ")" 
+            button.setStyleSheet("background-color: " + color_str +";")
+        
+            # add to list
+            self._channel_list.append(channel_num)
+
+            # make sure it is unique...
+            self._channel_list = list(set(self._channel_list))
+
+        if self._readout:
+            self._readout.select_channels(self._channel_list)
+            
+
 
 
     def _init_main_frame(self):
@@ -314,19 +403,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source_tabs.setTabBarAutoHide(False)
         self._data_source_tabs.setObjectName("sourceTabs")
        
-        # ---------
-        # Redis tab
-        # ---------
-        self._redis_tab = QtWidgets.QWidget()
-        font = QtGui.QFont()
-        font.setStrikeOut(False)
-        font.setKerning(True)
-        self._redis_tab.setFont(font)
-        self._redis_tab.setLayoutDirection(QtCore.Qt.LeftToRight)
-        self._redis_tab.setAutoFillBackground(False)
-        self._redis_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
-        self._redis_tab.setObjectName("redisTab")
-        self._data_source_tabs.addTab(self._redis_tab, "Redis")
+
+          
+        # -------------
+        # NI device tab
+        # -------------
+        self._niadc_tab = QtWidgets.QWidget()
+        self._niadc_tab.setEnabled(True)
+        self._niadc_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
+        self._niadc_tab.setObjectName("deviceTab")
+        self._data_source_tabs.addTab(self._niadc_tab, "ADC Device")
+      
 
         # --------
         # HDF5 tab
@@ -367,18 +454,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self._hdf5_select_button.setStyleSheet("background-color: rgb(162, 162, 241);")
         self._hdf5_select_button.setObjectName("fileSelectButton")
         self._hdf5_select_button.setText("Select \n" "Files/Dir")
-       
 
 
+        # disable
+        self._hdf5_tab.setEnabled(False)
         
-        # -------------
-        # NI device tab
-        # -------------
-        self._niadc_tab = QtWidgets.QWidget()
-        self._niadc_tab.setEnabled(True)
-        self._niadc_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
-        self._niadc_tab.setObjectName("deviceTab")
-        self._data_source_tabs.addTab(self._niadc_tab, "ADC Device")
+
+        # ---------
+        # Redis tab
+        # ---------
+        self._redis_tab = QtWidgets.QWidget()
+        font = QtGui.QFont()
+        font.setStrikeOut(False)
+        font.setKerning(True)
+        self._redis_tab.setFont(font)
+        self._redis_tab.setLayoutDirection(QtCore.Qt.LeftToRight)
+        self._redis_tab.setAutoFillBackground(False)
+        self._redis_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
+        self._redis_tab.setObjectName("redisTab")
+        self._data_source_tabs.addTab(self._redis_tab, "Redis")
+        
+        # disable
+        self._redis_tab.setEnabled(False)
 
 
         # -----------------
@@ -391,9 +488,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setWeight(50)
         self._source_combobox.setFont(font)
         self._source_combobox.setObjectName("sourceComboBox")
-        self._source_combobox.addItem("Redis")
-        self._source_combobox.addItem("HDF5")
         self._source_combobox.addItem("ADC Device")
+        self._source_combobox.addItem("HDF5")
+        self._source_combobox.addItem("Redis")
 
         # combo box label
         source_label = QtWidgets.QLabel(self._control_frame)
@@ -479,10 +576,13 @@ class MainWindow(QtWidgets.QMainWindow):
         channel_layout = QtWidgets.QWidget(self._channel_frame)
         channel_layout.setGeometry(QtCore.QRect(8, 11, 254, 137))
         channel_layout.setObjectName("layoutWidget")
+     
+
+        # add grid layout 
         channel_grid_layout = QtWidgets.QGridLayout(channel_layout)
         channel_grid_layout.setContentsMargins(0, 0, 0, 0)
         channel_grid_layout.setObjectName("gridLayout")
-
+        
         # add buttons
         self._channel_buttons = dict()
         row_num = 0
@@ -492,23 +592,26 @@ class MainWindow(QtWidgets.QMainWindow):
             button = QtWidgets.QPushButton(channel_layout)
             
             # size policy
+        
             size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, 
                                                 QtWidgets.QSizePolicy.Expanding)
             size_policy.setHorizontalStretch(0)
             size_policy.setVerticalStretch(0)
             size_policy.setHeightForWidth(button.sizePolicy().hasHeightForWidth())
             button.setSizePolicy(size_policy)
-
+        
             # text font
             font = QtGui.QFont()
             font.setBold(True)
             font.setWeight(75)
             button.setFont(font)
             button.setText("AI" + str(ichan))
+            button.setCheckable(True)
+            button.toggle()
             # background color
-            color = self._channels_color_map[ichan]
-            color_str = "rgb(" + str(color[0]) + "," + str(color[1]) + "," + str(color[2]) + ")" 
-            button.setStyleSheet("background-color: " + color_str +";")
+            #color = self._channels_color_map[ichan]
+            #color_str = "rgb(" + str(color[0]) + "," + str(color[1]) + "," + str(color[2]) + ")" 
+            #button.setStyleSheet("background-color: " + color_str +";")
             button.setObjectName("chanButton_" + str(ichan))
             
             # layout
@@ -518,10 +621,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 row_num = 0
                 col_num = 1
 
-
+            # connect 
+            button.clicked.connect(self._handle_channel)
+            
             # save
-            button.setObjectName("chanButton_" + str(ichan))
             self._channel_buttons[ichan] = button
+
+
+
 
     def _init_tools_frame(self):
         

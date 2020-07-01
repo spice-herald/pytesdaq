@@ -24,21 +24,22 @@ class Readout:
         self._redis = None
         self._hdf5 = None
 
-        # Initialize 
+        # Is running flag
         self._is_running = False
-        self._first_draw = True
-        self._plot_ref = None
 
         # data configuration
         self._data_config = dict()
 
-        # qt UI
+        # qt UI / trace display
         self._is_qt_ui = False
+        self._first_draw = True
+        self._plot_ref = None
+        self._selected_channel_list = list()
         self._axes=[]
         self._canvas = []
         self._status_bar = []
         self._colors = dict()
-        #self._colors = ['k','r','b','g','m','c','y','r']
+     
         
 
 
@@ -53,6 +54,10 @@ class Readout:
             color = (value[0]/255, value[1]/255,value[2]/255)
             self._colors[key] = color
   
+    def select_channels(self, channels):
+
+        self._first_draw = True
+        self._selected_channel_list = channels
 
 
 
@@ -213,27 +218,34 @@ class Readout:
     def _plot_data(self):
 
 
+        # channels
+        nchan_display = len(self._selected_channel_list)
+        if nchan_display==0:
+            return
+               
+
         # chan/bins
         nchan =  np.size(self._data_array,0)
         nbins =  np.size(self._data_array,1)
                 
         if self._first_draw:
-            channels = self._data_config['channel_list']
             dt = 1/self._data_config['sample_rate']
             self._axes.clear()
             self._axes.set_xlabel('ms')
             self._axes.set_ylabel('ADC bins')
             self._axes.set_title('Pulse')
             x_axis=np.arange(0, (nbins*dt)*1e3, 1e3*dt)
-            self._plot_ref = [None]*nchan
-            for ichan in range(nchan):
-                self._plot_ref[ichan], = self._axes.plot(x_axis,self._data_array[ichan],
-                                                         color = self._colors[ichan])  
+            self._plot_ref = [None]*nchan_display
+            for ichan in range(nchan_display):
+                chan = self._selected_channel_list[ichan]
+                self._plot_ref[ichan], = self._axes.plot(x_axis,self._data_array[chan],
+                                                         color = self._colors[chan])  
             self._canvas.draw()
             self._first_draw = False
         else:
-            for ichan in range(nchan):
-                self._plot_ref[ichan].set_ydata(self._data_array[ichan])
+            for ichan in range(nchan_display):
+                chan = self._selected_channel_list[ichan]
+                self._plot_ref[ichan].set_ydata(self._data_array[chan])
                         
         self._axes.relim()
         self._axes.autoscale_view()
