@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
         cout << "\t\t\tRun like this: .\\squidcontrol_setup.exe [-dummy dummy(0/1)] [-mode mode(AMP/FLL)] [-Iaux range(low/high) Iaux] [-Vb Vb] [-Ib Ib] [-Phib Phib]" << endl;
     }
 
-    unsigned short error = 0, channel = 1;
+    unsigned short error = 0, channel = 2;
     unsigned long baud = 57600, timeout = 100; // default settings
     int status = 0;
     long t_start = time(NULL);

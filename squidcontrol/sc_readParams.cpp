@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
         cout << "WIN\tWarning: The program will execute, but your input parameters are not being considered." << endl;
     }
 
-    unsigned short error = 0, channel = 1;
+    unsigned short error = 0, channel = 3;
     unsigned long baud = 57600, timeout = 100; // default settings
     int status = 0;
     long t_start = time(NULL);
