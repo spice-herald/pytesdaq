@@ -10,9 +10,10 @@ class Magnicon(object):
     def __init__(self, channel_list=[], default_active=1, reset_active=True, conn_info=None, remote_inst=None):
         """
         Initialize Magnicon driver.
-        Arguments are: list of channels used,
-        default active channel, whether to reset the active channel before doing anything
-        (not necessary if Type ID and Version ID are same for all channels),
+        Arguments are: list of channels used, default active channel,
+        whether to reset the active channel before doing anything (according
+        to Magnicon, this is not necessary if Type ID and Version ID are same
+        for all channels, but I find that it is necessary ~VV),
         connection info, and a Remote object.
         """
 
@@ -34,6 +35,15 @@ class Magnicon(object):
             self._remote_inst = remote_inst
         else:
             self._remote_inst = remote.Remote()
+
+
+
+    def __del__(self):
+        """
+        Destructor
+        Close SSH connection if open
+        """
+        self.disconnect()
 
 
 
@@ -68,31 +78,41 @@ class Magnicon(object):
 
 
 
-    def listen_for(self, string=None, max_loops=100):
+    def listen_for(self, strings=None, max_loops=100):
         """
         Keep receiving output from the SSH connection until a particular
-        string is present. This string can be None; this indicates that the
-        SSH connection is not actively producing any more text output
-        (including the terminal prompt). You can set a maximum number of times
-        to receive output from the Remote object, which can be None.
-        Returns the first instance of the text with that string.
+        string is present, or any string in a list of strings. Any of these
+        string can be None; this indicates that the SSH connection is not
+        actively producing any more text output (including the terminal
+        prompt).
+        Args: the string or strings (in a Python list, if there are multiple
+        strings) to listen for, any of which can be None; the maximum number
+        of times to receive output from the Remote object, which can be None.
+        Returns: the first instance of the text with any of these string(s).
         """
+
+        if not isinstance(strings, list):
+            strings = [strings]
 
         if max_loops is None:
             max_loops = np.inf
+
         s = ''
         n = 0
         success = False
 
         while(n <= max_loops):
             s = self._remote_inst.receive_output()
-            if string is None and s is None:
-                success = True
-                break
-            elif string is not None and s is not None:
-                if string in s:
+
+            for i in range(len(strings)):
+                if strings[i] is None and s is None:
                     success = True
                     break
+                elif strings[i] is not None and s is not None:
+                    if strings[i] in s:
+                        success = True
+                        break
+
             n += 1
 
         if success:
@@ -108,13 +128,14 @@ class Magnicon(object):
         """
 
         self._remote_inst.send_command('.\\get_squid_bias.exe %d %d I\n' % (controller_channel, self._reset_active))
-        s = self.listen_for('Ib')
-        if 'ERROR' in s:
-            print('Could not read Ib')
-            return -100
-        else:
+        s = self.listen_for(['Ib', 'ERROR'])
+
+        if 'Ib' in s:
             _, s = s.split('Ib = ')
             return float(s)
+        else:
+            print('Could not read Ib')
+            return -100.
 
 
 
@@ -124,13 +145,16 @@ class Magnicon(object):
         """
 
         self._remote_inst.send_command('.\\set_squid_bias.exe %d %d I %f\n' % (controller_channel, self._reset_active, Ib))
-        s = self.listen_for('Ib')
-        if 'ERROR' in s:
-            print('Could not set Ib')
-            return -100
-        else:
+        s = self.listen_for(['Ib', 'ERROR'])
+
+        if 'Ib' in s:
             _, s = s.split('Ib = ')
             return float(s)
+        else:
+            print('Could not set Ib')
+            return -100.
+
+
 
 
     def set_dummy(self, controller_channel, dummy):

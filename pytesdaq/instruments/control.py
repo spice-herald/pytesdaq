@@ -64,12 +64,6 @@ class Control:
             self._mag_inst.connect()
             self._mag_inst.chdir()
             self._mag_inst.listen_for(None)
-            self._mag_inst.set_dummy(2, 'on')
-            time.sleep(5)
-            self._mag_inst.set_squid_current_bias(2, 10)
-            time.sleep(5)
-            self._mag_inst.set_squid_current_bias(2, 20)
-            self._mag_inst.disconnect()
             if mag_conn_info:
                 if self._verbose:
                     print('SSH connection info for Magnicon:')
@@ -88,8 +82,9 @@ class Control:
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
-        
-               
+
+
+
     @property
     def verbose(self):
         return self._verbose
