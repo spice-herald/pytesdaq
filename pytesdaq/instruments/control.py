@@ -6,6 +6,7 @@ import time
 import numpy
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
+import pytesdaq.instruments.magnicon as magnicon
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connections
 import pytesdaq.utils.remote as remote
@@ -62,6 +63,13 @@ class Control:
             self._mag_inst.set_remote_inst()
             self._mag_inst.connect()
             self._mag_inst.chdir()
+            self._mag_inst.listen_for(None)
+            self._mag_inst.set_dummy(2, 'on')
+            time.sleep(5)
+            self._mag_inst.set_squid_current_bias(2, 10)
+            time.sleep(5)
+            self._mag_inst.set_squid_current_bias(2, 20)
+            self._mag_inst.disconnect()
             if mag_conn_info:
                 if self._verbose:
                     print('SSH connection info for Magnicon:')

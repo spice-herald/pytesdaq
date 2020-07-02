@@ -1,4 +1,6 @@
 import pytesdaq.utils.remote as remote
+import numpy as np
+import time
 
 class Magnicon(object):
     """
@@ -43,7 +45,15 @@ class Magnicon(object):
 
 
 
-    def chdir(self, new_dir=str())
+    def disconnect(self):
+        """
+        Close SSH connection to remote computer
+        """
+        self._remote_inst.close_connection()
+
+
+
+    def chdir(self, new_dir=str()):
         """
         Change directory to executable location, or wherever the user wants
         """
@@ -53,9 +63,42 @@ class Magnicon(object):
                 self._remote_inst.send_command('cd %s\n' % new_dir)
             else:
                 self._remote_inst.send_command('cd %s\n' % self._conn_info['exe_location'])
-            self.receive_output()
         else:
             print('ERROR: SSH connection not open. Command not sent.')
+
+
+
+    def listen_for(self, string=None, max_loops=100):
+        """
+        Keep receiving output from the SSH connection until a particular
+        string is present. This string can be None; this indicates that the
+        SSH connection is not actively producing any more text output
+        (including the terminal prompt). You can set a maximum number of times
+        to receive output from the Remote object, which can be None.
+        Returns the first instance of the text with that string.
+        """
+
+        if max_loops is None:
+            max_loops = np.inf
+        s = ''
+        n = 0
+        success = False
+
+        while(n <= max_loops):
+            s = self._remote_inst.receive_output()
+            if string is None and s is None:
+                success = True
+                break
+            elif string is not None and s is not None:
+                if string in s:
+                    success = True
+                    break
+            n += 1
+
+        if success:
+            return s
+        else:
+            return ''
 
 
 
@@ -64,8 +107,8 @@ class Magnicon(object):
         Get current bias through SQUID Ib (uA)
         """
 
-        self._remote_inst.send_command('.\\read_squid_bias.exe %d %d I\n' % (controller_channel, self._reset_active))
-        s = self._remote_inst.receive_output()
+        self._remote_inst.send_command('.\\get_squid_bias.exe %d %d I\n' % (controller_channel, self._reset_active))
+        s = self.listen_for('Ib')
         if 'ERROR' in s:
             print('Could not read Ib')
             return -100
@@ -80,14 +123,24 @@ class Magnicon(object):
         Set current bias through SQUID Ib (uA)
         """
 
-        self._remote_inst.send_command('.\\read_squid_bias.exe %d %d I %f\n' % (controller_channel, self._reset_active, Ib))
-        s = self._remote_inst.receive_output()
+        self._remote_inst.send_command('.\\set_squid_bias.exe %d %d I %f\n' % (controller_channel, self._reset_active, Ib))
+        s = self.listen_for('Ib')
         if 'ERROR' in s:
             print('Could not set Ib')
             return -100
         else:
             _, s = s.split('Ib = ')
             return float(s)
+
+
+    def set_dummy(self, controller_channel, dummy):
+        """
+        Set dummy status: dummy can be "on" or "off"
+        """
+
+        self._remote_inst.send_command('.\\set_dummy.exe %d %d %s\n' % (controller_channel, self._reset_active, dummy))
+        s = self.listen_for(None)
+        return 0
 
 
 

@@ -3,6 +3,7 @@ from io import StringIO
 import os,string
 import pandas as pd
 import re
+import traceback
 
 
 class Config:
@@ -515,11 +516,13 @@ class Config:
         info = {}
 
         try:
-            info['channel_list'] = [int(x) for x in self._get_setting('magnicon', 'channel_list')]
+            info['channel_list'] = [int(x) for x in self._get_setting('magnicon', 'channel_list').split(',')]
             info['default_active'] = int(self._get_setting('magnicon', 'default_active'))
             info['reset_active'] = bool(self._get_setting('magnicon', 'reset_active'))
-        except:
+        except Exception as e:
             print('ERROR: Could not get complete controller info for Magnicon')
+            print(str(e))
+            traceback.print_exc()
 
         return info
 
