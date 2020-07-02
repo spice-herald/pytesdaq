@@ -1,10 +1,7 @@
 #include <iostream>
-#include <time.h>
-#include <thread>
-#include <chrono>
 #include <string>
 #include "magsv.h"
-#include "sc_functions.cpp"
+#include "squid_control_helpers.cpp"
 
 using namespace std;
 
