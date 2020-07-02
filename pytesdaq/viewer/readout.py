@@ -16,7 +16,11 @@ class Readout:
         #self._web_scope = web_scope
 
         # data source: 
-        self._data_source = 'redis'
+        self._data_source = 'niadc'
+
+
+        # ADC device 
+        self._adc_name = 'adc1'
 
 
         # initialize db/adc
@@ -24,21 +28,22 @@ class Readout:
         self._redis = None
         self._hdf5 = None
 
-        # Initialize 
+        # Is running flag
         self._is_running = False
-        self._first_draw = True
-        self._plot_ref = None
 
         # data configuration
         self._data_config = dict()
 
-        # qt UI
+        # qt UI / trace display
         self._is_qt_ui = False
+        self._first_draw = True
+        self._plot_ref = None
+        self._selected_channel_list = list()
         self._axes=[]
         self._canvas = []
         self._status_bar = []
         self._colors = dict()
-        #self._colors = ['k','r','b','g','m','c','y','r']
+     
         
 
 
@@ -53,12 +58,16 @@ class Readout:
             color = (value[0]/255, value[1]/255,value[2]/255)
             self._colors[key] = color
   
+    def select_channels(self, channels):
+
+        self._first_draw = True
+        self._selected_channel_list = channels
 
 
 
-    def configure(self,data_source, adc_name = str(), channel_list=[],
+    def configure(self,data_source, adc_name = 'adc1', channel_list=[],
                   sample_rate=[], trace_length=[],
-                  voltage_min=[], voltage_max=[],trigger_type=[],
+                  voltage_min=[], voltage_max=[],trigger_type=3,
                   file_list=[]):
         
 
@@ -71,11 +80,13 @@ class Readout:
         # data source 
         self._data_source = data_source
 
+        # adc name 
+        self._adc_name = adc_name
 
 
         # read configuration file
         self._config = settings.Config()
-                       
+        self._data_config = dict()
 
         # NI ADC source
         if self._data_source == 'niadc':
@@ -102,14 +113,14 @@ class Readout:
             if sample_rate:
                 self._data_config['sample_rate'] = int(sample_rate)
             if trace_length:
-                nb_samples = round(config_dict['sample_rate']*trace_length/1000)
+                nb_samples = round(self._data_config['sample_rate']*trace_length/1000)
                 self._data_config['nb_samples'] = int(nb_samples)
             if voltage_min:
                 self._data_config['voltage_min'] = float(voltage_min)
             if voltage_max:
                 self._data_config['voltage_max'] = float(voltage_max)
             
-            self._data_config['trigger_type'] = 3
+            self._data_config['trigger_type'] = int(trigger_type)
 
             adc_config = dict()
             adc_config[adc_name] =  self._data_config
@@ -133,7 +144,7 @@ class Readout:
             self._hdf5 = hdf5.H5Core()
             self._hdf5.set_files(file_list)
             
-      
+                
     
         return True
 
@@ -142,6 +153,12 @@ class Readout:
     def stop_run(self):
         self._do_stop_run = True
 
+
+    def clear_daq(self):
+        self._do_stop_run = True
+        if self._data_source == 'niadc':
+            self._daq.clear()    
+       
 
     def is_running(self):
         return self._is_running
@@ -181,8 +198,10 @@ class Readout:
                 self._daq.read_single_event(self._data_array, do_clear_task=False)
 
             elif self._data_source == 'hdf5':
-                self._data_array, self._data_config = self._hdf5.read_event(include_metadata=True,adc_name='adc1')
 
+                self._data_array, self._data_config = self._hdf5.read_event(include_metadata=True,
+                                                                            adc_name=self._adc_name)
+                
                 if isinstance(self._data_array,str):
                     if self._is_qt_ui:
                         self._status_bar.showMessage('INFO: ' + self._data_array)
@@ -208,32 +227,50 @@ class Readout:
 
 
 
-
-
     def _plot_data(self):
 
 
+        if self._do_stop_run:
+            return
+
+        # check if seletect channels can be display
+        channel_num_list = list()
+        channel_index_list = list()
+        counter = 0
+        for chan in self._data_config['channel_list']:
+            if chan in self._selected_channel_list:
+                channel_num_list.append(chan)
+                channel_index_list.append(counter)
+            counter+=1
+                
+        nchan_display = len(channel_num_list)
+        if nchan_display==0:
+            return
+    
         # chan/bins
         nchan =  np.size(self._data_array,0)
         nbins =  np.size(self._data_array,1)
-                
+    
         if self._first_draw:
-            channels = self._data_config['channel_list']
             dt = 1/self._data_config['sample_rate']
             self._axes.clear()
             self._axes.set_xlabel('ms')
             self._axes.set_ylabel('ADC bins')
             self._axes.set_title('Pulse')
-            x_axis=np.arange(0, (nbins*dt)*1e3, 1e3*dt)
-            self._plot_ref = [None]*nchan
-            for ichan in range(nchan):
-                self._plot_ref[ichan], = self._axes.plot(x_axis,self._data_array[ichan],
-                                                         color = self._colors[ichan])  
+            x_axis=np.arange(0,nbins)*1e3*dt
+            self._plot_ref = [None]*nchan_display
+            for ichan in range(nchan_display):
+                chan = channel_num_list[ichan]
+                idx = channel_index_list[ichan]
+                self._plot_ref[ichan], = self._axes.plot(x_axis,self._data_array[idx],
+                                                         color = self._colors[chan])  
             self._canvas.draw()
             self._first_draw = False
         else:
-            for ichan in range(nchan):
-                self._plot_ref[ichan].set_ydata(self._data_array[ichan])
+            for ichan in range(nchan_display):
+                chan = channel_num_list[ichan]
+                idx = channel_index_list[ichan]
+                self._plot_ref[ichan].set_ydata(self._data_array[idx])
                         
         self._axes.relim()
         self._axes.autoscale_view()

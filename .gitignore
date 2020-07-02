@@ -1,3 +1,22 @@
+
+*__pycache__/*
+*.pyc
+
+### ignore jupyter checkpoints
+
+*.ipynb_checkpoints/
+
+# ignore compiled Python code
+build/*
+dist/*
+*.egg-info/*
+
+# ignore autosaved files
+
+*.*~
+
+# cache
+
 __pycache__/
 */__pycache__/
 */*/__pycache__/
