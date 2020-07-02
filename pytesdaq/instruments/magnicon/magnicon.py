@@ -5,7 +5,7 @@ class Magnicon(object):
     Magnicon SQUID driver
     """
 
-    def __init__(self, channel_list=[], default_active=1, reset_active=False, conn_info=None, remote_inst=None):
+    def __init__(self, channel_list=[], default_active=1, reset_active=True, conn_info=None, remote_inst=None):
         """
         Initialize Magnicon driver.
         Arguments are: list of channels used,
@@ -32,6 +32,62 @@ class Magnicon(object):
             self._remote_inst = remote_inst
         else:
             self._remote_inst = remote.Remote()
+
+
+
+    def connect(self):
+        """
+        Open SSH connection to remote computer
+        """
+        self._remote_inst.open_connection()
+
+
+
+    def chdir(self, new_dir=str())
+        """
+        Change directory to executable location, or wherever the user wants
+        """
+
+        if self._remote_inst.check_transport_active():
+            if new_dir:
+                self._remote_inst.send_command('cd %s\n' % new_dir)
+            else:
+                self._remote_inst.send_command('cd %s\n' % self._conn_info['exe_location'])
+            self.receive_output()
+        else:
+            print('ERROR: SSH connection not open. Command not sent.')
+
+
+
+    def get_squid_current_bias(self, controller_channel):
+        """
+        Get current bias through SQUID Ib (uA)
+        """
+
+        self._remote_inst.send_command('.\\read_squid_bias.exe %d %d I\n' % (controller_channel, self._reset_active))
+        s = self._remote_inst.receive_output()
+        if 'ERROR' in s:
+            print('Could not read Ib')
+            return -100
+        else:
+            _, s = s.split('Ib = ')
+            return float(s)
+
+
+
+    def set_squid_current_bias(self, controller_channel, Ib):
+        """
+        Set current bias through SQUID Ib (uA)
+        """
+
+        self._remote_inst.send_command('.\\read_squid_bias.exe %d %d I %f\n' % (controller_channel, self._reset_active, Ib))
+        s = self._remote_inst.receive_output()
+        if 'ERROR' in s:
+            print('Could not set Ib')
+            return -100
+        else:
+            _, s = s.split('Ib = ')
+            return float(s)
 
 
 
