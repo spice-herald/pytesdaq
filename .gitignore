@@ -15,6 +15,11 @@ dist/*
 
 *.*~
 
+# ignore Windows executables and compiler output
+
+*.exe
+*.obj
+
 # cache
 
 __pycache__/
