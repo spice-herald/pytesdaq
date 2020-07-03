@@ -20,11 +20,11 @@ int main(int argc, char** argv) {
     // Get amp_or_fll
     string amp_or_fll = argv[3];
     if (amp_or_fll.compare("AMP") == 0) {
-        MA_read_Amp(channel, &error, 0);
+        MA_write_Amp(channel, &error, 0);
         errorout(error);
     }
     else if (amp_or_fll.compare("FLL") == 0) {
-        MA_read_Amp(channel, &error, 1);
+        MA_write_Amp(channel, &error, 1);
         errorout(error);
     }
     else {

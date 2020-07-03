@@ -20,11 +20,11 @@ int main(int argc, char** argv) {
     // Get amp_gain_sign
     string amp_gain_sign = argv[3];
     if (amp_gain_sign.compare("negative") == 0) {
-        MA_read_AGain(channel, &error, 0);
+        MA_write_AGain(channel, &error, 0);
         errorout(error);
     }
     else if (amp_gain_sign.compare("positive") == 0) {
-        MA_read_AGain(channel, &error, 1);
+        MA_write_AGain(channel, &error, 1);
         errorout(error);
     }
     else {

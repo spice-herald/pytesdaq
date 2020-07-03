@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     double ranges_source[3] = {0, 0, 0}; // array for source range
     unsigned short waveform, phase_shift, freq_div, half_pp_offset, source;
     double pp_amplitude; // peak-to-peak amplitude
-    MA_read_GenParam(channel_no, &error, gen_num, &ranges_source[0], len,
+    MA_read_GenParam(channel, &error, gen_num, &ranges_source[0], len,
         &waveform, &phase_shift, &freq_div, &half_pp_offset, &source,
         &pp_amplitude);
     errorout(error);
@@ -54,17 +54,17 @@ int main(int argc, char** argv) {
     const char* waveform_dict[6] = {"triangle", "sawtoothpos",
         "sawtoothneg", "square", "sine", "noise"};
     const int phase_shift_dict[4] = {0, 90, 180, 270};
-    const int freq_div_dict[11] = {"off", "2", "4", "8", "16", "32",
+    const char* freq_div_dict[11] = {"off", "2", "4", "8", "16", "32",
         "64", "128", "256", "512", "1024"};
     const char* half_pp_offset_dict[2] = {"off", "on"};
-    const char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
+    const char* source_dict[7] = {"Ib", "Vb", "Test2", "Phib", "I", "Test5", "PhiX"};
 
     // Output everything.
     printf("Generator %d is %s, with monitoring %s. ",
         gen_num, onoff_dict[gen_onoff], onoff_dict[mon_onoff]);
     printf("The source is %s. The waveform is %s with a frequency of %f Hz, the divider at %s and a phase shift of %d. ",
         source_dict[source], waveform_dict[waveform], gen_freq, freq_div_dict[freq_div], phase_shift_dict[phase_shift]);
-    print("The peak-to-peak amplitude is %f, with the half-peak-to-peak offset %s.\n",
+    printf("The peak-to-peak amplitude is %f, with the half-peak-to-peak offset %s.\n",
         pp_amplitude, half_pp_offset_dict[half_pp_offset]);
 
     // Close connection

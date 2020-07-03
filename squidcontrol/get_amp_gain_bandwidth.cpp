@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    printf("SUCCESS: Read amp gain = %d, amp bandwidth = %s\n", amp_gain_real, amp_bw_real);
+    printf("SUCCESS: Read amp gain = %d, amp bandwidth = %s\n", amp_gain_real, amp_bw_real.c_str());
     cout << flush;
 
     // Close connection

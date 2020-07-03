@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     }
 
     // Convert generator status
-    const char* onoff_dict[2] = {"off", "on"};
+    char* onoff_dict[2] = {"off", "on"};
     char* gen_onoff_real = argv[4];
     char* mon_onoff_real = argv[5];
     unsigned short gen_onoff = (unsigned short) get_index_str(onoff_dict, 2, gen_onoff_real);
@@ -41,13 +41,13 @@ int main(int argc, char** argv) {
     double gen_freq = stod(argv[6]);
 
     // Convert waveform information
-    const char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
-    const char* waveform_dict[6] = {"triangle", "sawtoothpos",
+    char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
+    char* waveform_dict[6] = {"triangle", "sawtoothpos",
         "sawtoothneg", "square", "sine", "noise"};
-    const int phase_shift_dict[4] = {0, 90, 180, 270};
-    const char* freq_div_dict[11] = {"off", "2", "4", "8", "16", "32",
+    int phase_shift_dict[4] = {0, 90, 180, 270};
+    char* freq_div_dict[11] = {"off", "2", "4", "8", "16", "32",
         "64", "128", "256", "512", "1024"};
-    const char* half_pp_offset_dict[2] = {"off", "on"};
+    char* half_pp_offset_dict[2] = {"off", "on"};
 
     char* source_real = argv[7];
     char* waveform_real = argv[8];

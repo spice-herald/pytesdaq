@@ -87,8 +87,10 @@ void validate_args(unsigned short* containers, int argc, char** argv, const char
 int get_index_str(char** str_array, int str_array_length, char* desired_str) {
 
     int index = -1;
+    string s;
     for (int i = 0; i < str_array_length; i++) {
-        if (str_array[i].compare(desired_str) == 0) {
+        s = (string)str_array[i];
+        if (s.compare(desired_str) == 0) {
             index = i;
             break;
         }
