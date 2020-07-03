@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <limits>
 #include "magsv.h"
 #include "squid_control_helpers.cpp"
 
@@ -68,7 +69,7 @@ int main(int argc, char** argv) {
         }
     }
     else {
-        cout << "ERROR: Invalid source to set." << endl;
+        cout << "ERROR: Invalid source to set. Must be I, V, or Phi." << endl;
         cout << flush;
         return 2;
     }

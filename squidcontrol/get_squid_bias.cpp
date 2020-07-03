@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <limits>
 #include "magsv.h"
 #include "squid_control_helpers.cpp"
 

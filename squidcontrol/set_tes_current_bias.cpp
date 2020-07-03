@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <limits>
 #include "magsv.h"
 #include "squid_control_helpers.cpp"
 
@@ -47,7 +48,7 @@ int main(int argc, char** argv) {
         }
     }
     else {
-        cout << "ERROR: Invalid range." << endl;
+        cout << "ERROR: Invalid range. Must set be low or high." << endl;
         cout << flush;
         return 2;
     }

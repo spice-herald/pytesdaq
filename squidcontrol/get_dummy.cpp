@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <limits>
 #include "magsv.h"
 #include "squid_control_helpers.cpp"
 
@@ -17,7 +18,7 @@ int main(int argc, char** argv) {
     unsigned short error = containers[2];
 
     // Get dummy
-    unsigned short dummy = (unsigned short) USHRT_MAX;
+    unsigned short dummy = 0;
     MA_read_Dummy(channel, &error, &dummy);
     errorout(error);
     if (dummy == 0) {
