@@ -128,7 +128,7 @@ class Magnicon(object):
         """
 
         self._remote_inst.send_command('.\\get_squid_bias.exe %d %d I\n' % (controller_channel, self._reset_active))
-        s = self.listen_for(['Ib', 'ERROR'])
+        s = self.listen_for(['Ib', 'ERROR', 'Error'])
 
         if 'Ib' in s:
             _, s = s.split('Ib = ')
@@ -145,7 +145,7 @@ class Magnicon(object):
         """
 
         self._remote_inst.send_command('.\\set_squid_bias.exe %d %d I %f\n' % (controller_channel, self._reset_active, Ib))
-        s = self.listen_for(['Ib', 'ERROR'])
+        s = self.listen_for(['Ib', 'ERROR', 'Error'])
 
         if 'Ib' in s:
             _, s = s.split('Ib = ')
