@@ -16,6 +16,7 @@ const double IAUX_HIGH_MIN = -500., IAUX_HIGH_MAX = 500.;
 void errorout(unsigned short error) {
     if (error != 0)
         cout << "\nCommunication Error" << endl;
+        cout << flush;
 }
 
 
