@@ -1,14 +1,4 @@
 /*!
- * MA_read_GBP
- */
-void __stdcall MA_read_GBP(uint16_t channel_no, uint16_t *error, 
-	uint16_t *gbp);
-/*!
- * MA_read_OutCoup
- */
-void __stdcall MA_read_OutCoup(uint16_t channel_no, uint16_t *error, 
-	uint16_t *outcoup);
-/*!
  * MA_read_Phix
  */
 void __stdcall MA_read_Phix(uint16_t channel_no, uint16_t *error, 
@@ -75,16 +65,6 @@ void __stdcall MA_read_Vout(uint16_t channel_no, uint16_t *error,
 void __stdcall MA_set_RL_Iaux(uint16_t channel_no, uint16_t *error, 
 	double iaux_rl);
 /*!
- * MA_write_GBP
- */
-void __stdcall MA_write_GBP(uint16_t channel_no, uint16_t *error, 
-	uint16_t gbp_in);
-/*!
- * MA_write_OutCoup
- */
-void __stdcall MA_write_OutCoup(uint16_t channel_no, uint16_t *error, 
-	uint16_t outcoup);
-/*!
  * MA_write_PhiX
  */
 void __stdcall MA_write_PhiX(uint16_t channel_no, uint16_t *error, 
@@ -125,6 +105,11 @@ void __stdcall MA_write_RfxAmp(uint16_t channel_no, uint16_t *error,
  */
 void __stdcall MA_write_RfxFLL(uint16_t channel_no, uint16_t *error, 
 	uint16_t rfxfll);
+/*!
+ * MA_set_RL_Iaux
+ */
+void __stdcall MA_set_RL_Iaux(uint16_t channel_no, uint16_t *error, 
+	double iaux_rl);
 /*!
  * MA_write_SGain
  */
