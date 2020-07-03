@@ -20,26 +20,6 @@ void __stdcall MA_read_PulseParam(uint16_t channel_no, uint16_t *error,
 	double time_ranges[], double dur_ranges[], int32_t len, uint16_t *mode, 
 	double *time, double *duration);
 /*!
- * MA_read_RfAmp
- */
-void __stdcall MA_read_RfAmp(uint16_t channel_no, uint16_t *error, 
-	uint16_t *rfamp);
-/*!
- * MA_read_RfFLL
- */
-void __stdcall MA_read_RfFLL(uint16_t channel_no, uint16_t *error, 
-	uint16_t *rfffl);
-/*!
- * MA_read_RfxAmp
- */
-void __stdcall MA_read_RfxAmp(uint16_t channel_no, uint16_t *error, 
-	uint16_t *rfxamp);
-/*!
- * MA_read_RfxFLL
- */
-void __stdcall MA_read_RfxFLL(uint16_t channel_no, uint16_t *error, 
-	uint16_t *rfxfll);
-/*!
  * MA_read_SGain
  */
 void __stdcall MA_read_SGain(uint16_t channel_no, uint16_t *error, 
@@ -85,26 +65,6 @@ void __stdcall MA_write_PulseOnOff(uint16_t channel_no, uint16_t *error,
 void __stdcall MA_write_PulseParam(uint16_t channel_no, uint16_t *error, 
 	double duration_in, double time_in, uint16_t mode, double *duration_out, 
 	double *time_out);
-/*!
- * MA_write_RfAmp
- */
-void __stdcall MA_write_RfAmp(uint16_t channel_no, uint16_t *error, 
-	uint16_t rfamp_in);
-/*!
- * MA_write_RfFLL
- */
-void __stdcall MA_write_RfFLL(uint16_t channel_no, uint16_t *error, 
-	uint16_t rffll_in);
-/*!
- * MA_write_RfxAmp
- */
-void __stdcall MA_write_RfxAmp(uint16_t channel_no, uint16_t *error, 
-	uint16_t rfxamp);
-/*!
- * MA_write_RfxFLL
- */
-void __stdcall MA_write_RfxFLL(uint16_t channel_no, uint16_t *error, 
-	uint16_t rfxfll);
 /*!
  * MA_set_RL_Iaux
  */
