@@ -55,6 +55,13 @@ void validate_args(unsigned short* containers, int argc, char** argv, const char
     unsigned short active = (unsigned short)(stoul(argv[2]));
     unsigned short error = 0;
 
+    // Check active
+    if (active != 0 && active != 1) {
+        cout << "ERROR: active must be 0 or 1." << endl;
+        cout << flush;
+        return;
+    }
+
     // Connect to electronics
     MA_initUSB(&error, baud, timeout);
     errorout(error);
