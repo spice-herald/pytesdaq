@@ -1,9 +1,3 @@
-
-/*!
- * MA_read_AGain
- */
-void __stdcall MA_read_AGain(uint16_t channel_no, uint16_t *error, 
-	uint16_t *again);
 /*!
  * MA_read_Amp
  */
@@ -259,20 +253,10 @@ void __stdcall MA_set_RL_Iaux(uint16_t channel_no, uint16_t *error,
  */
 void __stdcall MA_sleep_mode(uint16_t channel_no, uint16_t *error);
 /*!
- * MA_write_AGain
- */
-void __stdcall MA_write_AGain(uint16_t channel_no, uint16_t *error, 
-	uint16_t again);
-/*!
  * MA_write_Amp
  */
 void __stdcall MA_write_Amp(uint16_t channel_no, uint16_t *error, 
 	uint16_t ampfll);
-/*!
- * MA_write_AmpMode
- */
-void __stdcall MA_write_AmpMode(uint16_t channel_no, uint16_t *error, 
-	uint16_t amp_gain, uint16_t amp_bw);
 /*!
  * MA_write_AVb
  */
