@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     // Check arguments
     unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
-    const char* extra_args[1] = {"amp_gain_sign[negative/positive]"};
+    const char* extra_args[1] = {"amp_gain_sign[negative,positive]"};
     validate_args(containers, argc, argv, "set_amp_gain_sign.exe", 1, extra_args);
     if (containers[0] == (unsigned short) USHRT_MAX) {
         return 1; }
