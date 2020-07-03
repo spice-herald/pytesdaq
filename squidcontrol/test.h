@@ -4,23 +4,6 @@
 void __stdcall MA_read_GBP(uint16_t channel_no, uint16_t *error, 
 	uint16_t *gbp);
 /*!
- * MA_read_GenFreq
- */
-void __stdcall MA_read_GenFreq(uint16_t channel_no, uint16_t *error, 
-	double ranges[], int32_t len, double *gen_freq);
-/*!
- * MA_read_GenOnOff
- */
-void __stdcall MA_read_GenOnOff(uint16_t channel_no, uint16_t *error, 
-	uint16_t *gen1_onoff, uint16_t *gen2_onoff, uint16_t *mon_onoff);
-/*!
- * MA_read_GenParam
- */
-void __stdcall MA_read_GenParam(uint16_t channel_no, uint16_t *error, 
-	uint16_t gen_no, double ranges[], int32_t len, uint16_t *wavef, 
-	uint16_t *phase, uint16_t *freq_div, uint16_t *bipolar, uint16_t *source, 
-	double *peakpeak);
-/*!
  * MA_read_OutCoup
  */
 void __stdcall MA_read_OutCoup(uint16_t channel_no, uint16_t *error, 
@@ -96,22 +79,6 @@ void __stdcall MA_set_RL_Iaux(uint16_t channel_no, uint16_t *error,
  */
 void __stdcall MA_write_GBP(uint16_t channel_no, uint16_t *error, 
 	uint16_t gbp_in);
-/*!
- * MA_write_GenFreq
- */
-void __stdcall MA_write_GenFreq(uint16_t channel_no, uint16_t *error, 
-	double gen_freq_in, double *gen_freq_out);
-/*!
- * MA_write_GenOnOff
- */
-void __stdcall MA_write_GenOnOff(uint16_t channel_no, uint16_t *error, 
-	uint16_t gen1_onoff, uint16_t gen2_onoff, uint16_t mon_onoff);
-/*!
- * MA_write_GenParam
- */
-void __stdcall MA_write_GenParam(uint16_t channel_no, uint16_t *error, 
-	uint16_t gen_no, uint16_t wavef, uint16_t source, double peakpeak_in, 
-	uint16_t phase, uint16_t freq_div, uint16_t bipolar, double *peakpeak_out);
 /*!
  * MA_write_OutCoup
  */

@@ -77,3 +77,50 @@ void validate_args(unsigned short* containers, int argc, char** argv, const char
     containers[1] = active;
     containers[2] = error;
 }
+
+
+
+// Given an array of strings, return the first index of a particular string
+// Args: array of strings, length of this array, the desired string
+// Returns: the index of the string or -1 if not found
+
+int get_index_str(char** str_array, int str_array_length, char* desired_str) {
+
+    int index = -1;
+    for (int i = 0; i < str_array_length; i++) {
+        if (str_array[i].compare(desired_str) == 0) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        cout << "ERROR: Could not find " << desired_str << endl;
+        cout << flush;
+    }
+    return index;
+}
+
+
+
+// Given an array of ints, return the first index of a particular int
+// Args: array of ints, length of this array, the desired int
+// Returns: the index of the int or -1 if not found
+
+int get_index_int(int* int_array, int int_array_length, int desired_int) {
+
+    int index = -1;
+    for (int i = 0; i < int_array_length; i++) {
+        if (int_array[i] == desired_int) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        cout << "ERROR: Could not find " << desired_int << endl;
+        cout << flush;
+    }
+    return index;
+}
+
