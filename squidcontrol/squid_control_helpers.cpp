@@ -22,30 +22,32 @@ void errorout(unsigned short error) {
 
 // Check user's command-line arguments for general validity
 // Check the number of arguments given, and if appropriate, open USB connection and set the active channel.
-// Arguments: argc and argv from the command-line arguments; the number of extra arguments in addition to
-// the call, channel, whether to set active, baud, and timeout (i.e. argc minus 5); the function call
-// in the form *.exe
-// Returns: an unsigned short array with three elements: channel, active, and error
+// Arguments: an unsigned short array with three elements to store channel, active, and error;
+// argc and argv from the command-line arguments; the function call in the form "*.exe"; the number of
+// extra arguments in addition to the call, channel, whether to set active, baud, and timeout (i.e. argc minus 5); 
+// the extra argument descriptions.
 
-unsigned short* validate_args(int argc, char** argv, int extra_args, string exe_name) {
-
-    unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
+void validate_args(unsigned short* containers, int argc, char** argv, const char* exe_name, int n_extra_args, const char** extra_args) {
 
     // Check number of arguments
-    if (argc != (3 + extra_args) && argc != (5 + extra_args)) {
+    if (argc != (3 + n_extra_args) && argc != (5 + n_extra_args)) {
         cout << "ERROR: run the program as follows" << endl;
-        printf("\t.\\%s channel[1,2,3] active[0,1] [baud = 57600] [timeout = 100]\n", exe_name);
+        printf("\t.\\%s channel[1,2,3] active[0,1] ", exe_name);
+        for (int i = 0; i < n_extra_args; i++) {
+            printf("%s ", extra_args[i]);
+        }
+        cout << "[baud = 57600] [timeout = 100]" << endl;
         cout << "\tNote: either set both baud and timeout or neither." << endl;
         cout << "\tNote: active indicates whether to make the channel the active channel." << endl;
         cout << flush;
-        return containers;
+        return;
     }
 
     // Set connection info
     unsigned long baud = 57600, timeout = 100; 
-    if (argc == (5 + extra_args)) {
-        baud = stoul(argv[3 + extra_args]);
-        timeout = stoul(argv[4 + extra_args]);
+    if (argc == (5 + n_extra_args)) {
+        baud = stoul(argv[3 + n_extra_args]);
+        timeout = stoul(argv[4 + n_extra_args]);
     }
 
     // Set containers: channel, whether to set active, error
@@ -67,5 +69,4 @@ unsigned short* validate_args(int argc, char** argv, int extra_args, string exe_
     containers[0] = channel;
     containers[1] = active;
     containers[2] = error;
-    return containers;
 }
