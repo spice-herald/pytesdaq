@@ -25,16 +25,6 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // Get generator status
-    unsigned short gen_onoff, gen1_onoff, gen2_onoff, mon_onoff;
-    const char* onoff_dict[2] = {"off", "on"};
-    MA_read_GenOnOff(channel, &error, &gen1_onoff, &gen2_onoff, &mon_onoff);
-    errorout(error);
-    if (gen_num == 1) {
-        gen_onoff = gen1_onoff; }
-    else if (gen_num == 2) {
-        gen_onoff = gen2_onoff; }
-
     // Get generator frequency
     double gen_freq = 0.;
     double ranges_freq[3] = {0, 0, 0}; // array for frequency range
@@ -60,8 +50,7 @@ int main(int argc, char** argv) {
     const char* source_dict[7] = {"Ib", "Vb", "Test2", "Phib", "I", "Test5", "PhiX"};
 
     // Output everything.
-    printf("Generator %d is %s, with monitoring %s. ",
-        gen_num, onoff_dict[gen_onoff], onoff_dict[mon_onoff]);
+    printf("Generator %d: ", gen_num);
     printf("The source is %s. The waveform is %s with a frequency of %f Hz, the divider at %s and a phase shift of %d. ",
         source_dict[source], waveform_dict[waveform], gen_freq, freq_div_dict[freq_div], phase_shift_dict[phase_shift]);
     printf("The peak-to-peak amplitude is %f, with the half-peak-to-peak offset %s.\n",

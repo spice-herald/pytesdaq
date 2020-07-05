@@ -10,13 +10,13 @@ int main(int argc, char** argv) {
 
     // Check arguments
     unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
-    const char* extra_args[10] = {"generator_number[1,2]", "generator_status[on,off]",
-        "monitor_status[on,off]", "frequency[Hz]", "source[Ib,Vb,Phib,I]",
+    const char* extra_args[8] = {"generator_number[1,2]", "frequency[Hz]",
+        "source[Ib,Vb,Phib,I]",
         "waveform[triangle,sawtoothpos,sawtoothneg,square,sine,noise]",
         "phase_shift[0,90,180,270]",
         "freq_div[off,2,4,8,16,32,64,128,256,512,1024]",
         "half_peak_peak_offset[on,off]", "peak_peak_amplitude"};
-    validate_args(containers, argc, argv, "set_generator.exe", 10, extra_args);
+    validate_args(containers, argc, argv, "set_generator_params.exe", 8, extra_args);
     if (containers[0] == (unsigned short) USHRT_MAX) {
         return 1; }
     unsigned short channel = containers[0];
@@ -30,15 +30,8 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // Convert generator status
-    char* onoff_dict[2] = {"off", "on"};
-    char* gen_onoff_real = argv[4];
-    char* mon_onoff_real = argv[5];
-    unsigned short gen_onoff = (unsigned short) get_index_str(onoff_dict, 2, gen_onoff_real);
-    unsigned short mon_onoff = (unsigned short) get_index_str(onoff_dict, 2, mon_onoff_real);
-
     // Convert generator frequency
-    double gen_freq = stod(argv[6]);
+    double gen_freq = stod(argv[4]);
 
     // Convert waveform information
     char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
@@ -49,12 +42,12 @@ int main(int argc, char** argv) {
         "64", "128", "256", "512", "1024"};
     char* half_pp_offset_dict[2] = {"off", "on"};
 
-    char* source_real = argv[7];
-    char* waveform_real = argv[8];
-    int phase_shift_real = stoi(argv[9]);
-    char* freq_div_real = argv[10];
-    char* half_pp_offset_real = argv[11];
-    double pp_amplitude = stod(argv[12]);
+    char* source_real = argv[5];
+    char* waveform_real = argv[6];
+    int phase_shift_real = stoi(argv[7]);
+    char* freq_div_real = argv[8];
+    char* half_pp_offset_real = argv[9];
+    double pp_amplitude = stod(argv[10]);
     double pp_amplitude_coerced = 0.;
 
     unsigned short source = (unsigned short) get_index_str(source_dict, 7, source_real);

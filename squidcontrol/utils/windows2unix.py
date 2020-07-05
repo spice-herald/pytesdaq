@@ -1,4 +1,5 @@
 import sys
+import os
 
 if len(sys.argv) != 2:
     print('Convert a text file from Windows (\\r\\n for new line to \\n).')
@@ -14,3 +15,5 @@ for line in f_in.readlines():
 
 f_out.close()
 f_in.close()
+
+os.rename(fn + '_2', fn)
