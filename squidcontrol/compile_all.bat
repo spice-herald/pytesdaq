@@ -9,8 +9,11 @@ cl /EHsc get_flux_bias_disconnect.cpp magsv.lib
 cl /EHsc get_generator_onoff.cpp magsv.lib
 cl /EHsc get_generator_params.cpp magsv.lib
 cl /EHsc get_output_coupling.cpp magsv.lib
+cl /EHsc get_output_voltage.cpp magsv.lib
+cl /EHsc get_preamp_input_voltage.cpp magsv.lib
 cl /EHsc get_squid_bias.cpp magsv.lib
 cl /EHsc get_squid_gain_sign.cpp magsv.lib
+cl /EHsc get_temperature.cpp magsv.lib
 cl /EHsc get_tes_current_bias.cpp magsv.lib
 cl /EHsc get_tes_pulse_disconnect.cpp magsv.lib
 cl /EHsc get_tes_pulse_onoff.cpp magsv.lib
