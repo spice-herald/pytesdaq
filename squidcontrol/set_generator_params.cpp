@@ -30,10 +30,13 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // Convert generator frequency
+    // Set generator frequency
     double gen_freq = stod(argv[4]);
+    double gen_freq_coerced = 0;
+    MA_write_GenFreq(channel, &error, gen_freq, &gen_freq_coerced);
+    errorout(error)
 
-    // Convert waveform information
+    // Set waveform information
     char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
     char* waveform_dict[6] = {"triangle", "sawtoothpos",
         "sawtoothneg", "square", "sine", "noise"};
@@ -60,8 +63,8 @@ int main(int argc, char** argv) {
         phase_shift, freq_div, half_pp_offset, &pp_amplitude_coerced);
     errorout(error);
 
-    cout << "SUCCESS: Set generator " << gen_num << " to peak-peak amplitude of "
-        << pp_amplitude_coerced << endl;
+    printf("SUCCESS: Set generator %d to peak-peak amplitude of %f and frequency of %f Hz.\n",
+        gen_num, pp_amplitude_coerced, gen_freq_coerced);
     cout << flush;
 
     // Close connection
