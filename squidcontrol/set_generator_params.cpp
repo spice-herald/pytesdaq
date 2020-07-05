@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     double gen_freq = stod(argv[4]);
     double gen_freq_coerced = 0;
     MA_write_GenFreq(channel, &error, gen_freq, &gen_freq_coerced);
-    errorout(error)
+    errorout(error);
 
     // Set waveform information
     char* source_dict[7] = {"Ib", "Vb", "", "Phib", "I", "", "PhiX"};
