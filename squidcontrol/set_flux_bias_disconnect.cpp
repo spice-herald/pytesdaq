@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     unsigned short error = containers[2];
 
     // Set disconnect switch for flux bias
-    string flux_bias_disconnect_real = argv[3];
+    char* flux_bias_disconnect_real = argv[3];
 
     char* disconnect_dict[2] = {"disconnected", "connected"};
     unsigned short flux_bias_disconnect = (unsigned short) get_index_str(disconnect_dict, 2, flux_bias_disconnect_real);

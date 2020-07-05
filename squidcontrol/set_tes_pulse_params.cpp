@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     // Check arguments
     unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
-    const char* extra_args[1] = {"pulse_mode[off/continuous/single]", "pulse_amplitude[uA]",
+    const char* extra_args[4] = {"pulse_mode[off/continuous/single]", "pulse_amplitude[uA]",
         "time_between_pulses[ms]", "pulse_duration[us]"};
     validate_args(containers, argc, argv, "set_tes_pulse_params.exe", 4, extra_args);
     if (containers[0] == (unsigned short) USHRT_MAX) {
@@ -35,11 +35,11 @@ int main(int argc, char** argv) {
         &pulse_duration_coerced, &time_between_pulses_coerced);
     errorout(error);
 
-    MA_write_Phix(channel, &error, pulse_amplitude, &pulse_amplitude_coerced);
+    MA_write_PhiX(channel, &error, pulse_amplitude, &pulse_amplitude_coerced);
     errorout(error);
 
     // Output
-    print("SUCCESS: Set TES pulse to %s mode with %f uA amplitude, %f us pulse duration, %f ms between pulses.\n",
+    printf("SUCCESS: Set TES pulse to %s mode with %f uA amplitude, %f us pulse duration, %f ms between pulses.\n",
         pulse_mode_real, pulse_amplitude_coerced, pulse_duration_coerced, time_between_pulses_coerced);
     cout << flush;
 

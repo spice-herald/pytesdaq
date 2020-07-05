@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     unsigned short error = containers[2];
 
     // Set tes_pulse_onoff for both generators and monitoring output
-    string tes_pulse_onoff_real = argv[3];
+    char* tes_pulse_onoff_real = argv[3];
 
     char* onoff_dict[2] = {"off", "on"};
     unsigned short tes_pulse_onoff = (unsigned short) get_index_str(onoff_dict, 2, tes_pulse_onoff_real);

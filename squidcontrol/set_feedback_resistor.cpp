@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     // Convert feedback resistor
     char* Rf_dict[16] = {"off", "0.7", "0.75", "0.91", "1.0", "2.14", "2.31",
         "2.73", "3.0", "7.0", "7.5", "9.1", "10.0", "23.1", "30", "100"};
-    string Rf_real = argv[3];
+    char* Rf_real = argv[3];
     unsigned short Rf = (unsigned short) get_index_str(Rf_dict, 16, Rf_real);
 
     // Set feedback resistor

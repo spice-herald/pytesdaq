@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     char* gbp_dict[19] = {"0.23", "0.27", "0.30", "0.38", "0.47", "0.55",
         "0.66", "0.82", "1.04", "1.28", "1.50", "1.80", "2.25", "2.80",
         "3.30", "4.00", "5.00", "6.20", "7.20"};
-    string gbp_real = argv[3];
+    char* gbp_real = argv[3];
     unsigned short gbp = (unsigned short) get_index_str(gbp_dict, 19, gbp_real);
 
     // Set gain bandwidth product

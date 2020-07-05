@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     unsigned short error = containers[2];
 
     // Set disconnect switch status for auxiliary current source
-    string tes_pulse_disconnect_real = argv[3];
+    char* tes_pulse_disconnect_real = argv[3];
 
     char* disconnect_dict[2] = {"disconnected", "connected"};
     unsigned short tes_pulse_disconnect = (unsigned short) get_index_str(disconnect_dict, 2, tes_pulse_disconnect_real);
