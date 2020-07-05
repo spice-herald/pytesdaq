@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
         errorout(error);
     }
     else {
-        cout << "ERROR: Invalid amplifier gain sign. Must be positive or negative." << endl;
+        cout << "ERROR: Invalid squid gain sign. Must be positive or negative." << endl;
         cout << flush;
         return 2;
     }
