@@ -2,7 +2,7 @@
 #include <string>
 #include <limits>
 #include "magsv.h"
-#include "squid_control_helpers.cpp"
+#include "utils/squid_control_helpers.cpp"
 
 using namespace std;
 
