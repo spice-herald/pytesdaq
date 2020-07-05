@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     unsigned short channel = containers[0];
     unsigned short error = containers[2];
 
-    // Get squid_gain_sign
+    // Get squid gain sign
     string squid_gain_sign = argv[3];
     if (squid_gain_sign.compare("positive") == 0) {
         MA_write_SGain(channel, &error, 0);

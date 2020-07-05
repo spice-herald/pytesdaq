@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     unsigned short channel = containers[0];
     unsigned short error = containers[2];
 
-    // Get amp gain sign
+    // Get squid gain sign
     unsigned short squid_gain_sign = 0;
     MA_read_SGain(channel, &error, &squid_gain_sign);
     errorout(error);
