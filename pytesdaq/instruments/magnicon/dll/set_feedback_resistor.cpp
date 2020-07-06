@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
 
     // Check arguments
     unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
-    const char* extra_args[1] = {"Rf[off,0.7,0.75,0.91,1.0,2.14,2.31,2.73,3.0,7.0,7.5,9.1,10.0,23.1,30,100]"};
+    const char* extra_args[1] = {"Rf[off,0.70,0.75,0.91,1.00,2.14,2.31,2.73,3.00,7.00,7.50,9.10,10.00,23.10,30.00,100.00]"};
     validate_args(containers, argc, argv, "set_feedback_resistor.exe", 1, extra_args);
     if (containers[0] == (unsigned short) USHRT_MAX) {
         return 1; }
@@ -23,8 +23,8 @@ int main(int argc, char** argv) {
     errorout(error);
 
     // Convert feedback resistor
-    char* Rf_dict[16] = {"off", "0.7", "0.75", "0.91", "1.0", "2.14", "2.31",
-        "2.73", "3.0", "7.0", "7.5", "9.1", "10.0", "23.1", "30", "100"};
+    char* Rf_dict[16] = {"off", "0.07", "0.75", "0.91", "1.00", "2.14", "2.31",
+        "2.73", "3.00", "7.00", "7.50", "9.10", "10.00", "23.10", "30.00", "100.00"};
     char* Rf_real = argv[3];
     unsigned short Rf = (unsigned short) get_index_str(Rf_dict, 16, Rf_real);
 
