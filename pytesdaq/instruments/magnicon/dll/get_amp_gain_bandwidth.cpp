@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
             amp_bw_real = "Full";
             break;
         case 6:
-            amp_bw_real = "AC Amp off";
+            amp_bw_real = "AC_Amp_off";
             break;
         default:
             cout << "ERROR getting amplifier bandwidth." << endl;
