@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 
     // Get output voltage
     double Vout = 0;
-    MA_read_Temp(channel, &error, &Vout);
+    MA_read_Vout(channel, &error, &Vout);
     errorout(error);
 
     cout << "Output voltage Vout = " << Vout << " V" << endl;
