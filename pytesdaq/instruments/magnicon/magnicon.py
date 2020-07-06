@@ -431,7 +431,7 @@ class Magnicon(object):
         """
         Get internal Magnicon generator parameters. Requires generator number input (1 or 2).
         Returns: source, waveform, frequency (Hz), frequency divider (0 for off), phase shift,
-            peak-to-peak amplitude, status of half-peak-to-peak offset (ON/OFF).
+            peak-to-peak amplitude (uA or uV), status of half-peak-to-peak offset (ON/OFF).
         If failed, returns 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
         """
 
@@ -734,24 +734,28 @@ class Magnicon(object):
 
 
 
-    def set_GBP(self, controller_channel):
+    def set_GBP(self, controller_channel, gbp):
         """
+        Set gain bandwidth product. Must be one of:
+        [0.23,0.27,0.30,0.38,0.47,0.55,0.66,0.82,1.04,1.28,1.50,1.80,
+            2.25,2.80,3.30,4.00,5.00,6.20,7.20]
+        Returns GBP or -1000 if failed
         """
 
-        command = '.\\set_GBP.exe %d %d\n' % (controller_channel, self._reset_active)
+        if round(gbp, 2) not in [0.23,0.27,0.30,0.38,0.47,0.55,0.66,0.82,1.04,1.28,1.50,1.80,2.25,2.80,3.30,4.00,5.00,6.20,7.20]:
+            print('Invalid GBP, not setting')
+            return -1000.        
+
+        command = '.\\set_GBP.exe %d %d\n' % (controller_channel, self._reset_active, gbp)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set GBP')
-            return
-        elif '' in s:
-            
+            return -1000.
         else:
-            print('Could not set GBP')
-            return
-
+            return gbp
 
 
 
@@ -776,150 +780,212 @@ class Magnicon(object):
 
 
 
-    def set_amp_gain_sign(self, controller_channel):
+    def set_amp_gain_sign(self, controller_channel, sign):
         """
+        Set sign of amplifier gain. Must be +1 or -1.
+        Returns the sign or 0 for failure.
         """
 
-        command = '.\\set_amp_gain_sign.exe %d %d\n' % (controller_channel, self._reset_active)
+        if sign == 1:
+            command = '.\\set_amp_gain_sign.exe %d %d positive\n' % (controller_channel, self._reset_active)
+        elif sign == -1:
+            command = '.\\set_amp_gain_sign.exe %d %d negative\n' % (controller_channel, self._reset_active)
+        else:
+            print('Invalid amp_gain_sign, not setting.')
+            return 0
+
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set amp_gain_sign')
-            return
-        elif '' in s:
-            
+            return 0
         else:
-            print('Could not set amp_gain_sign')
-            return
+            return sign
 
 
 
-
-    def set_amp_or_fll(self, controller_channel):
+    def set_amp_or_fll(self, controller_channel, mode):
         """
+        Set electronics mode. Must be 'AMP' or 'FLL'.
+        Returns the mode or FAIL.
         """
 
-        command = '.\\set_amp_or_fll.exe %d %d\n' % (controller_channel, self._reset_active)
+        if mode != "AMP" and mode != "FLL":
+            print('Invalid electronics mode, not setting')
+            return 'FAIL'
+
+        command = '.\\set_amp_or_fll.exe %d %d %s\n' % (controller_channel, self._reset_active, mode)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set amp_or_fll')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
         else:
             print('Could not set amp_or_fll')
-            return
+            return mode
 
 
 
-
-    def set_dummy(self, controller_channel):
+    def set_dummy(self, controller_channel, dummy_status):
         """
+        Set dummy SQUID status. Must be 'ON' or 'OFF'.
+        Returns the status or FAIL.
         """
 
-        command = '.\\set_dummy.exe %d %d\n' % (controller_channel, self._reset_active)
+        if dummy_status == 'ON':
+            command = '.\\set_dummy.exe %d %d on\n' % (controller_channel, self._reset_active)
+        elif dummy_status == 'OFF':
+            command = '.\\set_dummy.exe %d %d off\n' % (controller_channel, self._reset_active)
+        else:
+            print('Invalid dummy status, not setting')
+            return 'FAIL'
+
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set dummy')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
         else:
-            print('Could not set dummy')
-            return
+            return dummy_status
 
 
 
-
-    def set_feedback_resistor(self, controller_channel):
+    def set_feedback_resistor(self, controller_channel, Rf):
         """
+        Set resistor in feedback coil. Must be one of:
+            [0 (for off),0.70,0.75,0.91,1.00,2.14,2.31,2.73,3.00,7.00,7.50,9.10,10.00,23.10,30.00,100.00] kOhms
+        Returns feedback resistance or -1000 if failed.
         """
 
-        command = '.\\set_feedback_resistor.exe %d %d\n' % (controller_channel, self._reset_active)
+        if Rf not in [0,0.70,0.75,0.91,1.00,2.14,2.31,2.73,3.00,7.00,7.50,9.10,10.00,23.10,30.00,100.00]:
+            print('Invalid feedback resistance, not setting')
+            return -1000.
+
+        if Rf == 0:
+            command = '.\\set_feedback_resistor.exe %d %d off\n' % (controller_channel, self._reset_active)
+        else:
+            command = '.\\set_feedback_resistor.exe %d %d %.2f\n' % (controller_channel, self._reset_active, Rf)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set feedback_resistor')
-            return
-        elif '' in s:
-            
+            return -1000.
         else:
-            print('Could not set feedback_resistor')
-            return
+            return Rf
 
 
 
-
-    def set_flux_bias_disconnect(self, controller_channel):
+    def set_flux_bias_disconnect(self, controller_channel, flux_bias_status):
         """
+        Set status of flux bias disconnect switch. Must be CONNECTED or DISCONNECTED.
+        Returns status or FAIL if failed.
         """
 
-        command = '.\\set_flux_bias_disconnect.exe %d %d\n' % (controller_channel, self._reset_active)
+        if flux_bias_status != 'CONNECTED' and flux_bias_status != 'DISCONNECTED':
+            print('Invalid flux bias status, not setting')
+            return 'FAIL'
+
+        command = '.\\set_flux_bias_disconnect.exe %d %d %s\n' % (controller_channel, self._reset_active, flux_bias_status.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set flux_bias_disconnect')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
         else:
-            print('Could not set flux_bias_disconnect')
-            return
+            return flux_bias_status
 
 
 
-
-    def set_generator_onoff(self, controller_channel):
+    def set_generator_onoff(self, controller_channel, gen1_onoff, gen2_onoff, mon_onoff):
         """
+        Set status of generators and monitoring output. All must be ON or OFF.
+        Returns status of all three, or FAIL, FAIL, FAIL if failed.
         """
 
-        command = '.\\set_generator_onoff.exe %d %d\n' % (controller_channel, self._reset_active)
+        possible_args = ['ON', 'OFF']
+        if gen1_onoff not in possible_args or gen2_onoff not in possible_args or mon_onoff not in possible_args:
+            print('Invalid generator or monitoring status, not setting.')
+            return 'FAIL', 'FAIL', 'FAIL'
+
+        command = '.\\set_generator_onoff.exe %d %d %s %s %s\n' % \
+            (controller_channel, self._reset_active, gen1_onoff.lower(), gen2_onoff.lower(), mon_onoff.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set generator_onoff')
-            return
-        elif '' in s:
-            
+            return 'FAIL', 'FAIL', 'FAIL'
         else:
-            print('Could not set generator_onoff')
-            return
+            return gen1_onoff, gen2_onoff, mon_onoff
 
 
 
-
-    def set_generator_params(self, controller_channel):
+    def set_generator_params(self, controller_channel, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset, pp_amplitude):
         """
+        Set parameters for internal source generator:
+        Arguments: generator number (1 or 2), generator frequency (Hz),
+            source (Ib, Vb, Phib, or I),
+            waveform (triangle, sawtoothpos, sawtoothneg, square, sine, noise),
+            phase shift (0, 90, 180, or 270),
+            frequency divider (0 for off, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024),
+            half peak-peak offset (ON or OFF),
+            peak-peak amplitude (uA or uV)
+        Returns: coerced peak-peak amplitude and coerced frequency,
+            or -1000 for both if failed.
         """
 
-        command = '.\\set_generator_params.exe %d %d\n' % (controller_channel, self._reset_active)
+        if gen_num not in [1, 2]:
+            print('Invalid generator number, not setting')
+            return -1000., -1000.
+        if source not in ['Ib', 'Vb', 'Phib', 'I']:
+            print('Invalid source, not setting')
+            return -1000., -1000.
+        if waveform not in ['triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise']:
+            print('Invalid waveform, not setting')
+            return -1000., -1000.
+        if phase_shift not in [0, 90, 180, 270]:
+            print('Invalid phase shift, not setting')
+            return -1000., -1000.
+        if freq_div not in [0, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]:
+            print('Invalid frequency divider, not setting')
+            return -1000., -1000.
+        if half_pp_offset not in ['ON', 'OFF']:
+            print('Invalid half peak-peak offset, not setting')
+            return -1000., -1000.
+
+        if freq_div == 0:
+            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d off %s %f\n' %
+                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, half_pp_offset, pp_amplitude)
+        else:
+            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d %d %s %f\n' %
+                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset, pp_amplitude)
+
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set generator_params')
-            return
-        elif '' in s:
-            
+            return -1000., -1000.
+        elif 'Set generator' in s:
+            _, s = s.split('peak-peak amplitude of ')
+            pp_amplitude_coerced, s = s.split(' and frequency of ')
+            gen_freq_coerced, _ = s.split(' Hz.')
+            return pp_amplitude_coerced, gen_freq_coerced
         else:
             print('Could not set generator_params')
-            return
-
+            return -1000., -1000.
 
 
 
