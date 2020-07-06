@@ -39,8 +39,8 @@ int main(int argc, char** argv) {
     errorout(error);
 
     // Output
-    printf("SUCCESS: Set TES pulse to %s mode with %f uA amplitude, %f us pulse duration, %f ms between pulses.\n",
-        pulse_mode_real, pulse_amplitude_coerced, pulse_duration_coerced, time_between_pulses_coerced);
+    printf("SUCCESS: Set TES pulse to %s mode with %f uA amplitude, %f ms between pulses, %f us pulse duration.\n",
+        pulse_mode_real, pulse_amplitude_coerced, time_between_pulses_coerced, pulse_duration_coerced);
     cout << flush;
 
     // Close connection
