@@ -702,8 +702,7 @@ class Control:
 
                 if not self._dummy_mode:
                     if param_name == 'tes_bias':
-                        # param_val = magnicon.get_phonon_qet_bias(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = magnicon.get_tes_current_bias(controller_channel)
                     elif param_name == 'squid_bias':
                         param_val = self._mag_inst.get_squid_current_bias(controller_channel)
                     elif param_name == 'lock_point':
@@ -825,8 +824,7 @@ class Control:
 
             if not self._dummy_mode:
                 if param_name == 'tes_bias':
-                    # magnicon.set_phonon_qet_bias(controller_channel, value)
-                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                    magnicon.set_tes_current_bias(controller_channel, value, mode=None)
                 elif param_name == 'squid_bias':
                     self._mag_inst.set_squid_current_bias(controller_channel, value)
                 elif param_name == 'lock_point':
