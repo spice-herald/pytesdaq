@@ -187,7 +187,7 @@ class Magnicon(object):
     def get_amp_gain_bandwidth(self, controller_channel):
         """
         Get amplifier gain (unitless) and bandwidth (MHz if numerical, possibly Full or AC_Amp_off).
-        Returns -1000 and blank string if failed
+        Returns -1000 and FAIL if failed
         """
 
         command = '.\\get_amp_gain_bandwidth.exe %d %d\n' % (controller_channel, self._reset_active)
@@ -197,7 +197,7 @@ class Magnicon(object):
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get amp_gain_bandwidth')
-            return -1000, ''
+            return -1000, 'FAIL'
         elif '' in s:
             _, s = s.split('amp gain = ')
             amp_gain = int(s.split(', amp bandwidth'))
@@ -206,7 +206,7 @@ class Magnicon(object):
             return amp_gain, amp_bw
         else:
             print('Could not get amp_gain_bandwidth')
-            return -1000, ''
+            return -1000, 'FAIL'
 
 
 
@@ -319,298 +319,418 @@ class Magnicon(object):
 
 
 
-
     def get_feedback_resistor(self, controller_channel):
         """
+        Get feedback coil resistor (kOhms).
+        Returns 0 if feedback resistor is off. Returns -1000 if failed.
         """
 
         command = '.\\get_feedback_resistor.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get feedback_resistor')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'SUCCESS' in s:
+            _, s = s.split('Rf = ')
+            if 'AMP' in s:
+                Rf, _ = s.split(' (AMP)')
+            elif 'FLL' in s:
+                Rf, _ = s.split(' (FLL)')
+            else:
+                print('Could not get feedback_resistor')
+                return -1000.
+            if 'off' in Rf:
+                return 0.
+            else:
+                return float(Rf)
         else:
             print('Could not get feedback_resistor')
-            return
-
+            return -1000.
 
 
 
     def get_flux_bias_disconnect(self, controller_channel):
         """
+        Get status of flux bias connection switch.
+        Returns CONNECTED, DISCONNECTED, or FAIL.
         """
 
         command = '.\\get_flux_bias_disconnect.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Flux bias', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get flux_bias_disconnect')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
+        elif 'Flux bias' in s:
+            if 'disconnected' in s:
+                return 'DISCONNECTED'
+            elif 'connected' in s:
+                return 'CONNECTED' 
+            else:
+                print('Could not get flux_bias_disconnect')
+                return 'FAIL'
         else:
             print('Could not get flux_bias_disconnect')
-            return
-
+            return 'FAIL'
 
 
 
     def get_generator_onoff(self, controller_channel):
         """
+        Get status of both generators and monitoring output.
+        Returns ON or OFF for each of the three connections.
+        Returns FAIL, FAIL, FAIL if failed.
         """
 
         command = '.\\get_generator_onoff.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Generator', 'Monitoring', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get generator_onoff')
-            return
+            return 'FAIL', 'FAIL', 'FAIL'
         elif '' in s:
-            
+            _, s = s.split('Generator 1 is')
+            gen1, s = s.split('Generator 2 is')
+            gen2, mon = s.split('Monitoring is')
+            if 'off' in gen1:
+                gen1_status = 'OFF'
+            elif 'on' in gen1:
+                gen1_status = 'ON'
+            else:
+                print('Could not get generator_onoff')
+                gen1_status = 'FAIL'
+            if 'off' in gen2:
+                gen2_status = 'OFF'
+            elif 'on' in gen2:
+                gen2_status = 'ON'
+            else:
+                print('Could not get generator_onoff')
+                gen2_status = 'FAIL'
+            if 'off' in mon:
+                mon_status = 'OFF'
+            elif 'on' in mon:
+                mon_status = 'ON'
+            else:
+                print('Could not get generator_onoff')
+                mon_status = 'FAIL'
+            return gen1_status, gen2_status, mon_status
         else:
             print('Could not get generator_onoff')
-            return
+            return 'FAIL', 'FAIL', 'FAIL'
 
 
 
-
-    def get_generator_params(self, controller_channel):
+    def get_generator_params(self, controller_channel, generator_number):
         """
+        Get internal Magnicon generator parameters. Requires generator number input (1 or 2).
+        Returns: source, waveform, frequency (Hz), frequency divider (0 for off), phase shift,
+            peak-to-peak amplitude, status of half-peak-to-peak offset (ON/OFF).
+        If failed, returns 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
         """
 
-        command = '.\\get_generator_params.exe %d %d\n' % (controller_channel, self._reset_active)
+        command = '.\\get_generator_params.exe %d %d %d\n' % (controller_channel, self._reset_active, generator_number)
         self._remote_inst.send_command(command)
         s = self.listen_for(['', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get generator_params')
-            return
+            return 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
         elif '' in s:
-            
+            _, s = s.split('source is ')
+            source, s = s.split('. The waveform is ')
+            waveform, s = s.split(' with a frequency of ')
+            gen_freq, s = s.split(' Hz, the divider at ')
+            freq_div, s = s.split(' and a phase shift of ')
+            if 'off' in freq_div:
+                freq_div = '0'
+            phase_shift, s = s.split('. The peak-to-peak amplitude is ')
+            pp_amplitude, half_pp_offset = s.split(', with the half-peak-to-peak offset')
+            if 'off' in half_pp_offset:
+                half_pp_offset = 'OFF'
+            elif 'on' in half_pp_offset:
+                half_pp_offset = 'ON'
+            else:
+                print('Could not get generator_params')
+                return 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
+            return source, waveform, float(gen_freq), int(freq_div), int(phase_shift), float(pp_amplitude), half_pp_offset
         else:
             print('Could not get generator_params')
-            return
-
+            return 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
 
 
 
     def get_output_coupling(self, controller_channel):
         """
+        Get electronics coupling (AC or DC). Returns 'FAIL' if failed.
         """
 
         command = '.\\get_output_coupling.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['coupling', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get output_coupling')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
+        elif 'coupling' in s:
+            if '(DC)' in s:
+                return 'DC'
+            elif '(AC)' in s:
+                return 'AC'
+            else:
+                return 'FAIL'
         else:
             print('Could not get output_coupling')
-            return
-
+            return 'FAIL'
 
 
 
     def get_output_voltage(self, controller_channel):
         """
+        Read output voltage in Volts. Normally you would not use this, rather an ADC card.
+        Returns -1000 if failed.
         """
 
         command = '.\\get_output_voltage.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Output voltage', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get output_voltage')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'Output voltage' in s:
+            _, s = s.split('Vout = ')
+            Vout, _ = s.split(' V')
+            return float(Vout)
         else:
             print('Could not get output_voltage')
-            return
-
+            return -1000.
 
 
 
     def get_preamp_input_voltage(self, controller_channel):
         """
+        Get preamp input voltage, i.e. V-Vb, in uA.
+        Returns -1000 if failed.
         """
 
         command = '.\\get_preamp_input_voltage.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['V - Vb', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get preamp_input_voltage')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'V - Vb' in s:
+            _, s = s.split('V - Vb = ')
+            voltage, _ = s.split(' uV')
+            return float(voltage)
         else:
             print('Could not get preamp_input_voltage')
-            return
+            return -1000.
 
 
 
-
-    def get_squid_bias(self, controller_channel):
+    def get_squid_bias(self, controller_channel, bias_source):
         """
+        Get Ib, Vb, or Phib. Argument bias_source should be I, V, or Phi.
+        Returns -1000 if failed.
         """
 
-        command = '.\\get_squid_bias.exe %d %d\n' % (controller_channel, self._reset_active)
+        command = '.\\get_squid_bias.exe %d %d %d\n' % (controller_channel, self._reset_active, bias_source)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get squid_bias')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'SUCCESS' in s:
+            _, s = s.split(bias_source + 'b = ')
+            return float(s)
         else:
             print('Could not get squid_bias')
-            return
-
+            return -1000.
 
 
 
     def get_squid_gain_sign(self, controller_channel):
         """
+        Get sign of SQUID gain. Returns +1, -1, or 0 if failed.
         """
 
         command = '.\\get_squid_gain_sign.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Squid Gain', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get squid_gain_sign')
-            return
-        elif '' in s:
-            
+            return 0
+        elif 'Squid Gain' in s:
+            if 'negative' in s:
+                return -1
+            elif 'positive' in s:
+                return 1
+            else:
+                print('Could not get squid_gain_sign')
+                return 0
         else:
             print('Could not get squid_gain_sign')
-            return
-
+            return 0
 
 
 
     def get_temperature(self, controller_channel):
         """
+        Get board temperature in degrees Celsius. Returns -1000 if failed.
         """
 
         command = '.\\get_temperature.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['temperature', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get temperature')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'temperature' in s:
+            _, s = s.split('Board temperature = ')
+            temp, _ = s.split(' deg Celsius')
+            return float(temp)
         else:
             print('Could not get temperature')
-            return
-
+            return -1000.
 
 
 
     def get_tes_current_bias(self, controller_channel):
         """
+        Get current bias through TES/shunt resistor setup (uA). Return -1000 if failed.
         """
 
         command = '.\\get_tes_current_bias.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Iaux', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_current_bias')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'Iaux' in s:
+            _, s = s.split('Iaux = ')
+            if 'low' in s:
+                Iaux, _ = s.split(' (low mode)')
+                return float(Iaux)
+            elif 'high' in s:
+                Iaux, _ = s.split(' (high mode)')
+                return float(Iaux)
+            else:
+                print('Could not get tes_current_bias')
+                return -1000.
         else:
             print('Could not get tes_current_bias')
-            return
-
+            return -1000.
 
 
 
     def get_tes_pulse_disconnect(self, controller_channel):
         """
+        Get status of auxiliary current source (through TES/shunt) switch.
+        Returns CONNECTED, DISCONNECTED, or FAIL.
         """
 
         command = '.\\get_tes_pulse_disconnect.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['TES current pulse', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_disconnect')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
+        elif 'TES current pulse' in s:
+            if 'disconnected' in s:
+                return 'DISCONNECTED'
+            elif 'connected' in s:
+                return 'CONNECTED' 
+            else:
+                print('Could not get tes_pulse_disconnect')
+                return 'FAIL'
         else:
             print('Could not get tes_pulse_disconnect')
-            return
-
+            return 'FAIL'
 
 
 
     def get_tes_pulse_onoff(self, controller_channel):
         """
+        Get status of TES pulse generator.
+        Returns 'ON', 'OFF', or 'FAIL'
         """
 
         command = '.\\get_tes_pulse_onoff.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['TES current pulse', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_onoff')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
+        elif 'TES current pulse' in s:
+            if 'pulse is off' in s:
+                return 'OFF'
+            elif 'pulse is on' in s:
+                return 'ON'
+            else:
+                print('Could not get tes_pulse_onoff')
+                return 'FAIL'
         else:
             print('Could not get tes_pulse_onoff')
-            return
-
+            return 'FAIL'
 
 
 
     def get_tes_pulse_params(self, controller_channel):
         """
+        Get parameters for TES pulse (auxiliary current pulse).
+        The parameters are: pulse mode (off, continuous, single),
+        pulse amplitude (uA), time between pulses (ms), and pulse
+        duration (us).
+        If failed, returns 'FAIL', -1000, -1000, -1000.
         """
 
         command = '.\\get_tes_pulse_params.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Pulse mode', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_params')
-            return
-        elif '' in s:
-            
+            return 'FAIL', -1000., -1000., -1000.
+        elif 'Pulse mode' in s:
+            _, s = s.split('Pulse mode is ')
+            pulse_mode, s = s.split(', with an amplitude of ')
+            pulse_amplitude, s = s.split(' uA, ')
+            time_between_pulses, s = s.split(' ms between pulses, a pulse duration of ')
+            pulse_duration, _ = s.split(' us.')
+            if pulse_mode not in ['off', 'continuous', 'single']:
+                print('Could not get tes_pulse_params')
+                return 'FAIL', -1000., -1000., -1000.
+            else:
+                return pulse_mode, pulse_amplitude, time_between_pulses, pulse_duration
         else:
             print('Could not get tes_pulse_params')
-            return
-
+            return 'FAIL', -1000., -1000., -1000.
 
 
 
@@ -969,21 +1089,6 @@ class Magnicon(object):
 
 
 
-    def get_tes_current_bias(self, controller_channel):
-        """
-        Get current bias through TES/shunt resistor setup (uA). Return -1000 if failed.
-        """
-
-        self._remote_inst.send_command('.\\get_tes_current_bias.exe %d %d\n' % (controller_channel, self._reset_active))
-        s = self.listen_for(['Iaux', 'ERROR', 'Error'])
-
-        if 'Iaux' in s:
-            _, s = s.split('Iaux = ')
-            s, _ = s.split(' (')
-            return float(s)
-        else:
-            print('Could not read Iaux')
-            return -1000.
 
 
 
