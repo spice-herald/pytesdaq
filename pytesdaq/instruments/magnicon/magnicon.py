@@ -989,172 +989,80 @@ class Magnicon(object):
 
 
 
-    def set_output_coupling(self, controller_channel):
+    def set_output_coupling(self, controller_channel, coupling):
         """
+        Set electronics coupling; must be 'AC' or 'DC'.
+        Returns the coupling or 'FAIL' if failed.
         """
 
-        command = '.\\set_output_coupling.exe %d %d\n' % (controller_channel, self._reset_active)
+        if coupling != 'AC' and coupling != 'DC':
+            print('Invalid coupling, not setting')
+            return 'FAIL'
+
+        command = '.\\set_output_coupling.exe %d %d %s\n' % (controller_channel, self._reset_active, coupling)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
+        if s is not None:
             print('Could not set output_coupling')
-            return
-        elif '' in s:
-            
+            return 'FAIL'
         else:
-            print('Could not set output_coupling')
-            return
+            return coupling
 
 
 
-
-    def set_squid_bias(self, controller_channel):
+    def set_squid_bias(self, controller_channel, bias_source, new_value):
         """
+        Set the current, voltage, or flux bias in the SQUID.
+        The argument bias_source must be I, V, or Phi.
+        Returns the coerced bias or -1000 if failed.
         """
 
-        command = '.\\set_squid_bias.exe %d %d\n' % (controller_channel, self._reset_active)
+        if bias_source not in ['I', 'V', 'Phi']:
+            print('Invalid SQUID bias source, not setting.')
+            return -1000.
+
+        command = '.\\set_squid_bias.exe %d %d %s %f\n' % (controller_channel, self._reset_active, bias_source, new_value)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set squid_bias')
-            return
-        elif '' in s:
-            
+            return -1000.
+        elif 'SUCCESS' in s:
+            _, s = s.split(bias_source + 'b = ')
+            return float(s)
         else:
             print('Could not set squid_bias')
             return
 
 
 
-
-    def set_squid_gain_sign(self, controller_channel):
+    def set_squid_gain_sign(self, controller_channel, sign):
         """
+        Set sign of amplifier gain. Must be +1 or -1.
+        Returns the sign or 0 for failure.
         """
 
-        command = '.\\set_squid_gain_sign.exe %d %d\n' % (controller_channel, self._reset_active)
+        if sign == 1:
+            command = '.\\set_squid_gain_sign.exe %d %d positive\n' % (controller_channel, self._reset_active)
+        elif sign == -1:
+            command = '.\\set_squid_gain_sign.exe %d %d negative\n' % (controller_channel, self._reset_active)
+        else:
+            print('Invalid squid_gain_sign, not setting.')
+            return 0
+
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for([None, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'ERROR' in s or 'Error' in s:
-            print('Could not set squid_gain_sign')
-            return
-        elif '' in s:
-            
+        if s is not None:
+            print('Could not set amp_gain_sign')
+            return 0
         else:
-            print('Could not set squid_gain_sign')
-            return
-
-
-
-
-    def set_tes_current_bias(self, controller_channel):
-        """
-        """
-
-        command = '.\\set_tes_current_bias.exe %d %d\n' % (controller_channel, self._reset_active)
-        self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
-        s = self.remove_terminal_output(s, [command], True, True)
-
-        if 'ERROR' in s or 'Error' in s:
-            print('Could not set tes_current_bias')
-            return
-        elif '' in s:
-            
-        else:
-            print('Could not set tes_current_bias')
-            return
-
-
-
-
-    def set_tes_pulse_disconnect(self, controller_channel):
-        """
-        """
-
-        command = '.\\set_tes_pulse_disconnect.exe %d %d\n' % (controller_channel, self._reset_active)
-        self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
-        s = self.remove_terminal_output(s, [command], True, True)
-
-        if 'ERROR' in s or 'Error' in s:
-            print('Could not set tes_pulse_disconnect')
-            return
-        elif '' in s:
-            
-        else:
-            print('Could not set tes_pulse_disconnect')
-            return
-
-
-
-
-    def set_tes_pulse_onoff(self, controller_channel):
-        """
-        """
-
-        command = '.\\set_tes_pulse_onoff.exe %d %d\n' % (controller_channel, self._reset_active)
-        self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
-        s = self.remove_terminal_output(s, [command], True, True)
-
-        if 'ERROR' in s or 'Error' in s:
-            print('Could not set tes_pulse_onoff')
-            return
-        elif '' in s:
-            
-        else:
-            print('Could not set tes_pulse_onoff')
-            return
-
-
-
-
-    def set_tes_pulse_params(self, controller_channel):
-        """
-        """
-
-        command = '.\\set_tes_pulse_params.exe %d %d\n' % (controller_channel, self._reset_active)
-        self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
-        s = self.remove_terminal_output(s, [command], True, True)
-
-        if 'ERROR' in s or 'Error' in s:
-            print('Could not set tes_pulse_params')
-            return
-        elif '' in s:
-            
-        else:
-            print('Could not set tes_pulse_params')
-            return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            return sign
 
 
 
@@ -1166,52 +1074,109 @@ class Magnicon(object):
         If 'mode' is None, it will set to low if -120 < I < 120, high otherwise.
         """
 
-        if mode is not None:
-            self._remote_inst.send_command('.\\set_tes_current_bias.exe %d %d %s %f\n' % (controller_channel, self._reset_active, mode, Iaux))
-        elif Iaux > -120 and Iaux < 120:
-            self._remote_inst.send_command('.\\set_tes_current_bias.exe %d %d low %f\n' % (controller_channel, self._reset_active, mode, Iaux))
-        else:
-            self._remote_inst.send_command('.\\set_tes_current_bias.exe %d %d high %f\n' % (controller_channel, self._reset_active, mode, Iaux))
+        if mode is not None and mode not in ['low', 'high']:
+            print('Invalid TES bias mode, not setting')
+            return -1000.
 
+        if mode is None:
+            if Iaux > -120 and Iaux < 120:
+                mode = 'low'
+            else:
+                mode = 'high'
+            
+        command = '.\\set_tes_current_bias.exe %d %d %s %f\n' % (controller_channel, self._reset_active, mode, Iaux)
+        self._remote_inst.send_command(command)
         s = self.listen_for(['Iaux', 'ERROR', 'Error'])
+        s = self.remove_terminal_output(s, [command], True, True)
 
-        if 'Iaux' in s:
+        if 'ERROR' in s or 'Error' in s:
+            print('Could not set tes_current_bias')
+            return -1000.
+        elif 'Iaux' in s:
             _, s = s.split('Iaux = ')
             return float(s)
         else:
-            print('Could not set Iaux')
+            print('Could not set tes_current_bias')
             return -1000.
 
 
+    def set_tes_pulse_disconnect(self, controller_channel, tes_pulse_status):
+        """
+        Set status of TES pulse disconnect switch. Must be CONNECTED or DISCONNECTED.
+        Returns status or FAIL if failed.
+        """
+
+        if tes_pulse_status != 'CONNECTED' and tes_pulse_status != 'DISCONNECTED':
+            print('Invalid flux bias status, not setting')
+            return 'FAIL'
+
+        command = '.\\set_tes_pulse_disconnect.exe %d %d %s\n' % (controller_channel, self._reset_active, tes_pulse_status.lower())
+        self._remote_inst.send_command(command)
+        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.remove_terminal_output(s, [command], True, True)
+
+        if s is not None:
+            print('Could not set tes_pulse_disconnect')
+            return 'FAIL'
+        else:
+            return tes_pulse_status
 
 
 
+    def set_tes_pulse_onoff(self, controller_channel, pulse_onoff):
+        """
+        Set status of TES pulse generator. Can be 'ON' or 'OFF'.
+        Returns status or 'FAIL' if failed.
+        """
+
+        if pulse_onoff != 'ON' and pulse_onoff != 'OFF':
+            print('Invalid TES pulse generator status, not setting')
+            return 'FAIL'
+
+        command = '.\\set_tes_pulse_onoff.exe %d %d %s\n' % (controller_channel, self._reset_active, pulse_onoff.lower())
+        self._remote_inst.send_command(command)
+        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.remove_terminal_output(s, [command], True, True)
+
+        if s is not None:
+            print('Could not set tes_pulse_onoff')
+            return 'FAIL'
+        else:
+            return pulse_onoff
 
 
 
+    def set_tes_pulse_params(self, controller_channel, pulse_mode, pulse_amplitude, time_between_pulses, pulse_duration):
+        """
+        Set parameters for current pulse generator through TES/shunt.
+        Arguments: pulse mode (must be 'off', 'continuous', or 'single'),
+            pulse amplitude (uA), time between pulses (ms), pulse duration (us)
+        Returns: coerced pulse amplitude, coerced time between pulses,
+            coerced pulse duration, or -1000 for all if failed
+        """
 
+        if pulse_mode not in ['off', 'continuous', 'single']:
+            print('Invalid TES pulse mode, not setting')
+            return -1000., -1000., -1000.
 
+        command = '.\\set_tes_pulse_params.exe %d %d %s %f %f %f\n' % \
+            (controller_channel, self._reset_active, pulse_mode, pulse_amplitude, time_between_pulses, pulse_duration)
+        self._remote_inst.send_command(command)
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
+        s = self.remove_terminal_output(s, [command], True, True)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        if 'ERROR' in s or 'Error' in s:
+            print('Could not set tes_pulse_params')
+            return -1000., -1000., -1000.
+        elif '' in s:
+            _, s = s.split(pulse_mode + ' mode with ')
+            pulse_amplitude_coerced, s = s.split(' uA amplitude, ')
+            time_between_pulses_coerced, s = s.split(' ms between pulses, ')
+            pulse_duration_coerced, _ = s.split(' us pulse duration.')
+            return float(pulse_amplitude_coerced), float(time_between_pulses_coerced), float(pulse_duration_coerced)
+        else:
+            print('Could not set tes_pulse_params')
+            return -1000., -1000., -1000.
 
 
 
