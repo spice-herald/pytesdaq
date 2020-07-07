@@ -772,7 +772,7 @@ class Magnicon(object):
             print('Could not set amp_gain_bandwidth')
             return
         elif '' in s:
-            
+            pass
         else:
             print('Could not set amp_gain_bandwidth')
             return
@@ -965,10 +965,10 @@ class Magnicon(object):
             return -1000., -1000.
 
         if freq_div == 0:
-            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d off %s %f\n' %
+            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d off %s %f\n' % \
                 (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, half_pp_offset, pp_amplitude)
         else:
-            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d %d %s %f\n' %
+            command = '.\\set_generator_params.exe %d %d %d %f %s %s %d %d %s %f\n' % \
                 (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset, pp_amplitude)
 
         self._remote_inst.send_command(command)
