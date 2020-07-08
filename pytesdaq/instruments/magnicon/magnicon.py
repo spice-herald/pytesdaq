@@ -11,7 +11,7 @@ class Magnicon(object):
     Magnicon SQUID driver. Note: currently only works for XXF-1 6MHz in TES mode.
     """
 
-    def __init__(self, channel_list=[], default_active=1, reset_active=True, conn_info=None, remote_inst=None):
+    def __init__(self, channel_list=[], default_active=1, reset_active=1, conn_info=None, remote_inst=None):
         """
         Initialize Magnicon driver.
         Arguments are: list of channels used, default active channel,
@@ -117,6 +117,8 @@ class Magnicon(object):
                         success = True
                         break
 
+            if success:
+                break
             n += 1
 
         if success:
