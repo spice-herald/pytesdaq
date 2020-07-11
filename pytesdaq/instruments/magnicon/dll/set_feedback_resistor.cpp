@@ -42,5 +42,9 @@ int main(int argc, char** argv) {
     MA_closeUSB(&error);
     errorout(error);
 
+    // Output message so it can be read by SSH connection
+    cout << "DONE" << endl;
+    cout << flush;
+
     return 0;
 }

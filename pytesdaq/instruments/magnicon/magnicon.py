@@ -82,7 +82,7 @@ class Magnicon(object):
 
 
 
-    def listen_for(self, strings=None, max_loops=100):
+    def listen_for(self, strings=None, max_loops=50):
         """
         Keep receiving output from the SSH connection until a particular
         string is present, or any string in a list of strings. Any of these
@@ -171,6 +171,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Gain bandwidth', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get GBP')
@@ -196,6 +198,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['amp gain', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get amp_gain_bandwidth')
@@ -222,6 +226,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Amp Gain', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get amp_gain_sign')
@@ -249,6 +255,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Electronics mode', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get amp_or_fll')
@@ -277,6 +285,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get channel_info')
@@ -303,6 +313,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get dummy')
@@ -331,6 +343,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get feedback_resistor')
@@ -364,6 +378,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Flux bias', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get flux_bias_disconnect')
@@ -393,6 +409,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Generator', 'Monitoring', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get generator_onoff')
@@ -441,6 +459,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get generator_params')
@@ -478,6 +498,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['coupling', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get output_coupling')
@@ -505,6 +527,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Output voltage', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get output_voltage')
@@ -529,6 +553,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['V - Vb', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get preamp_input_voltage')
@@ -553,6 +579,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get squid_bias')
@@ -575,6 +603,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Squid Gain', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get squid_gain_sign')
@@ -602,6 +632,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['temperature', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get temperature')
@@ -625,6 +657,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Iaux', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_current_bias')
@@ -656,6 +690,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['TES current pulse', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_disconnect')
@@ -684,6 +720,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['TES current pulse', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_onoff')
@@ -715,6 +753,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Pulse mode', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not get tes_pulse_params')
@@ -750,14 +790,19 @@ class Magnicon(object):
 
         command = '.\\set_GBP.exe %d %d\n' % (controller_channel, self._reset_active, gbp)
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set GBP')
             return -1000.
-        else:
+        elif 'DONE' in s:
             return gbp
+        else:
+            print('Could not set GBP')
+            return -1000.
 
 
 
@@ -767,8 +812,10 @@ class Magnicon(object):
 
         command = '.\\set_amp_gain_bandwidth.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set amp_gain_bandwidth')
@@ -797,14 +844,19 @@ class Magnicon(object):
             return 0
 
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set amp_gain_sign')
             return 0
-        else:
+        elif 'DONE' in s:
             return sign
+        else:
+            print('Could not set amp_gain_sign')
+            return 0
 
 
 
@@ -820,15 +872,19 @@ class Magnicon(object):
 
         command = '.\\set_amp_or_fll.exe %d %d %s\n' % (controller_channel, self._reset_active, mode)
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set amp_or_fll')
             return 'FAIL'
+        elif 'DONE' in s:
+            return mode
         else:
             print('Could not set amp_or_fll')
-            return mode
+            return 'FAIL'
 
 
 
@@ -847,14 +903,19 @@ class Magnicon(object):
             return 'FAIL'
 
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set dummy')
             return 'FAIL'
-        else:
+        elif 'DONE' in s:
             return dummy_status
+        else:
+            print('Could not set dummy')
+            return 'FAIL'
 
 
 
@@ -874,14 +935,19 @@ class Magnicon(object):
         else:
             command = '.\\set_feedback_resistor.exe %d %d %.2f\n' % (controller_channel, self._reset_active, Rf)
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set feedback_resistor')
             return -1000.
-        else:
+        elif 'DONE' in s:
             return Rf
+        else:
+            print('Could not set feedback_resistor')
+            return -1000.
 
 
 
@@ -897,14 +963,19 @@ class Magnicon(object):
 
         command = '.\\set_flux_bias_disconnect.exe %d %d %s\n' % (controller_channel, self._reset_active, flux_bias_status.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set flux_bias_disconnect')
             return 'FAIL'
-        else:
+        elif 'DONE' in s:
             return flux_bias_status
+        else:
+            print('Could not set flux_bias_disconnect')
+            return 'FAIL'
 
 
 
@@ -922,14 +993,19 @@ class Magnicon(object):
         command = '.\\set_generator_onoff.exe %d %d %s %s %s\n' % \
             (controller_channel, self._reset_active, gen1_onoff.lower(), gen2_onoff.lower(), mon_onoff.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set generator_onoff')
             return 'FAIL', 'FAIL', 'FAIL'
-        else:
+        elif 'DONE' in s:
             return gen1_onoff, gen2_onoff, mon_onoff
+        else:
+            print('Could not set generator_onoff')
+            return 'FAIL', 'FAIL', 'FAIL'
 
 
 
@@ -976,11 +1052,13 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set generator_params')
             return -1000., -1000.
-        elif 'Set generator' in s:
+        elif 'Set generator' in s or 'SUCCESS' in s:
             _, s = s.split('peak-peak amplitude of ')
             pp_amplitude_coerced, s = s.split(' and frequency of ')
             gen_freq_coerced, _ = s.split(' Hz.')
@@ -1003,14 +1081,19 @@ class Magnicon(object):
 
         command = '.\\set_output_coupling.exe %d %d %s\n' % (controller_channel, self._reset_active, coupling)
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set output_coupling')
             return 'FAIL'
-        else:
+        elif 'DONE' in s:
             return coupling
+        else:
+            print('Could not set output_coupling')
+            return 'FAIL'
 
 
 
@@ -1029,6 +1112,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set squid_bias')
@@ -1057,14 +1142,19 @@ class Magnicon(object):
             return 0
 
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set amp_gain_sign')
             return 0
-        else:
+        elif 'DONE' in s:
             return sign
+        else:
+            print('Could not set amp_gain_sign')
+            return 0
 
 
 
@@ -1090,6 +1180,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['Iaux', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set tes_current_bias')
@@ -1114,14 +1206,19 @@ class Magnicon(object):
 
         command = '.\\set_tes_pulse_disconnect.exe %d %d %s\n' % (controller_channel, self._reset_active, tes_pulse_status.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set tes_pulse_disconnect')
             return 'FAIL'
-        else:
+        elif 'DONE' in s:
             return tes_pulse_status
+        else:
+            print('Could not set tes_pulse_disconnect')
+            return 'FAIL'
 
 
 
@@ -1137,14 +1234,19 @@ class Magnicon(object):
 
         command = '.\\set_tes_pulse_onoff.exe %d %d %s\n' % (controller_channel, self._reset_active, pulse_onoff.lower())
         self._remote_inst.send_command(command)
-        s = self.listen_for([None, 'ERROR', 'Error'])
+        s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
-        if s is not None:
+        if 'ERROR' in s or 'Error' in s:
             print('Could not set tes_pulse_onoff')
             return 'FAIL'
-        else:
+        elif 'DONE' in s:
             return pulse_onoff
+        else:
+            print('Could not set tes_pulse_onoff')
+            return 'FAIL'
 
 
 
@@ -1166,6 +1268,8 @@ class Magnicon(object):
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
+        self.listen_for(self._conn_info['username'], max_loops=50)
+        self.listen_for([None])
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set tes_pulse_params')
@@ -1179,17 +1283,6 @@ class Magnicon(object):
         else:
             print('Could not set tes_pulse_params')
             return -1000., -1000., -1000.
-
-
-
-    def set_dummy(self, controller_channel, dummy):
-        """
-        Set dummy status: dummy can be "on" or "off"
-        """
-
-        self._remote_inst.send_command('.\\set_dummy.exe %d %d %s\n' % (controller_channel, self._reset_active, dummy))
-        s = self.listen_for(None)
-        return 0
 
 
 
