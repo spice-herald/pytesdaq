@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 
     // Get V - Vb
     double V_Vb = 0;
-    MA_read_Temp(channel, &error, &V_Vb);
+    MA_read_V_Vb(channel, &error, &V_Vb);
     errorout(error);
 
     cout << "V - Vb = " << V_Vb << " uV" << endl;
