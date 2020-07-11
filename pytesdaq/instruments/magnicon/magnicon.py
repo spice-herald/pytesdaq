@@ -457,7 +457,7 @@ class Magnicon(object):
 
         command = '.\\get_generator_params.exe %d %d %d\n' % (controller_channel, self._reset_active, generator_number)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['', 'ERROR', 'Error'])
+        s = self.listen_for(['Generator %d' % generator_number, 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
         self.listen_for(self._conn_info['username'], max_loops=50)
         self.listen_for([None])
@@ -465,7 +465,7 @@ class Magnicon(object):
         if 'ERROR' in s or 'Error' in s:
             print('Could not get generator_params')
             return 'FAIL', 'FAIL', 0, 0, 0, 0, 'FAIL'
-        elif '' in s:
+        elif 'Generator %d' % generator_number in s:
             _, s = s.split('source is ')
             source, s = s.split('. The waveform is ')
             waveform, s = s.split(' with a frequency of ')
@@ -575,7 +575,7 @@ class Magnicon(object):
         Returns -1000 if failed.
         """
 
-        command = '.\\get_squid_bias.exe %d %d %d\n' % (controller_channel, self._reset_active, bias_source)
+        command = '.\\get_squid_bias.exe %d %d %s\n' % (controller_channel, self._reset_active, bias_source)
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
@@ -788,7 +788,7 @@ class Magnicon(object):
             print('Invalid GBP, not setting')
             return -1000.        
 
-        command = '.\\set_GBP.exe %d %d\n' % (controller_channel, self._reset_active, gbp)
+        command = '.\\set_GBP.exe %d %d %.2f\n' % (controller_channel, self._reset_active, gbp)
         self._remote_inst.send_command(command)
         s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
