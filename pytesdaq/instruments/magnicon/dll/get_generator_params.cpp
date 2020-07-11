@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     const char* freq_div_dict[11] = {"off", "2", "4", "8", "16", "32",
         "64", "128", "256", "512", "1024"};
     const char* half_pp_offset_dict[2] = {"off", "on"};
-    const char* source_dict[7] = {"Ib", "Vb", "Test2", "Phib", "I", "Test5", "PhiX"};
+    const char* source_dict[7] = {"Ib", "Vb", "Phib", "Test3", "I", "Test5", "PhiX"};
 
     // Output everything.
     printf("Generator %d: ", gen_num);
