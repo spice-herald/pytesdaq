@@ -206,9 +206,9 @@ class Magnicon(object):
             return -1000, 'FAIL'
         elif '' in s:
             _, s = s.split('amp gain = ')
-            amp_gain = int(s.split(', amp bandwidth'))
-            _, s = s.split('amp bandwidth = ')
-            amp_bw = s.replace('\n', '')
+            amp_gain, amp_bw = s.split(', amp bandwidth = ')
+            amp_gain = int(amp_gain)
+            amp_bw = amp_bw.replace('\n', '')
             return amp_gain, amp_bw
         else:
             print('Could not get amp_gain_bandwidth')
@@ -496,7 +496,7 @@ class Magnicon(object):
 
         command = '.\\get_output_coupling.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['coupling', 'ERROR', 'Error'])
+        s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
         self.listen_for(self._conn_info['username'], max_loops=50)
         self.listen_for([None])
@@ -504,7 +504,7 @@ class Magnicon(object):
         if 'ERROR' in s or 'Error' in s:
             print('Could not get output_coupling')
             return 'FAIL'
-        elif 'coupling' in s:
+        elif 'SUCCESS' in s:
             if '(DC)' in s:
                 return 'DC'
             elif '(AC)' in s:
@@ -575,6 +575,10 @@ class Magnicon(object):
         Returns -1000 if failed.
         """
 
+        if bias_source not in ['I', 'V', 'Phi']:
+            print('Invalid squid bias source, not setting.')
+            return -1000.
+
         command = '.\\get_squid_bias.exe %d %d %s\n' % (controller_channel, self._reset_active, bias_source)
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
@@ -630,7 +634,7 @@ class Magnicon(object):
 
         command = '.\\get_temperature.exe %d %d\n' % (controller_channel, self._reset_active)
         self._remote_inst.send_command(command)
-        s = self.listen_for(['temperature', 'ERROR', 'Error'])
+        s = self.listen_for(['Celsius', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
         self.listen_for(self._conn_info['username'], max_loops=50)
         self.listen_for([None])
@@ -638,7 +642,7 @@ class Magnicon(object):
         if 'ERROR' in s or 'Error' in s:
             print('Could not get temperature')
             return -1000.
-        elif 'temperature' in s:
+        elif 'Celsius' in s:
             _, s = s.split('Board temperature = ')
             temp, _ = s.split(' deg Celsius')
             return float(temp)
@@ -806,11 +810,25 @@ class Magnicon(object):
 
 
 
-    def set_amp_gain_bandwidth(self, controller_channel):
+    def set_amp_gain_bandwidth(self, controller_channel, amp_gain, amp_bw):
         """
+        Set amplifier gain and bandwidth.
+        Gain must be one of [1100, 1400, 1700, 2000].
+        Bandwidth must be one of [0.2, 0.7, 1.4, Full, AC_Amp_off]. Numerical values are in MHz.
+            If bandwidth is numerical, you can enter the floating-point number or a string.
+        Returns the gain and bandwidth or -1000, 'FAIL' if failed.
         """
 
-        command = '.\\set_amp_gain_bandwidth.exe %d %d\n' % (controller_channel, self._reset_active)
+        if amp_gain not in [1100, 1400, 1700, 2000]:
+            print('Invalid amplifier gain, not setting.')
+            return -1000, 'FAIL'
+        if isinstance(amp_bw, float):
+            amp_bw = '%.1f' % amp_bw
+        if amp_bw not in ['0.2', '0.7', '1.4', 'Full', 'AC_Amp_off']:
+            print('Invalid amplifier bandwidth, not setting.')
+            return -1000, 'FAIL'
+
+        command = '.\\set_amp_gain_bandwidth.exe %d %d %d %s\n' % (controller_channel, self._reset_active, amp_gain, amp_bw)
         self._remote_inst.send_command(command)
         s = self.listen_for(['DONE', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
@@ -819,13 +837,12 @@ class Magnicon(object):
 
         if 'ERROR' in s or 'Error' in s:
             print('Could not set amp_gain_bandwidth')
-            return
-        elif '' in s:
-            pass
+            return -1000, 'FAIL'
+        elif 'DONE' in s:
+            return amp_gain, amp_bw
         else:
             print('Could not set amp_gain_bandwidth')
-            return
-
+            return -1000, 'FAIL'
 
 
 
@@ -1044,10 +1061,10 @@ class Magnicon(object):
 
         if freq_div == 0:
             command = '.\\set_generator_params.exe %d %d %d %f %s %s %d off %s %f\n' % \
-                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, half_pp_offset, pp_amplitude)
+                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, half_pp_offset.lower(), pp_amplitude)
         else:
             command = '.\\set_generator_params.exe %d %d %d %f %s %s %d %d %s %f\n' % \
-                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset, pp_amplitude)
+                (controller_channel, self._reset_active, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset.lower(), pp_amplitude)
 
         self._remote_inst.send_command(command)
         s = self.listen_for(['SUCCESS', 'ERROR', 'Error'])
@@ -1310,7 +1327,7 @@ class Magnicon(object):
 
 
 
-    def get_remote(self):
+    def get_remote_inst(self):
         """
         Get Remote object
         """
