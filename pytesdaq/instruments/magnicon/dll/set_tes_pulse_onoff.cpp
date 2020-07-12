@@ -8,6 +8,9 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
+    cout << "Warning: This function is only useful for turning on single shot pulse mode." << endl;
+    cout << "To turn on or off the continuous pulse mode, or to turn off single shot, use set_tes_pulse_params.cpp" << endl;
+
     // Check arguments
     unsigned short containers[3] = {(unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX, (unsigned short) USHRT_MAX};
     const char* extra_args[1] = {"tes_pulse_status[on,off]"};
