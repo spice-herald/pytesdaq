@@ -48,45 +48,23 @@ int main(int argc, char** argv) {
             return 2;
     }
 
-    if (amp_bw_real.compare("Full") == 0) {
-        switch(amp_gain) {
-            case 0:
-                amp_gain_real = 220;
-                break;
-            case 1:
-                amp_gain_real = 280;
-                break;
-            case 2:
-                amp_gain_real = 340;
-                break;
-            case 3:
-                amp_gain_real = 400;
-                break;
-            default:
-                cout << "ERROR getting amplifier bandwidth." << endl;
-                cout << flush;
-                return 2;
-        }
-    }
-    else {
-        switch(amp_gain) {
-            case 0:
-                amp_gain_real = 1100;
-                break;
-            case 1:
-                amp_gain_real = 1400;
-                break;
-            case 2:
-                amp_gain_real = 1700;
-                break;
-            case 3:
-                amp_gain_real = 2000;
-                break;
-            default:
-                cout << "ERROR getting amplifier gain." << endl;
-                cout << flush;
-                return 2;
-        }
+    switch(amp_gain) {
+        case 0:
+            amp_gain_real = 1100;
+            break;
+        case 1:
+            amp_gain_real = 1400;
+            break;
+        case 2:
+            amp_gain_real = 1700;
+            break;
+        case 3:
+            amp_gain_real = 2000;
+            break;
+        default:
+            cout << "ERROR getting amplifier gain." << endl;
+            cout << flush;
+            return 2;
     }
 
     printf("SUCCESS: Read amp gain = %d, amp bandwidth = %s\n", amp_gain_real, amp_bw_real.c_str());
