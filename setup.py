@@ -10,5 +10,11 @@ setup(name='pytesdaq',
       package_data = {
           '': ['*.ini'],
       },
-      packages = find_packages()
-      )
+      packages = find_packages(),
+      install_requires = ['pyramid', 'pyramid_mako', 'pyramid_exclog', 'pyramid_debugtoolbar', 'configparser', 'waitress', 'pdoc3', 'mkdocs'],
+      entry_points = {
+        'paste.app_factory': [
+            'main = pytesdaq.display:main',
+        ],
+      },
+  )
