@@ -7,6 +7,8 @@ import pytesdaq.config.settings as settings
 from pytesdaq.utils import  arg_utils
 import pytesdaq.io.redis as redis
 import pytesdaq.io.hdf5 as hdf5
+from pytesdaq.analyzer import analyzer
+
 
 class Readout:
     
@@ -43,8 +45,27 @@ class Readout:
         self._canvas = []
         self._status_bar = []
         self._colors = dict()
+        self._enable_auto_scale = True
+        self._nb_bins = 0
      
         
+        
+        # initialize analysis config
+        self._analysis_config = dict()
+        self._analysis_config['unit'] = 'adc'
+        self._analysis_config['norm'] = 'none'
+        self._analysis_config['calc_psd'] = False
+        self._analysis_config['enable_running_avg'] = False
+        self._analysis_config['nb_events_avg'] = 1
+        self._analysis_config['calc_didv'] = False
+        self._analysis_config['enable_pilup_rejection'] = False
+
+
+
+        # instanciate analyzer
+        self._analyzer = analyzer.Analyzer()
+        
+       
 
 
     def register_ui(self,axes,canvas,status_bar,colors):
@@ -57,6 +78,8 @@ class Readout:
         for key,value in colors.items():
             color = (value[0]/255, value[1]/255,value[2]/255)
             self._colors[key] = color
+
+
   
     def select_channels(self, channels):
 
@@ -164,19 +187,56 @@ class Readout:
         return self._is_running
 
 
+        
+    def update_analysis_config(self,norm = None, unit= None, calc_psd =None, calc_didv = None, 
+                               enable_pileup_rejection =None,
+                               enable_running_avg = None, nb_events_avg=None):
+        
+        
+
+        if norm is not None:
+            self._analysis_config['norm'] = norm
+            
+        if unit is not None:
+            self._analysis_config['unit'] = unit
+
+        if calc_psd is not None:
+            self._analysis_config['calc_psd'] = calc_psd
+        
+        if calc_didv is not None:
+            self._analysis_config['calc_didv'] = calc_didv
+
+        if enable_pileup_rejection is not None:
+            self._analysis_config['enable_pileup_rejection'] = enable_pileup_rejection
+            
+        if enable_running_avg is not None:
+            self._analysis_config['enable_running_avg'] = enable_running_avg
+            
+        if nb_events_avg is not None:
+            self._analysis_config['nb_events_avg'] = nb_events_avg 
+
+            
+        # redraw after analysis update
+        self._first_draw = True
+
+        # FIXME: restart running avg?
+        
+
+    def set_auto_scale(self,enable_auto_scale):
+        self._enable_auto_scale  = enable_auto_scale
+        
     def run(self,save_redis=False,do_plot=False):
         
 
         # =========================
         # Initialize data container
-        # =========================\
-        self._data_array = []
-        self._data_array_avg  = []
+        # =========================
+        data_array = []
         if self._data_source == 'niadc':
             nb_channels = len(self._data_config['channel_list'])
             nb_samples =  self._data_config['nb_samples']
-            self._data_array = np.zeros((nb_channels,nb_samples), dtype=np.int16)
-            self._data_array_avg = np.zeros((nb_channels,nb_samples), dtype=np.int16)
+            data_array = np.zeros((nb_channels,nb_samples), dtype=np.int16)
+        
             
 
         # =========================
@@ -193,19 +253,27 @@ class Readout:
                 QCoreApplication.processEvents()
                 
 
-            # get traces
+            # ----------------------
+            # Get Traces
+            # ----------------------
+
             if self._data_source == 'niadc':
-                self._daq.read_single_event(self._data_array, do_clear_task=False)
+
+                self._daq.read_single_event(data_array, do_clear_task=False)
+
 
             elif self._data_source == 'hdf5':
 
-                self._data_array, self._data_config = self._hdf5.read_event(include_metadata=True,
-                                                                            adc_name=self._adc_name)
+                data_array, self._data_config = self._hdf5.read_event(include_metadata=True,
+                                                                      adc_name=self._adc_name)
                 
-                if isinstance(self._data_array,str):
+                # if error -> output is a string
+                if isinstance(data_array,str):
                     if self._is_qt_ui:
-                        self._status_bar.showMessage('INFO: ' + self._data_array)
+                        self._status_bar.showMessage('INFO: ' + data_array)
                     break
+
+                # add channel list
                 self._data_config['channel_list'] = self._data_config['adc_channel_indices']
 
                 if 'event_num' in self._data_config and self._is_qt_ui:
@@ -213,11 +281,75 @@ class Readout:
             
             else:
                 print('Not implemented')
+
+
+            # event QT process
+            if self._is_qt_ui:
+                QCoreApplication.processEvents()
+              
+
+
+            # ------------------
+            # Analysis
+            # ------------------
+
+            # check selected channels
+            channel_num_list = list()
+            channel_index_list = list()
+            counter = 0
+            for chan in self._data_config['channel_list']:
+                if chan in self._selected_channel_list:
+                    channel_num_list.append(chan)
+                    channel_index_list.append(counter)
+                counter+=1
+
+            if len(channel_num_list) == 0:
+                continue
+
+            selected_data_array = data_array[channel_index_list,:]
+            self._data_config['selected_channel_list'] = channel_num_list
+            self._data_config['selected_channel_index'] = channel_index_list
+
+            # set data
+            self._analyzer.set_data(selected_data_array,self._data_config)
+
+            # process
+            self._analyzer.process(self._analysis_config)
+            
+
+            # get processed data
+            processed_data_array = self._analyzer.get_processed_data()
+            freq_array = []
+            if self._analysis_config['calc_psd']:
+                freq_array = self._analyzer.get_freq_array()
                 
+
+
+
+            # event QT process
+            if self._is_qt_ui:
+                QCoreApplication.processEvents()
+              
+
+            # ------------------
+            # Store in redis
+            # ------------------
+
+
+
+
+
+            # ------------------
+            # Display
+            # ------------------
+        
             if do_plot:
-                self._plot_data()
-         
-       
+                self._plot_data(processed_data_array,freq_array)
+                
+                
+          
+
+
         # clear
         if self._data_source == 'niadc':
             self._daq.clear()    
@@ -227,53 +359,78 @@ class Readout:
 
 
 
-    def _plot_data(self):
+    def _plot_data(self, data_array,freq_array=[]):
 
 
         if self._do_stop_run:
             return
 
-        # check if seletect channels can be display
-        channel_num_list = list()
-        channel_index_list = list()
-        counter = 0
-        for chan in self._data_config['channel_list']:
-            if chan in self._selected_channel_list:
-                channel_num_list.append(chan)
-                channel_index_list.append(counter)
-            counter+=1
-                
-        nchan_display = len(channel_num_list)
-        if nchan_display==0:
-            return
-    
+
         # chan/bins
-        nchan =  np.size(self._data_array,0)
-        nbins =  np.size(self._data_array,1)
-    
+        nchan =  np.size(data_array,0)
+        nbins =  np.size(data_array,1)
+
+
+        # sanity checks
+        if nchan == 0 or nbins==0:
+            return
+
+        if self._plot_ref is None or len(self._plot_ref)!=nchan:
+            self._first_draw = True
+
+        if self._analysis_config['calc_psd'] and len(freq_array)!=0:
+            if len(freq_array)!=nbins:
+                freq_array = []
+
+        if self._nb_bins != nbins:
+            self._nb_bins = nbins
+            self._first_draw = True
+
+        # draw!
         if self._first_draw:
-            dt = 1/self._data_config['sample_rate']
+           
+            # axes label
             self._axes.clear()
-            self._axes.set_xlabel('ms')
-            self._axes.set_ylabel('ADC bins')
-            self._axes.set_title('Pulse')
-            x_axis=np.arange(0,nbins)*1e3*dt
-            self._plot_ref = [None]*nchan_display
-            for ichan in range(nchan_display):
-                chan = channel_num_list[ichan]
-                idx = channel_index_list[ichan]
-                self._plot_ref[ichan], = self._axes.plot(x_axis,self._data_array[idx],
-                                                         color = self._colors[chan])  
+            if self._analysis_config['calc_psd']:
+                self._axes.set_xlabel('kHz')
+                self._axes.set_ylabel('ADC/rtHz')
+                self._axes.set_title('PSD')
+                self._axes.set_yscale('log')
+                self._axes.set_xscale('log')
+            else:
+                self._axes.set_xlabel('ms')
+                self._axes.set_ylabel('ADC bins')
+                self._axes.set_title('Pulse')
+                self._axes.set_yscale('linear')
+                self._axes.set_xscale('linear')
+
+            # x axis value
+            dt = 1/self._data_config['sample_rate']
+            x_axis =np.arange(0,nbins)*1e3*dt
+            if self._analysis_config['calc_psd'] and len(freq_array)!=0:
+                x_axis = freq_array/1e3
+          
+            self._plot_ref = [None]*nchan
+            for ichan in range(nchan):
+                chan = self._data_config['selected_channel_list'][ichan]
+                self._plot_ref[ichan], = self._axes.plot(x_axis,data_array[ichan],
+                                                         color = self._colors[chan]) 
             self._canvas.draw()
             self._first_draw = False
         else:
-            for ichan in range(nchan_display):
-                chan = channel_num_list[ichan]
-                idx = channel_index_list[ichan]
-                self._plot_ref[ichan].set_ydata(self._data_array[idx])
-                        
-        self._axes.relim()
-        self._axes.autoscale_view()
+            
+            for ichan in range(nchan):
+                self._plot_ref[ichan].set_ydata(data_array[ichan])
+            
+
+        if self._enable_auto_scale:
+            self._axes.relim()
+            self._axes.autoscale_view()
+            
+
+        self._axes.grid(which='major',axis='both',alpha=0.5)
+        self._axes.grid(which='minor',axis='both',alpha=0.2,ls='dashed')
+
         self._canvas.draw()
         self._canvas.flush_events()
             

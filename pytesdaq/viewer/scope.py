@@ -68,14 +68,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._is_running = False
         self._stop_request = False
    
-
-         # initialize readout
-        self._readout = []
-        self.initialize_readout()
-
-
-
-    def initialize_readout(self):
+        
+        # initialize readout
         self._readout = readout.Readout()
         self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
                                   self._channels_color_map)
@@ -247,7 +241,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    def _handle_hdf5_selection_type(self):
+    def _handle_hdf5_filedialog_type(self):
 
         if self._hdf5_dir_radiobutton.isChecked():
             self._select_hdf5_dir = True
@@ -255,7 +249,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._select_hdf5_dir = False
                 
 
-    def _handle_hdf5_selection(self):
+    def _handle_hdf5_filedialog(self):
         """
         Handle hdf5 selection. 
         Called when clicking on select HDF5
@@ -285,7 +279,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    def _handle_channel(self):
+    def _handle_channel_selection(self):
         """
         Handle channel buttons selection (Signal/Slot connection)
         """
@@ -323,6 +317,37 @@ class MainWindow(QtWidgets.QMainWindow):
             self._readout.select_channels(self._channel_list)
             
 
+    def _handle_waveform_type(self):
+        """
+        Handle waveform type and unit selection (Signal/Slot connection)
+        """
+        waveform_type = str(self._waveform_combobox.currentText())
+
+
+        # type
+        calc_psd = False
+        if waveform_type=='PSD':
+            calc_psd = True
+
+        # unit
+        unit =  str(self._unit_combobox.currentText())
+
+
+        # norm
+        norm = str(self._norm_combobox.currentText())
+        
+        # update analysis config
+        self._readout.update_analysis_config(calc_psd=calc_psd,unit=unit,norm=norm)
+        
+        
+
+    def _handle_auto_scale(self):
+        
+        enable_auto_scale = False
+        if self._auto_scale_checkbox.isChecked():
+            enable_auto_scale = True
+        self._readout.set_auto_scale(enable_auto_scale)
+        
 
 
     def _init_main_frame(self):
@@ -642,8 +667,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # connect buttons
         # ---------------
         self._display_control_button.clicked.connect(self._handle_display)
-        self._hdf5_select_button.clicked.connect(self._handle_hdf5_selection)
-        self._hdf5_dir_radiobutton.toggled.connect(self._handle_hdf5_selection_type)
+        self._hdf5_select_button.clicked.connect(self._handle_hdf5_filedialog)
+        self._hdf5_dir_radiobutton.toggled.connect(self._handle_hdf5_filedialog_type)
         self._source_combobox.activated.connect(self._handle_source_selection)
        
         
@@ -660,10 +685,69 @@ class MainWindow(QtWidgets.QMainWindow):
         self._display_frame.setObjectName("DisplayFrame")
         
 
-        
+        font = QtGui.QFont()
+        font.setBold(False)
+        font.setWeight(75)
+
+        # waveform type selection
+        font.setBold(False)
+        self._waveform_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._waveform_combobox.setGeometry(QtCore.QRect(40, 30, 100, 25))
+        self._waveform_combobox.setFont(font)
+        self._waveform_combobox.setObjectName("waveformComboBox")
+        self._waveform_combobox.addItem("Waveform")
+        self._waveform_combobox.addItem("PSD")
+       
+
+        # unit
+        font.setBold(True)
+        unit_label = QtWidgets.QLabel(self._display_frame)
+        unit_label.setGeometry(QtCore.QRect(155, 30, 31, 25))
+        unit_label.setFont(font)
+        unit_label.setText("Unit:")
+
+
+        font.setBold(False)
+        self._unit_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._unit_combobox.setGeometry(QtCore.QRect(190, 30, 100, 25))
+        self._unit_combobox.setFont(font)
+        self._unit_combobox.setObjectName("unitComboBox")
+        self._unit_combobox.addItem("ADC")
+        self._unit_combobox.addItem("Volts")
+        self._unit_combobox.addItem("Amps")
+        self._unit_combobox.addItem("pAmps")
+       
+        # norm
+        font.setBold(True)
+        norm_label = QtWidgets.QLabel(self._display_frame)
+        norm_label.setGeometry(QtCore.QRect(305, 30, 60, 25))
+        norm_label.setFont(font)
+        norm_label.setText("Norm:")
+
+
+        font.setBold(False)
+        self._norm_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._norm_combobox.setGeometry(QtCore.QRect(350, 30, 100, 25))
+        self._norm_combobox.setFont(font)
+        self._norm_combobox.setObjectName("normComboBox")
+        self._norm_combobox.addItem("None")
+        self._norm_combobox.addItem("OpenLoop")
+        self._norm_combobox.addItem("CloseLoop")
+    
+
+        # auto_scale
+        font.setBold(True)
+        self._auto_scale_checkbox =  QtWidgets.QCheckBox(self._display_frame)
+        self._auto_scale_checkbox.setGeometry(QtCore.QRect(470, 30, 101, 25))
+        self._auto_scale_checkbox.setFont(font)
+        self._auto_scale_checkbox.setText("Auto Scale")
+        self._auto_scale_checkbox.setChecked(True)
+
+
+
 
         # canvas
-        self._fig = Figure((3.0,3.0), dpi=100)
+        self._fig = Figure((2.7,2.7), dpi=100)
         #self._fig, self._axes = plt.subplots(sharex=False)
         self._axes = self._fig.add_subplot(111)
         #self._fig.subplots_adjust(hspace=.3)
@@ -673,13 +757,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # canvas layout
         canvas_layout_widget = QtWidgets.QWidget(self._display_frame)
-        canvas_layout_widget.setGeometry(QtCore.QRect(12, 11, 574, 537))
-        canvas_layout = QtWidgets.QVBoxLayout(canvas_layout_widget)
-        canvas_layout.setContentsMargins(0, 0, 0, 0)
-        canvas_layout.addWidget(self._canvas)
-        canvas_layout.addWidget(self._canvas_toolbar)
-        
+        canvas_layout_widget.setGeometry(QtCore.QRect(12, 61, 574, 520))
+        vbox = QtWidgets.QVBoxLayout(canvas_layout_widget)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.addWidget(self._canvas)
+        vbox.addWidget(self._canvas_toolbar)
+    
 
+        # connect
+        self._waveform_combobox.activated.connect(self._handle_waveform_type)
+        self._unit_combobox.activated.connect(self._handle_waveform_type)
+        self._norm_combobox.activated.connect(self._handle_waveform_type)
+        self._auto_scale_checkbox.toggled.connect(self._handle_auto_scale)
 
     def _init_channel_frame(self):
         
@@ -742,7 +831,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 col_num = 1
 
             # connect 
-            button.clicked.connect(self._handle_channel)
+            button.clicked.connect(self._handle_channel_selection)
             
             # save
             self._channel_buttons[ichan] = button
