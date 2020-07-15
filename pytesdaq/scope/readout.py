@@ -56,11 +56,12 @@ class Readout:
         self._analysis_config['norm'] = 'none'
         self._analysis_config['calc_psd'] = False
         self._analysis_config['enable_running_avg'] = False
+        self._analysis_config['reset_running_avg'] = False
         self._analysis_config['nb_events_avg'] = 1
         self._analysis_config['calc_didv'] = False
         self._analysis_config['enable_pilup_rejection'] = False
-
-
+      
+        
 
         # instanciate analyzer
         self._analyzer = analyzer.Analyzer()
@@ -84,6 +85,7 @@ class Readout:
     def select_channels(self, channels):
 
         self._first_draw = True
+        self._analysis_config['reset_running_avg'] = True
         self._selected_channel_list = channels
 
 
@@ -193,22 +195,22 @@ class Readout:
                                enable_running_avg = None, nb_events_avg=None):
         
         
-
+        
         if norm is not None:
             self._analysis_config['norm'] = norm
             
         if unit is not None:
             self._analysis_config['unit'] = unit
-
+        
         if calc_psd is not None:
             self._analysis_config['calc_psd'] = calc_psd
         
         if calc_didv is not None:
             self._analysis_config['calc_didv'] = calc_didv
-
+        
         if enable_pileup_rejection is not None:
             self._analysis_config['enable_pileup_rejection'] = enable_pileup_rejection
-            
+        
         if enable_running_avg is not None:
             self._analysis_config['enable_running_avg'] = enable_running_avg
             
@@ -218,13 +220,21 @@ class Readout:
             
         # redraw after analysis update
         self._first_draw = True
+        
 
-        # FIXME: restart running avg?
+        # reset running avg
+        if (norm is not None or unit is not None or 
+            calc_psd is not None or calc_didv is not None or 
+            enable_pileup_rejection is not None):
+            self._analysis_config['reset_running_avg'] = True
+
         
 
     def set_auto_scale(self,enable_auto_scale):
         self._enable_auto_scale  = enable_auto_scale
         
+
+
     def run(self,save_redis=False,do_plot=False):
         
 
@@ -310,20 +320,11 @@ class Readout:
             self._data_config['selected_channel_list'] = channel_num_list
             self._data_config['selected_channel_index'] = channel_index_list
 
-            # set data
-            self._analyzer.set_data(selected_data_array,self._data_config)
-
             # process
-            self._analyzer.process(self._analysis_config)
-            
-
-            # get processed data
-            processed_data_array = self._analyzer.get_processed_data()
-            freq_array = []
-            if self._analysis_config['calc_psd']:
-                freq_array = self._analyzer.get_freq_array()
-                
-
+            selected_data_array = self._analyzer.process(selected_data_array, self._data_config, 
+                                                         self._analysis_config)
+         
+ 
 
 
             # event QT process
@@ -344,13 +345,21 @@ class Readout:
             # ------------------
         
             if do_plot:
-                self._plot_data(processed_data_array,freq_array)
+                self._plot_data(selected_data_array,self._analyzer.freq_array)
                 
                 
           
+            # ------------------
+            # Clear
+            # ------------------
+            self._analysis_config['reset_running_avg'] = False
 
 
-        # clear
+
+
+        # =========================
+        # Cleanup
+        # =========================
         if self._data_source == 'niadc':
             self._daq.clear()    
         self._is_running = False
@@ -392,7 +401,7 @@ class Readout:
             # axes label
             self._axes.clear()
             if self._analysis_config['calc_psd']:
-                self._axes.set_xlabel('kHz')
+                self._axes.set_xlabel('Hz')
                 self._axes.set_ylabel('ADC/rtHz')
                 self._axes.set_title('PSD')
                 self._axes.set_yscale('log')
@@ -408,7 +417,7 @@ class Readout:
             dt = 1/self._data_config['sample_rate']
             x_axis =np.arange(0,nbins)*1e3*dt
             if self._analysis_config['calc_psd'] and len(freq_array)!=0:
-                x_axis = freq_array/1e3
+                x_axis = freq_array
           
             self._plot_ref = [None]*nchan
             for ichan in range(nchan):

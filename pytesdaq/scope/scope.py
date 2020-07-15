@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as NavigationToolbar
 from matplotlib.figure import Figure
-from pytesdaq.viewer import readout
+from pytesdaq.scope import readout
 from glob import glob
 import os,time
 
@@ -57,9 +57,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_channel_frame()
         self._init_tools_frame()
 
-        # temporary
-        self._tools_frame.setEnabled(False)
-        
         # show
         self.show()
         
@@ -348,6 +345,19 @@ class MainWindow(QtWidgets.QMainWindow):
             enable_auto_scale = True
         self._readout.set_auto_scale(enable_auto_scale)
         
+
+
+    def _handle_running_avg(self):
+        
+        if self._running_avg_checkbox.isChecked():
+            self._running_avg_spinbox.setEnabled(True)
+            value = int(self._running_avg_spinbox.value())
+            self._readout.update_analysis_config(enable_running_avg = True, nb_events_avg=value)
+        else:
+            self._running_avg_spinbox.setProperty("value", 1)
+            self._running_avg_spinbox.setEnabled(False)
+            self._readout.update_analysis_config(enable_running_avg = False)
+
 
 
     def _init_main_frame(self):
@@ -859,7 +869,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tools_button.setStyleSheet("background-color: rgb(162, 162, 241);")
         self._tools_button.setObjectName("toolsButton")
         self._tools_button.setText("Tools")
-        
+        self._tools_button.setEnabled(False)
+
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
         self._running_avg_checkbox.setGeometry(QtCore.QRect(16, 16, 109, 21))
@@ -874,9 +885,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._running_avg_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._running_avg_spinbox.setEnabled(False)
         self._running_avg_spinbox.setGeometry(QtCore.QRect(34, 40, 85, 21))
-        self._running_avg_spinbox.setMaximum(20000)
+        self._running_avg_spinbox.setMaximum(500)
         self._running_avg_spinbox.setProperty("value", 1)
         self._running_avg_spinbox.setObjectName("runningAvgSpinBox")
+        self._running_avg_spinbox.setEnabled(False)
+
 
         # add lopw pass filter
         self._lpfilter_checkbox = QtWidgets.QCheckBox(self._tools_frame)
@@ -895,8 +908,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lpfilter_spinbox.setMinimum(1)
         self._lpfilter_spinbox.setMaximum(500)
         self._lpfilter_spinbox.setObjectName("lpFilterSpinBox")
-      
+        self._lpfilter_spinbox.setEnabled(False)
         
+
+        # connect 
+        self._running_avg_checkbox.toggled.connect(self._handle_running_avg)
+        self._running_avg_spinbox.valueChanged.connect(self._handle_running_avg)
+
+        #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
+
+
 
     def _set_display_button(self,do_run):
         
