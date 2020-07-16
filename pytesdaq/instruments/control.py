@@ -6,6 +6,7 @@ import time
 import numpy
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
+import pytesdaq.instruments.magnicon as magnicon
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connections
 import pytesdaq.utils.remote as remote
@@ -53,26 +54,37 @@ class Control:
 
     	# Magnicon
         if self._squid_controller == 'magnicon' and not self._dummy_mode:
+            mag_control_info = self._config.get_magnicon_controller_info()
             mag_conn_info = self._config.get_magnicon_connection_info()
+            self._mag_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
+                                               default_active=mag_control_info['default_active'],
+                                               reset_active=mag_control_info['reset_active'],
+                                               conn_info=mag_conn_info)
+            self._mag_inst.set_remote_inst()
+            self._mag_inst.connect()
+            self._mag_inst.chdir()
+            self._mag_inst.listen_for(None)
             if mag_conn_info:
                 if self._verbose:
                     print('SSH connection info for Magnicon:')
                     print('Hostname:', mag_conn_info['hostname'])
                     print('Username:', mag_conn_info['username'])
-                    print('Port:', mag_conn_info['port'])
+                    print('Port:', str(mag_conn_info['port']))
                     print('RSA key:', mag_conn_info['rsa_key'])
-                    print('Log file', mag_conn_info['log_file'])
-            self._remote = remote.Remote(hostname=mag_conn_info['hostname'],
-                                         port=mag_conn_info['port'],
-                                         username=mag_conn_info['username'],
-                                         auth_method='rsa',
-                                         auth_val=mag_conn_info['rsa_key'],
-                                         log_file=mag_conn_info['log_file'])
+                    print('Log file:', mag_conn_info['log_file'])
+                    print('Executable location:', mag_conn_info['exe_location'])
+            if mag_control_info:
+                if self._verbose:
+                    print('Controller info for Magnicon:')
+                    print('Channel list:', str(mag_control_info['channel_list']))
+                    print('Default active channel:', str(mag_control_info['default_active']))
+                    print('Reset active channel after every step:', str(mag_control_info['reset_active']))
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
-        
-               
+
+
+
     @property
     def verbose(self):
         return self._verbose
@@ -690,11 +702,9 @@ class Control:
 
                 if not self._dummy_mode:
                     if param_name == 'tes_bias':
-                        # param_val = magnicon.get_phonon_qet_bias(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = magnicon.get_tes_current_bias(controller_channel)
                     elif param_name == 'squid_bias':
-                        # param_val = magnicon.get_phonon_squid_bias(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = self._mag_inst.get_squid_current_bias(controller_channel)
                     elif param_name == 'lock_point':
                         # param_val = magnicon.get_phonon_lock_point(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
@@ -807,8 +817,43 @@ class Control:
                     feb.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
         elif self._squid_controller=='magnicon' and not self._dummy_mode:
-            # Magnicon
-            print('Magnicon')
+
+            if self._verbose:
+                print('INFO: Setting "' + param_name + '" to ' + str(value) + ' (using Magnicon)')
+                print('(channel = ' + str(controller_channel) + ')')
+
+            if not self._dummy_mode:
+                if param_name == 'tes_bias':
+                    magnicon.set_tes_current_bias(controller_channel, value, mode=None)
+                elif param_name == 'squid_bias':
+                    self._mag_inst.set_squid_current_bias(controller_channel, value)
+                elif param_name == 'lock_point':
+                    # magnicon.set_phonon_lock_point(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_gain':
+                    # magnicon.set_phonon_feedback_gain(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'output_offset':
+                    # magnicon.set_phonon_offset(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'output_gain':
+                    # magnicon.set_phonon_output_gain(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_polarity':
+                    # magnicon.set_phonon_feedback_polarity(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_loop_open':
+                    # magnicon.set_phonon_feedback_loop(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'preamp_source':
+                    # magnicon.set_phonon_source_preamp(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'signal_gen_feedback_connected':
+                    # magnicon.connect_signal_generator_feedback(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'signal_gen_tes_connected':
+                    # magnicon.connect_signal_generator_tes(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
             
         else:
             print('ERROR: Unknow SQUID controller "' + 

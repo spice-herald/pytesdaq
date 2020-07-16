@@ -131,7 +131,7 @@ class Remote(object):
         if not transport.is_authenticated():
             print("*** Authentication failed.")
             transport.close()
-            sys.exit(1)                                                                                                                                       
+            sys.exit(1)
 
 
 
