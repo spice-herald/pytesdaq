@@ -387,9 +387,10 @@ class Readout:
         if self._plot_ref is None or len(self._plot_ref)!=nchan:
             self._first_draw = True
 
-        if self._analysis_config['calc_psd'] and len(freq_array)!=0:
-            if len(freq_array)!=nbins:
-                freq_array = []
+        if self._analysis_config['calc_psd']:
+            if freq_array is None or len(freq_array)!=nbins:
+                return
+
 
         if self._nb_bins != nbins:
             self._nb_bins = nbins

@@ -74,7 +74,8 @@ class Analyzer:
         
         if  self._analysis_config['calc_psd']:
             data_array = self.calc_psd(data_array, data_config['sample_rate'])
-            
+        else:
+            self._freq_array = None
     
 
 
@@ -167,9 +168,7 @@ class Analyzer:
         
 
     def _calc_running_avg(self):
-        print(self._nb_events_buffer)
-        print(self._buffer.shape)
-
+     
         data_array = None
         if self._buffer is not None:
             data_array = np.mean(self._buffer,axis=2)
