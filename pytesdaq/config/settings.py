@@ -3,6 +3,7 @@ from io import StringIO
 import os,string
 import pandas as pd
 import re
+import traceback
 
 
 class Config:
@@ -492,18 +493,37 @@ class Config:
         """
         Returns a dictionary with the magnicon SSH connection info
         """
-        info = dict()
+        info = {}
 
         try:
             info['hostname'] = self._get_setting('magnicon', 'hostname')
             info['username'] = self._get_setting('magnicon', 'username')
-            info['port'] = self._get_setting('magnicon', 'port')
+            info['port'] = int(self._get_setting('magnicon', 'port'))
             info['rsa_key'] = self._get_setting('magnicon', 'rsa_key')
             info['log_file'] = self._get_setting('magnicon', 'log_file')
+            info['exe_location'] = self._get_setting('magnicon', 'exe_location')
         except:
             print('ERROR: Could not get complete connection info for Magnicon')
 
         return info
 
+
+
+    def get_magnicon_controller_info(self):
+        """
+        Returns a dictionary with the magnicon controller info
+        """
+        info = {}
+
+        try:
+            info['channel_list'] = [int(x) for x in self._get_setting('magnicon', 'channel_list').split(',')]
+            info['default_active'] = int(self._get_setting('magnicon', 'default_active'))
+            info['reset_active'] = bool(self._get_setting('magnicon', 'reset_active'))
+        except Exception as e:
+            print('ERROR: Could not get complete controller info for Magnicon')
+            print(str(e))
+            traceback.print_exc()
+
+        return info
 
 
