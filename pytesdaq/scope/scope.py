@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as NavigationToolbar
 from matplotlib.figure import Figure
-from pytesdaq.viewer import readout
+from pytesdaq.scope import readout
 from glob import glob
 import os,time
 
@@ -28,9 +28,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # initalize main window
         self.setWindowModality(QtCore.Qt.NonModal)
         self.resize(900, 700)
-        self.setStyleSheet("background-color: rgb(211, 252, 255);")
+        self.setStyleSheet('background-color: rgb(211, 252, 255);')
         self.setTabShape(QtWidgets.QTabWidget.Rounded)
-        self.setWindowTitle("Pulse Viewer")
+        self.setWindowTitle('Pulse Viewer')
 
 
 
@@ -57,9 +57,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_channel_frame()
         self._init_tools_frame()
 
-        # temporary
-        self._tools_frame.setEnabled(False)
-        
         # show
         self.show()
         
@@ -68,14 +65,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._is_running = False
         self._stop_request = False
    
-
-         # initialize readout
-        self._readout = []
-        self.initialize_readout()
-
-
-
-    def initialize_readout(self):
+        
+        # initialize readout
         self._readout = readout.Readout()
         self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
                                   self._channels_color_map)
@@ -98,7 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 
         
             
-        print("Exiting Pulse Display UI")
+        print('Exiting Pulse Display UI')
         
 
 
@@ -123,7 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._source_combobox.setEnabled(True)
 
             # status bar
-            self.statusBar().showMessage("Display Stopped")
+            self.statusBar().showMessage('Display Stopped')
           
             
         else:
@@ -165,7 +156,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 
                 # check selection done
                 if not self._file_list:
-                    self.statusBar().showMessage("WARNING: No files selected!")  
+                    self.statusBar().showMessage('WARNING: No files selected!')  
                     return
 
                 status = self._readout.configure('hdf5', file_list = self._file_list)
@@ -176,13 +167,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     return
             
             else:
-                self.statusBar().showMessage("WARNING: Redis not implemented")  
+                self.statusBar().showMessage('WARNING: Redis not implemented')  
                 return
 
 
 
             # status bar
-            self.statusBar().showMessage("Running...")
+            self.statusBar().showMessage('Running...')
           
 
             # disable 
@@ -200,7 +191,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._source_combobox.setEnabled(True)
 
             # status bar
-            self.statusBar().showMessage("Run stopped...")
+            self.statusBar().showMessage('Run stopped...')
           
 
 
@@ -215,7 +206,7 @@ class MainWindow(QtWidgets.QMainWindow):
         data_source = str(self._source_combobox.currentText())
         
         # select tab
-        if data_source== "Redis":
+        if data_source== 'Redis':
             self._data_source  = 'redis'
 
             self._redis_tab.setEnabled(True)
@@ -224,7 +215,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
             self._data_source_tabs.setCurrentWidget(self._redis_tab)
 
-        elif data_source== "HDF5":
+        elif data_source== 'HDF5':
             self._data_source  = 'hdf5'
             
             self._redis_tab.setEnabled(False)
@@ -233,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self._data_source_tabs.setCurrentWidget(self._hdf5_tab)
 
-        elif data_source== "Device":
+        elif data_source== 'Device':
             self._data_source  = 'niadc'
 
             self._redis_tab.setEnabled(False)
@@ -243,11 +234,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self._data_source_tabs.setCurrentWidget(self._niadc_tab)
 
         else:
-            print("WARNING: Unknown selection")
+            print('WARNING: Unknown selection')
 
 
 
-    def _handle_hdf5_selection_type(self):
+    def _handle_hdf5_filedialog_type(self):
 
         if self._hdf5_dir_radiobutton.isChecked():
             self._select_hdf5_dir = True
@@ -255,7 +246,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._select_hdf5_dir = False
                 
 
-    def _handle_hdf5_selection(self):
+    def _handle_hdf5_filedialog(self):
         """
         Handle hdf5 selection. 
         Called when clicking on select HDF5
@@ -265,11 +256,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         files = list()
         if not self._select_hdf5_dir:
-            files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,"Select File (s)",self._default_data_dir,
-                                                              "HDF5 Files (*.hdf5)", options=options)
+            files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,'Select File (s)',self._default_data_dir,
+                                                              'HDF5 Files (*.hdf5)', options=options)
         else:
             options |= QtWidgets.QFileDialog.ShowDirsOnly  | QtWidgets.QFileDialog.DontResolveSymlinks
-            dir = QtWidgets.QFileDialog.getExistingDirectory(self,"Select Directory",
+            dir = QtWidgets.QFileDialog.getExistingDirectory(self,'Select Directory',
                                                              self._default_data_dir,options=options)
                                  
 
@@ -285,7 +276,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    def _handle_channel(self):
+    def _handle_channel_selection(self):
         """
         Handle channel buttons selection (Signal/Slot connection)
         """
@@ -301,7 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # change color
         if button.isChecked():
             # change color
-            button.setStyleSheet("background-color: rgb(226, 255, 219);")
+            button.setStyleSheet('background-color: rgb(226, 255, 219);')
 
             # remove from list
             if self._channel_list and channel_num in self._channel_list:
@@ -310,8 +301,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # change color
             color = self._channels_color_map[channel_num]
-            color_str = "rgb(" + str(color[0]) + "," + str(color[1]) + "," + str(color[2]) + ")" 
-            button.setStyleSheet("background-color: " + color_str +";")
+            color_str = 'rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')' 
+            button.setStyleSheet('background-color: ' + color_str +';')
         
             # add to list
             self._channel_list.append(channel_num)
@@ -323,6 +314,97 @@ class MainWindow(QtWidgets.QMainWindow):
             self._readout.select_channels(self._channel_list)
             
 
+    def _handle_waveform_type(self):
+        """
+        Handle waveform type and unit selection (Signal/Slot connection)
+        """
+        waveform_type = str(self._waveform_combobox.currentText())
+
+
+        # type
+        calc_psd = False
+        if waveform_type=='PSD':
+            calc_psd = True
+
+        # update analysis config
+        self._readout.update_analysis_config(calc_psd=calc_psd)
+
+  
+
+
+    def _handle_waveform_unit(self):
+        """
+        Handle waveform type and unit selection (Signal/Slot connection)
+        """
+
+        
+        # unit
+        unit =  str(self._unit_combobox.currentText())                                   
+        norm = str(self._norm_combobox.currentText())
+           
+        # change norm display
+        self._norm_combobox.clear()
+        if unit=='ADC':
+            self._norm_combobox.addItem('None')
+            norm = 'None'
+        elif unit=='Volts':
+            self._norm_combobox.addItem('None')
+            self._norm_combobox.addItem('OpenLoop')
+            if norm == 'OpenLoop':
+                self._norm_combobox.setCurrentIndex(1)
+            else:
+                self._norm_combobox.setCurrentIndex(0)
+                norm = 'None'
+        elif (unit=='Amps' or unit=='pAmps'):
+            self._norm_combobox.addItem('OpenLoop')
+            self._norm_combobox.addItem('CloseLoop')
+            if norm=='OpenLoop':
+                self._norm_combobox.setCurrentIndex(0)
+            else:
+                self._norm_combobox.setCurrentIndex(1)
+                norm = 'CloseLoop'
+                
+        # update analysis
+        self._readout.update_analysis_config(unit=unit,norm=norm)
+        
+
+
+
+
+    def _handle_waveform_norm(self):
+        """
+        Handle waveform type and unit selection (Signal/Slot connection)
+        """
+
+             
+        # norm 
+        norm = str(self._norm_combobox.currentText())
+
+        # update analysis
+        self._readout.update_analysis_config(norm=norm)
+
+
+
+    def _handle_auto_scale(self):
+        
+        enable_auto_scale = False
+        if self._auto_scale_checkbox.isChecked():
+            enable_auto_scale = True
+        self._readout.set_auto_scale(enable_auto_scale)
+        
+
+
+    def _handle_running_avg(self):
+        
+        if self._running_avg_checkbox.isChecked():
+            self._running_avg_spinbox.setEnabled(True)
+            value = int(self._running_avg_spinbox.value())
+            self._readout.update_analysis_config(enable_running_avg = True, nb_events_avg=value)
+        else:
+            self._running_avg_spinbox.setProperty('value', 1)
+            self._running_avg_spinbox.setEnabled(False)
+            self._readout.update_analysis_config(enable_running_avg = False)
+
 
 
     def _init_main_frame(self):
@@ -331,7 +413,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # add main widget
         self._central_widget = QtWidgets.QWidget(self)
         self._central_widget.setEnabled(True)
-        self._central_widget.setObjectName("central_widget")
+        self._central_widget.setObjectName('central_widget')
         self.setCentralWidget(self._central_widget)
         
 
@@ -345,36 +427,36 @@ class MainWindow(QtWidgets.QMainWindow):
         # add title frame
         self._title_frame = QtWidgets.QFrame(self._central_widget)
         self._title_frame.setGeometry(QtCore.QRect(10, 8, 877, 61))
-        self._title_frame.setStyleSheet("background-color: rgb(0, 0, 255);")
+        self._title_frame.setStyleSheet('background-color: rgb(0, 0, 255);')
         self._title_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._title_frame.setFrameShadow(QtWidgets.QFrame.Raised)
-        self._title_frame.setObjectName("titleWindow")
+        self._title_frame.setObjectName('titleWindow')
 
         # add title label
         self._title_label = QtWidgets.QLabel(self._title_frame)
         self._title_label.setGeometry(QtCore.QRect(26, 12, 261, 37))
         font = QtGui.QFont()
-        font.setFamily("Sans Serif")
+        font.setFamily('Sans Serif')
         font.setPointSize(23)
         font.setBold(True)
         font.setWeight(75)
         self._title_label.setFont(font)
-        self._title_label.setStyleSheet("color: rgb(255, 255, 127);")
-        self._title_label.setObjectName("titleLabel")
-        self._title_label.setText("Pulse Display")
+        self._title_label.setStyleSheet('color: rgb(255, 255, 127);')
+        self._title_label.setObjectName('titleLabel')
+        self._title_label.setText('Pulse Display')
 
         # add device selection box + label
         
         # combo box
         self._device_combobox = QtWidgets.QComboBox(self._title_frame)
         self._device_combobox.setGeometry(QtCore.QRect(470, 16, 93, 29))
-        self._device_combobox.setObjectName("deviceComboBox")
+        self._device_combobox.setObjectName('deviceComboBox')
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(50)
         self._device_combobox.setFont(font)
-        #self._device_combobox.setStyleSheet("background-color: rgb(226, 255, 219);")
-        self._device_combobox.addItem("NI ADC1")
+        #self._device_combobox.setStyleSheet('background-color: rgb(226, 255, 219);')
+        self._device_combobox.addItem('NI ADC1')
 
 
 
@@ -386,9 +468,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         device_label.setFont(font)
-        device_label.setStyleSheet("color: rgb(200, 255, 255);")
-        device_label.setObjectName("deviceLabel")
-        device_label.setText("Device:")
+        device_label.setStyleSheet('color: rgb(200, 255, 255);')
+        device_label.setObjectName('deviceLabel')
+        device_label.setText('Device:')
 
 
         # status widget  
@@ -401,9 +483,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         status_label.setFont(font)
-        status_label.setStyleSheet("color: rgb(200, 255, 255);")
-        status_label.setObjectName("statusLabel")
-        status_label.setText("Status:")
+        status_label.setStyleSheet('color: rgb(200, 255, 255);')
+        status_label.setObjectName('statusLabel')
+        status_label.setText('Status:')
 
         # status widget
         self._status_textbox = QtWidgets.QLabel(self._title_frame)
@@ -413,9 +495,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._status_textbox.setFont(font)
-        self._status_textbox.setStyleSheet("background-color: rgb(255, 0, 0);")
-        self._status_textbox.setObjectName("statusTextbox")
-        self._status_textbox.setText("  Stopped")
+        self._status_textbox.setStyleSheet('background-color: rgb(255, 0, 0);')
+        self._status_textbox.setObjectName('statusTextbox')
+        self._status_textbox.setText('  Stopped')
         '''
 
 
@@ -425,10 +507,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # add control frame
         self._control_frame = QtWidgets.QFrame(self._central_widget)
         self._control_frame.setGeometry(QtCore.QRect(10, 76, 269, 269))
-        self._control_frame.setStyleSheet("background-color: rgb(226, 255, 219);")
+        self._control_frame.setStyleSheet('background-color: rgb(226, 255, 219);')
         self._control_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._control_frame.setFrameShadow(QtWidgets.QFrame.Raised)
-        self._control_frame.setObjectName("controlFrame")
+        self._control_frame.setObjectName('controlFrame')
 
         # data source tabs
         self._data_source_tabs = QtWidgets.QTabWidget(self._control_frame)
@@ -439,7 +521,7 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setWeight(75)
         self._data_source_tabs.setFont(font)
         self._data_source_tabs.setAutoFillBackground(False)
-        self._data_source_tabs.setStyleSheet("")
+        self._data_source_tabs.setStyleSheet('')
         self._data_source_tabs.setTabPosition(QtWidgets.QTabWidget.North)
         self._data_source_tabs.setTabShape(QtWidgets.QTabWidget.Rounded)
         self._data_source_tabs.setIconSize(QtCore.QSize(16, 16))
@@ -448,7 +530,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source_tabs.setDocumentMode(False)
         self._data_source_tabs.setTabsClosable(False)
         self._data_source_tabs.setTabBarAutoHide(False)
-        self._data_source_tabs.setObjectName("sourceTabs")
+        self._data_source_tabs.setObjectName('sourceTabs')
        
 
           
@@ -457,34 +539,34 @@ class MainWindow(QtWidgets.QMainWindow):
         # -------------
         self._niadc_tab = QtWidgets.QWidget()
         self._niadc_tab.setEnabled(True)
-        self._niadc_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
-        self._niadc_tab.setObjectName("deviceTab")
-        self._data_source_tabs.addTab(self._niadc_tab, "Device")
+        self._niadc_tab.setStyleSheet('background-color: rgb(243, 255, 242);')
+        self._niadc_tab.setObjectName('deviceTab')
+        self._data_source_tabs.addTab(self._niadc_tab, 'Device')
       
 
         # Trace length
         trace_length_label = QtWidgets.QLabel(self._niadc_tab)
         trace_length_label.setGeometry(QtCore.QRect(5, 5, 131, 37))
         trace_length_label.setFont(font)
-        trace_length_label.setText("Length [ms]")
+        trace_length_label.setText('Length [ms]')
 
         self._trace_length_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
         self._trace_length_spinbox.setGeometry(QtCore.QRect(5, 35, 95, 21))
         self._trace_length_spinbox.setMaximum(100000)
-        self._trace_length_spinbox.setProperty("value", 10)
-        self._trace_length_spinbox.setObjectName("traceLengthSpinBox")
+        self._trace_length_spinbox.setProperty('value', 10)
+        self._trace_length_spinbox.setObjectName('traceLengthSpinBox')
         
         # Sample Rate
         sample_rate_label = QtWidgets.QLabel(self._niadc_tab)
         sample_rate_label.setGeometry(QtCore.QRect(5, 60, 131, 37))
         sample_rate_label.setFont(font)
-        sample_rate_label.setText("SampleRate [Hz]")
+        sample_rate_label.setText('SampleRate [Hz]')
         
         self._sample_rate_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
         self._sample_rate_spinbox.setGeometry(QtCore.QRect(5, 90, 95, 21))
         self._sample_rate_spinbox.setMaximum(3500000)
-        self._sample_rate_spinbox.setProperty("value", 1250000)
-        self._sample_rate_spinbox.setObjectName("sampleRateSpinBox")
+        self._sample_rate_spinbox.setProperty('value', 1250000)
+        self._sample_rate_spinbox.setObjectName('sampleRateSpinBox')
         
 
         # separator
@@ -502,36 +584,36 @@ class MainWindow(QtWidgets.QMainWindow):
         voltage_label = QtWidgets.QLabel(self._niadc_tab)
         voltage_label.setGeometry(QtCore.QRect(150, 20, 100, 30))
         voltage_label.setFont(font)
-        voltage_label.setText("Voltage [V]")
+        voltage_label.setText('Voltage [V]')
 
         self._voltage_min_combobox = QtWidgets.QComboBox(self._niadc_tab)
         self._voltage_min_combobox.setGeometry(QtCore.QRect(176, 50, 54, 23))
         self._voltage_min_combobox.setFont(font)
-        self._voltage_min_combobox.addItem("-1")
-        self._voltage_min_combobox.addItem("-2")
-        self._voltage_min_combobox.addItem("-5")
-        self._voltage_min_combobox.addItem("-10")
+        self._voltage_min_combobox.addItem('-1')
+        self._voltage_min_combobox.addItem('-2')
+        self._voltage_min_combobox.addItem('-5')
+        self._voltage_min_combobox.addItem('-10')
         self._voltage_min_combobox.setCurrentIndex(3)
 
         self._voltage_max_combobox = QtWidgets.QComboBox(self._niadc_tab)
         self._voltage_max_combobox.setGeometry(QtCore.QRect(176, 75, 54, 23))
         self._voltage_max_combobox.setFont(font)
-        self._voltage_max_combobox.addItem("+1")
-        self._voltage_max_combobox.addItem("+2")
-        self._voltage_max_combobox.addItem("+5")
-        self._voltage_max_combobox.addItem("+10")
+        self._voltage_max_combobox.addItem('+1')
+        self._voltage_max_combobox.addItem('+2')
+        self._voltage_max_combobox.addItem('+5')
+        self._voltage_max_combobox.addItem('+10')
         self._voltage_max_combobox.setCurrentIndex(3)
 
         # Trace length
         voltage_min_label = QtWidgets.QLabel(self._niadc_tab)
         voltage_min_label.setGeometry(QtCore.QRect(143, 45, 31, 30))
         voltage_min_label.setFont(font)
-        voltage_min_label.setText("Min:")
+        voltage_min_label.setText('Min:')
 
         voltage_max_label = QtWidgets.QLabel(self._niadc_tab)
         voltage_max_label.setGeometry(QtCore.QRect(140, 71, 32, 30))
         voltage_max_label.setFont(font)
-        voltage_max_label.setText("Max:")
+        voltage_max_label.setText('Max:')
 
     
 
@@ -540,9 +622,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # --------
         self._hdf5_tab = QtWidgets.QWidget()
         self._hdf5_tab.setEnabled(True)
-        self._hdf5_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
-        self._hdf5_tab.setObjectName("hdf5Tab")
-        self._data_source_tabs.addTab(self._hdf5_tab, "HDF5")
+        self._hdf5_tab.setStyleSheet('background-color: rgb(243, 255, 242);')
+        self._hdf5_tab.setObjectName('hdf5Tab')
+        self._data_source_tabs.addTab(self._hdf5_tab, 'HDF5')
         
         
         self._hdf5_file_radiobutton =  QtWidgets.QRadioButton(self._hdf5_tab)
@@ -551,7 +633,7 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._hdf5_file_radiobutton.setFont(font)
-        self._hdf5_file_radiobutton.setText("Files")
+        self._hdf5_file_radiobutton.setText('Files')
         self._hdf5_file_radiobutton.setChecked(True)
 
         self._hdf5_dir_radiobutton =  QtWidgets.QRadioButton(self._hdf5_tab)
@@ -560,7 +642,7 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._hdf5_dir_radiobutton.setFont(font)
-        self._hdf5_dir_radiobutton.setText("Directory")
+        self._hdf5_dir_radiobutton.setText('Directory')
         
 
 
@@ -571,9 +653,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._hdf5_select_button.setFont(font)
-        self._hdf5_select_button.setStyleSheet("background-color: rgb(162, 162, 241);")
-        self._hdf5_select_button.setObjectName("fileSelectButton")
-        self._hdf5_select_button.setText("Select \n" "Files/Dir")
+        self._hdf5_select_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._hdf5_select_button.setObjectName('fileSelectButton')
+        self._hdf5_select_button.setText('Select \n' 'Files/Dir')
 
 
         # disable
@@ -590,9 +672,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._redis_tab.setFont(font)
         self._redis_tab.setLayoutDirection(QtCore.Qt.LeftToRight)
         self._redis_tab.setAutoFillBackground(False)
-        self._redis_tab.setStyleSheet("background-color: rgb(243, 255, 242);")
-        self._redis_tab.setObjectName("redisTab")
-        self._data_source_tabs.addTab(self._redis_tab, "Redis")
+        self._redis_tab.setStyleSheet('background-color: rgb(243, 255, 242);')
+        self._redis_tab.setObjectName('redisTab')
+        self._data_source_tabs.addTab(self._redis_tab, 'Redis')
         
         # disable
         self._redis_tab.setEnabled(False)
@@ -607,10 +689,10 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(False)
         font.setWeight(50)
         self._source_combobox.setFont(font)
-        self._source_combobox.setObjectName("sourceComboBox")
-        self._source_combobox.addItem("Device")
-        self._source_combobox.addItem("HDF5")
-        self._source_combobox.addItem("Redis")
+        self._source_combobox.setObjectName('sourceComboBox')
+        self._source_combobox.addItem('Device')
+        self._source_combobox.addItem('HDF5')
+        self._source_combobox.addItem('Redis')
 
         # combo box label
         source_label = QtWidgets.QLabel(self._control_frame)
@@ -619,8 +701,8 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         source_label.setFont(font)
-        source_label.setObjectName("sourceLabel")
-        source_label.setText("Data Source:")
+        source_label.setObjectName('sourceLabel')
+        source_label.setText('Data Source:')
 
 
         # --------------
@@ -632,9 +714,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._display_control_button.setFont(font)
-        self._display_control_button.setStyleSheet("background-color: rgb(255, 0, 0);")
-        self._display_control_button.setObjectName("displayControlButton")
-        self._display_control_button.setText("Display \n" "Waveform")
+        self._display_control_button.setStyleSheet('background-color: rgb(255, 0, 0);')
+        self._display_control_button.setObjectName('displayControlButton')
+        self._display_control_button.setText('Display \n' 'Waveform')
     
         
 
@@ -642,8 +724,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # connect buttons
         # ---------------
         self._display_control_button.clicked.connect(self._handle_display)
-        self._hdf5_select_button.clicked.connect(self._handle_hdf5_selection)
-        self._hdf5_dir_radiobutton.toggled.connect(self._handle_hdf5_selection_type)
+        self._hdf5_select_button.clicked.connect(self._handle_hdf5_filedialog)
+        self._hdf5_dir_radiobutton.toggled.connect(self._handle_hdf5_filedialog_type)
         self._source_combobox.activated.connect(self._handle_source_selection)
        
         
@@ -653,17 +735,76 @@ class MainWindow(QtWidgets.QMainWindow):
         # frame
         self._display_frame = QtWidgets.QFrame(self._central_widget)
         self._display_frame.setGeometry(QtCore.QRect(290, 76, 597, 597))
-        self._display_frame.setStyleSheet("background-color: rgb(254, 255, 216);")
+        self._display_frame.setStyleSheet('background-color: rgb(254, 255, 216);')
         self._display_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._display_frame.setFrameShadow(QtWidgets.QFrame.Raised)
         self._display_frame.setLineWidth(1)
-        self._display_frame.setObjectName("DisplayFrame")
+        self._display_frame.setObjectName('DisplayFrame')
         
 
-        
+        font = QtGui.QFont()
+        font.setBold(False)
+        font.setWeight(75)
+
+        # waveform type selection
+        font.setBold(False)
+        self._waveform_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._waveform_combobox.setGeometry(QtCore.QRect(40, 30, 100, 25))
+        self._waveform_combobox.setFont(font)
+        self._waveform_combobox.setObjectName('waveformComboBox')
+        self._waveform_combobox.addItem('Waveform')
+        self._waveform_combobox.addItem('PSD')
+       
+
+        # unit
+        font.setBold(True)
+        unit_label = QtWidgets.QLabel(self._display_frame)
+        unit_label.setGeometry(QtCore.QRect(155, 30, 31, 25))
+        unit_label.setFont(font)
+        unit_label.setText('Unit:')
+
+
+        font.setBold(False)
+        self._unit_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._unit_combobox.setGeometry(QtCore.QRect(190, 30, 100, 25))
+        self._unit_combobox.setFont(font)
+        self._unit_combobox.setObjectName('unitComboBox')
+        self._unit_combobox.addItem('ADC')
+        self._unit_combobox.addItem('Volts')
+        self._unit_combobox.addItem('Amps')
+        self._unit_combobox.addItem('pAmps')
+       
+        # norm
+        font.setBold(True)
+        norm_label = QtWidgets.QLabel(self._display_frame)
+        norm_label.setGeometry(QtCore.QRect(305, 30, 60, 25))
+        norm_label.setFont(font)
+        norm_label.setText('Norm:')
+
+
+        font.setBold(False)
+        self._norm_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._norm_combobox.setGeometry(QtCore.QRect(350, 30, 100, 25))
+        self._norm_combobox.setFont(font)
+        self._norm_combobox.setObjectName('normComboBox')
+        self._norm_combobox.addItem('None')
+        #self._norm_combobox.addItem('OpenLoop')
+        #self._norm_combobox.addItem('CloseLoop')
+    
+
+        # auto_scale
+        font.setBold(True)
+        self._auto_scale_checkbox =  QtWidgets.QCheckBox(self._display_frame)
+        self._auto_scale_checkbox.setGeometry(QtCore.QRect(470, 30, 101, 25))
+        self._auto_scale_checkbox.setFont(font)
+        self._auto_scale_checkbox.setText('Auto Scale')
+        self._auto_scale_checkbox.setChecked(True)
+
+
+
 
         # canvas
-        self._fig = Figure((3.0,3.0), dpi=100)
+        self._fig = Figure((2.7,2.7), dpi=100)
         #self._fig, self._axes = plt.subplots(sharex=False)
         self._axes = self._fig.add_subplot(111)
         #self._fig.subplots_adjust(hspace=.3)
@@ -673,35 +814,40 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # canvas layout
         canvas_layout_widget = QtWidgets.QWidget(self._display_frame)
-        canvas_layout_widget.setGeometry(QtCore.QRect(12, 11, 574, 537))
-        canvas_layout = QtWidgets.QVBoxLayout(canvas_layout_widget)
-        canvas_layout.setContentsMargins(0, 0, 0, 0)
-        canvas_layout.addWidget(self._canvas)
-        canvas_layout.addWidget(self._canvas_toolbar)
-        
+        canvas_layout_widget.setGeometry(QtCore.QRect(12, 61, 574, 520))
+        vbox = QtWidgets.QVBoxLayout(canvas_layout_widget)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.addWidget(self._canvas)
+        vbox.addWidget(self._canvas_toolbar)
+    
 
+        # connect
+        self._waveform_combobox.activated.connect(self._handle_waveform_type)
+        self._unit_combobox.activated.connect(self._handle_waveform_unit)
+        self._norm_combobox.activated.connect(self._handle_waveform_norm)
+        self._auto_scale_checkbox.toggled.connect(self._handle_auto_scale)
 
     def _init_channel_frame(self):
         
         # channel frame
         self._channel_frame = QtWidgets.QFrame(self._central_widget)
         self._channel_frame.setGeometry(QtCore.QRect(10, 352, 269, 161))
-        self._channel_frame.setStyleSheet("background-color: rgb(226, 255, 219);")
+        self._channel_frame.setStyleSheet('background-color: rgb(226, 255, 219);')
         self._channel_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._channel_frame.setFrameShadow(QtWidgets.QFrame.Raised)
         self._channel_frame.setLineWidth(2)
-        self._channel_frame.setObjectName("ChannelFrame")
+        self._channel_frame.setObjectName('ChannelFrame')
 
         # set grid layout
         channel_layout = QtWidgets.QWidget(self._channel_frame)
         channel_layout.setGeometry(QtCore.QRect(8, 11, 254, 137))
-        channel_layout.setObjectName("layoutWidget")
+        channel_layout.setObjectName('layoutWidget')
      
 
         # add grid layout 
         channel_grid_layout = QtWidgets.QGridLayout(channel_layout)
         channel_grid_layout.setContentsMargins(0, 0, 0, 0)
-        channel_grid_layout.setObjectName("gridLayout")
+        channel_grid_layout.setObjectName('gridLayout')
         
         # add buttons
         self._channel_buttons = dict()
@@ -725,14 +871,14 @@ class MainWindow(QtWidgets.QMainWindow):
             font.setBold(True)
             font.setWeight(75)
             button.setFont(font)
-            button.setText("AI" + str(ichan))
+            button.setText('AI' + str(ichan))
             button.setCheckable(True)
             button.toggle()
             # background color
             #color = self._channels_color_map[ichan]
-            #color_str = "rgb(" + str(color[0]) + "," + str(color[1]) + "," + str(color[2]) + ")" 
-            #button.setStyleSheet("background-color: " + color_str +";")
-            button.setObjectName("chanButton_" + str(ichan))
+            #color_str = 'rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')' 
+            #button.setStyleSheet('background-color: ' + color_str +';')
+            button.setObjectName('chanButton_' + str(ichan))
             
             # layout
             channel_grid_layout.addWidget(button, row_num, col_num, 1, 1)
@@ -742,7 +888,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 col_num = 1
 
             # connect 
-            button.clicked.connect(self._handle_channel)
+            button.clicked.connect(self._handle_channel_selection)
             
             # save
             self._channel_buttons[ichan] = button
@@ -755,10 +901,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # create frame
         self._tools_frame = QtWidgets.QFrame(self._central_widget)
         self._tools_frame.setGeometry(QtCore.QRect(10, 520, 269, 153))
-        self._tools_frame.setStyleSheet("background-color: rgb(226, 255, 219);")
+        self._tools_frame.setStyleSheet('background-color: rgb(226, 255, 219);')
         self._tools_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._tools_frame.setFrameShadow(QtWidgets.QFrame.Raised)
-        self._tools_frame.setObjectName("ToolsFrame")
+        self._tools_frame.setObjectName('ToolsFrame')
 
         # Add tools button
         self._tools_button = QtWidgets.QPushButton(self._tools_frame)
@@ -767,10 +913,11 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._tools_button.setFont(font)
-        self._tools_button.setStyleSheet("background-color: rgb(162, 162, 241);")
-        self._tools_button.setObjectName("toolsButton")
-        self._tools_button.setText("Tools")
-        
+        self._tools_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._tools_button.setObjectName('toolsButton')
+        self._tools_button.setText('Tools')
+        self._tools_button.setEnabled(False)
+
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
         self._running_avg_checkbox.setGeometry(QtCore.QRect(16, 16, 109, 21))
@@ -778,16 +925,18 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._running_avg_checkbox.setFont(font)
-        self._running_avg_checkbox.setObjectName("runningAvgCheckBox")
-        self._running_avg_checkbox.setText("Running Avg")
+        self._running_avg_checkbox.setObjectName('runningAvgCheckBox')
+        self._running_avg_checkbox.setText('Running Avg')
 
         # running avg spin box
         self._running_avg_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._running_avg_spinbox.setEnabled(False)
         self._running_avg_spinbox.setGeometry(QtCore.QRect(34, 40, 85, 21))
-        self._running_avg_spinbox.setMaximum(20000)
-        self._running_avg_spinbox.setProperty("value", 1)
-        self._running_avg_spinbox.setObjectName("runningAvgSpinBox")
+        self._running_avg_spinbox.setMaximum(500)
+        self._running_avg_spinbox.setProperty('value', 1)
+        self._running_avg_spinbox.setObjectName('runningAvgSpinBox')
+        self._running_avg_spinbox.setEnabled(False)
+
 
         # add lopw pass filter
         self._lpfilter_checkbox = QtWidgets.QCheckBox(self._tools_frame)
@@ -796,8 +945,9 @@ class MainWindow(QtWidgets.QMainWindow):
         font.setBold(True)
         font.setWeight(75)
         self._lpfilter_checkbox.setFont(font)
-        self._lpfilter_checkbox.setObjectName("lpFilterCheckBox")
-        self._lpfilter_checkbox.setText("LP Filter [kHz]")
+        self._lpfilter_checkbox.setObjectName('lpFilterCheckBox')
+        self._lpfilter_checkbox.setText('LP Filter [kHz]')
+        self._lpfilter_checkbox.setEnabled(False)
 
         # lp filter spin box
         self._lpfilter_spinbox = QtWidgets.QSpinBox(self._tools_frame)
@@ -805,24 +955,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 100, 83, 21))
         self._lpfilter_spinbox.setMinimum(1)
         self._lpfilter_spinbox.setMaximum(500)
-        self._lpfilter_spinbox.setObjectName("lpFilterSpinBox")
-      
+        self._lpfilter_spinbox.setObjectName('lpFilterSpinBox')
+        self._lpfilter_spinbox.setEnabled(False)
         
+
+        # connect 
+        self._running_avg_checkbox.toggled.connect(self._handle_running_avg)
+        self._running_avg_spinbox.valueChanged.connect(self._handle_running_avg)
+
+        #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
+
+
 
     def _set_display_button(self,do_run):
         
         if do_run:
-            self._display_control_button.setStyleSheet("background-color: rgb(0, 255, 0);")
-            self._display_control_button.setText("Stop \n" "Display")
+            self._display_control_button.setStyleSheet('background-color: rgb(0, 255, 0);')
+            self._display_control_button.setText('Stop \n' 'Display')
         else:
-            self._display_control_button.setStyleSheet("background-color: rgb(255, 0, 0);")
-            self._display_control_button.setText("Display \n" "Waveform")
+            self._display_control_button.setStyleSheet('background-color: rgb(255, 0, 0);')
+            self._display_control_button.setText('Display \n' 'Waveform')
         
         
 
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     ui = MainWindow()
     sys.exit(app.exec_())
