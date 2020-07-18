@@ -159,7 +159,7 @@ class Control:
         Set SQUID lock point
         """
         try:
-            self._set_sensor_val('lock_point', bias,
+            self._set_sensor_val('lock_point_voltage', bias,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -419,7 +419,7 @@ class Control:
         """
         lock_point = nan
         try:
-            lock_point = self._get_sensor_val('lock_point',
+            lock_point = self._get_sensor_val('lock_point_voltage',
                                               tes_channel=tes_channel,
                                               detector_channel=detector_channel,
                                               adc_id=adc_id, adc_channel=adc_channel)
@@ -502,6 +502,8 @@ class Control:
             print('ERROR getting output gain')
             
         return output_gain
+
+
 
 
     def get_feedback_polarity(self, 
@@ -601,6 +603,7 @@ class Control:
             
 
 
+
     def is_signal_gen_tes_connected(self, 
                                     tes_channel=str(),
                                     detector_channel= str(),
@@ -625,6 +628,74 @@ class Control:
         return is_connected
             
 
+
+
+
+    def read_all(self, tes_channel_list=None, detector_channel_list= None,
+                 adc_id=None,adc_channel_list=None):
+        """
+        Read from baord all parameters
+        Output in a dictionary: dict['param'] = array value (sorted by adc channels)
+        """
+
+        
+        # parameter list
+        param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
+                      'output_gain','feedback_polarity','feedback_open']
+                      
+
+        # channel list 
+        channel_type = str()
+        adc_channel_list = list()
+        adc_name_list = list()
+        adc_name = None
+        if tes_channel_list is not None:
+            channel_type ='tes'
+            channel_list = tes_channel_list
+        elif detector_channel is not None:
+            channel_type ='detector'
+            channel_list = detector_channel_list
+        elif (adc_id is not None and adc_channel_list is not None):
+            channel_type = 'adc'
+            adc_name = adc_id
+            channel_list = adc_channel_list
+        else:
+            raise ValueError('ERROR in control::read_all: No argument given!')
+
+            
+
+        # intialize output
+        output_dict = dict()
+        output_dict['adc_name'] = adc_name
+        output_dict['channel_type'] = channel_type
+        output_dict['channel_list'] = channel_list
+        for param in param_list:
+            output_dict[param] = list()
+
+        # loop channels
+        for chan in channel_list:
+            # loop parameters
+            for param in param_list:
+                val = nan
+                try:
+                    if channel_type =='tes':
+                        val = self._get_sensor_val(param,tes_channel=chan)
+                    elif channel_type == 'detector':
+                        val = self._get_sensor_val(param,detector_channel=chan)
+                    else:
+                        val = self._get_sensor_val(param,adc_id=adc_id,adc_channel=chan)
+                except:
+                    print('WARNING in control::read_all: unable to get value for "' +  param 
+                          + '" (' + channel_type + ' = ' +  chan + ')')
+                    
+                output_dict[param].append(val)  
+            
+                # wait
+                time.sleep(0.1)
+        
+        return output_dict
+        
+        
 
 
 
@@ -671,7 +742,7 @@ class Control:
                         param_val = feb.get_phonon_qet_bias(subrack, slot,controller_channel)
                     elif param_name == 'squid_bias':
                         param_val = feb.get_phonon_squid_bias(subrack, slot,controller_channel)
-                    elif param_name == 'lock_point':
+                    elif param_name == 'lock_point_voltage':
                         param_val = feb.get_phonon_lock_point(subrack, slot,controller_channel)
                     elif param_name == 'feedback_gain':
                         param_val = feb.get_phonon_feedback_gain(subrack, slot,controller_channel)
@@ -697,15 +768,15 @@ class Control:
             elif self._squid_controller=='magnicon':
 
                 if self._verbose:
-                    print('Getting setting "' + param_name + '" from Magnicon')
-                    print('(channel = ' + str(controller_channel) + ')')
+                    print('INFO: Getting "' + param_name + ' for channel ' 
+                          + str(controller_channel) + ' (Magnicon)')
 
                 if not self._dummy_mode:
                     if param_name == 'tes_bias':
                         param_val = magnicon.get_tes_current_bias(controller_channel)
                     elif param_name == 'squid_bias':
                         param_val = self._mag_inst.get_squid_current_bias(controller_channel)
-                    elif param_name == 'lock_point':
+                    elif param_name == 'lock_point_voltage':
                         # param_val = magnicon.get_phonon_lock_point(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                     elif param_name == 'feedback_gain':
@@ -797,7 +868,7 @@ class Control:
                     feb.set_phonon_qet_bias(subrack, slot,controller_channel,value)
                 elif param_name == 'squid_bias':
                     feb.set_phonon_squid_bias(subrack, slot,controller_channel,value)
-                elif param_name == 'lock_point':
+                elif param_name == 'lock_point_voltage':
                     feb.set_phonon_lock_point(subrack, slot,controller_channel,value)
                 elif param_name == 'feedback_gain':
                     feb.set_phonon_feedback_gain(subrack, slot,controller_channel,value)
@@ -816,18 +887,19 @@ class Control:
                 elif param_name == 'signal_gen_tes_connected':
                     feb.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
-        elif self._squid_controller=='magnicon' and not self._dummy_mode:
 
+        elif self._squid_controller=='magnicon':
+            
             if self._verbose:
-                print('INFO: Setting "' + param_name + '" to ' + str(value) + ' (using Magnicon)')
-                print('(channel = ' + str(controller_channel) + ')')
+                print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
+                      + str(controller_channel) + ' (Magnicon)!')
 
             if not self._dummy_mode:
                 if param_name == 'tes_bias':
                     magnicon.set_tes_current_bias(controller_channel, value, mode=None)
                 elif param_name == 'squid_bias':
                     self._mag_inst.set_squid_current_bias(controller_channel, value)
-                elif param_name == 'lock_point':
+                elif param_name == 'lock_point_voltage':
                     # magnicon.set_phonon_lock_point(controller_channel, value)
                     print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                 elif param_name == 'feedback_gain':
