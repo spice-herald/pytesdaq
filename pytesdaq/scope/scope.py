@@ -186,13 +186,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self._is_running=True
             self._readout.run(do_plot=True)
 
-            # enable
-            self._data_source_tabs.setEnabled(True)
-            self._source_combobox.setEnabled(True)
 
             # status bar
             self.statusBar().showMessage('Run stopped...')
           
+
+            # change status
+            self._set_display_button(False)
+            self._is_running=False
+            self._data_source_tabs.setEnabled(True)
+            self._source_combobox.setEnabled(True)
 
 
         

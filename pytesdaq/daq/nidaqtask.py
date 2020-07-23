@@ -217,7 +217,7 @@ class NITask(Task):
         # transfer mode (not sure it is doing anything...)
         #ai_voltage_channels.ai_data_xfer_mech = nidaqmx.constants.DataTransferActiveTransferMode.INTERRUP
         #ai_voltage_channels.ai_data_xfer_mech = nidaqmx.constants.DataTransferActiveTransferMode.DMA
-
+        
 
         # sampling rate / trigger mode (continuous vs finite)
         buffer_length = self._nb_samples
@@ -263,6 +263,15 @@ class NITask(Task):
         self.register_every_n_samples_acquired_into_buffer_event(self._nb_samples,
                                                                  self._read_callback)
 
+        
+        adc_conversion_factor = list()
+        for chan in ai_voltage_channels:
+            adc_conversion_factor.append(chan.ai_dev_scaling_coeff)
+            
+            
+        config_dict['adc_conversion_factor'] = np.array(adc_conversion_factor)
+
+        
 
         self._is_run_configured = True
     

@@ -14,8 +14,8 @@ class Analyzer:
 
         # default analysis configuration
         self._analysis_config = dict()
-        self._analysis_config['unit'] = 'adc'
-        self._analysis_config['norm'] = 'none'
+        self._analysis_config['unit'] = 'ADC'
+        self._analysis_config['norm'] = 'None'
         self._analysis_config['calc_psd'] = False
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
@@ -54,17 +54,13 @@ class Analyzer:
         # Pileup rejection...
         # ---------------------
 
-
-
         
         # ---------------------
         # normalization
         # ---------------------
-
-        #if self._analysis_config['unit']!='adc' or self._analysis_config['norm']!='None':
-        #    self.normalize(data_array,data_config,unit,norm)
-
-
+        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm']!='None':
+            data_array = self.normalize(data_array,data_config,
+                                        self._analysis_config['unit'],self._analysis_config['norm'])
 
 
 
@@ -102,8 +98,23 @@ class Analyzer:
 
 
     def normalize(self,data_array,data_config, unit, norm):
-        print('Normalize')
+        """
+        Normalize array
+        """
+
+        # intialize output
+        data_array_norm = np.zeros_like(data_array, dtype=np.float64)
+       
+        # loop and normalize
+        nb_channels = np.size(data_array,0)
+        for ichan in range(0,nb_channels):
+            chan_index = data_config['selected_channel_index'][ichan]
+            cal_coeff = data_config['adc_conversion_factor'][chan_index][::-1]
+            poly = np.poly1d(cal_coeff)
+            data_array_norm[ichan,:] = poly(data_array[ichan,:])
+            
         
+        return data_array_norm
         
         
 
