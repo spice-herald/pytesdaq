@@ -65,17 +65,16 @@
 </nav>
 
 <main role="main" class="container">
-
-  <div class="starter-template">
+  <div></div>
+  <div class="bs-component">
     <h1>Data Repository</h1>
-    <p class="lead">Simple table construction for now.</p>
   </div>
   <div>
     <h2>Table of Files</h2>
   </div>
 
   <div>
-    <table class="table table-bordered table-hover table-striped">
+    <table class="table table-sm table-bordered table-hover table-striped">
       <thead class="thead-dark">
         <tr>
           <th scope="col">#</th>

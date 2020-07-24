@@ -17,10 +17,14 @@ Getting Started
     env/bin/pip install --upgrade pip setuptools
 
 - Install the project in editable mode with its testing requirements.
+    
+    cd ..
 
     env/bin/pip install -e ".[testing]"
 
 - Run your project's tests
+    
+    cd pytesdaq
 
     env/bin/pytest
 
