@@ -91,6 +91,14 @@ class Analyzer:
           
                
 
+        # ---------------------
+        # PSD -> sqrt
+        # ---------------------
+        if  self._analysis_config['calc_psd']:
+            data_array = np.sqrt(data_array)
+        
+      
+
         # return data
         return data_array
         
