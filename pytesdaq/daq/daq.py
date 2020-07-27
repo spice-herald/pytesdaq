@@ -87,7 +87,7 @@ class DAQ:
         if self._driver_name=='polaris':
             self._driver = polaris.PolarisTask()
             self._driver.overwrite_config_allowed = True
-            self._driver.polaris_exe = '/home/serfass/daq_test/ContAcq-IntClk'
+            self._driver.polaris_exe = 'polaris'
             self._driver.config_file_name = 'nidaq.cfg'
 
         elif self._driver_name=='pydaqmx':
@@ -140,6 +140,7 @@ class DAQ:
             self._driver.set_adc_config(adc_name, sample_rate=sample_rate,
                                         nb_samples=nb_samples,
                                         voltage_min=voltage_min,voltage_max=voltage_max,
+                                        trigger_type = trigger_type,
                                         channel_list=channel_list,
                                         buffer_length=buffer_length)
 

@@ -145,8 +145,8 @@ class PolarisTask:
 
 
     def set_adc_config(self,adc_name, device_name=str(), sample_rate=[], nb_samples=[],
-                       voltage_min=list(), voltage_max=list(), channel_list=list(),
-                       buffer_length=[]):
+                       voltage_min=list(), voltage_max=list(), channel_list=list(), 
+                       trigger_type = [],buffer_length=[]):
         
         """
         Set ADC config
@@ -178,6 +178,9 @@ class PolarisTask:
         if voltage_max:
             adc_dict['voltage_max'] = float(voltage_max)
     
+        if trigger_type:
+            adc_dict['trigger_type'] = int(trigger_type)
+            
         
         self._adc_config[adc_name] = adc_dict
 

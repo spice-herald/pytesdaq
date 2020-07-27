@@ -121,6 +121,9 @@ class Analyzer:
             poly = np.poly1d(cal_coeff)
             data_array_norm[ichan,:] = poly(data_array[ichan,:])
             
+            # normalize
+            if self._analysis_config['unit']=='mVolts':
+                data_array_norm[ichan,:] = data_array_norm[ichan,:]*1000
         
         return data_array_norm
         

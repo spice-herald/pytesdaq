@@ -92,7 +92,7 @@ class Readout:
 
     def configure(self,data_source, adc_name = 'adc1', channel_list=[],
                   sample_rate=[], trace_length=[],
-                  voltage_min=[], voltage_max=[],trigger_type=3,
+                  voltage_min=[], voltage_max=[],trigger_type=4,
                   file_list=[]):
         
 
@@ -401,6 +401,15 @@ class Readout:
             self._nb_bins = nbins
             self._first_draw = True
 
+
+        # label
+        ylabel = self._analysis_config['unit']
+        if self._analysis_config['calc_psd']:
+            ylabel = ylabel + '/rtHz'
+            
+        
+
+
         # draw!
         if self._first_draw:
            
@@ -408,13 +417,13 @@ class Readout:
             self._axes.clear()
             if self._analysis_config['calc_psd']:
                 self._axes.set_xlabel('Hz')
-                self._axes.set_ylabel('ADC/rtHz')
+                self._axes.set_ylabel(ylabel)
                 self._axes.set_title('PSD')
                 self._axes.set_yscale('log')
                 self._axes.set_xscale('log')
             else:
                 self._axes.set_xlabel('ms')
-                self._axes.set_ylabel('ADC bins')
+                self._axes.set_ylabel(ylabel)
                 self._axes.set_title('Pulse')
                 self._axes.set_yscale('linear')
                 self._axes.set_xscale('linear')

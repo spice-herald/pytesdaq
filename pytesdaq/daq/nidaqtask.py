@@ -113,12 +113,12 @@ class NITask(Task):
 
 
     def set_adc_config(self,adc_name, device_name = str(), sample_rate=[],nb_samples=[],
-                       voltage_min = [],voltage_max = [], channel_list=list(),
-                       buffer_length = [],filter_enable=[]):
+                       voltage_min = [],voltage_max = [], channel_list=list(), 
+                       trigger_type = [], buffer_length = [],filter_enable=[]):
         
             
         """
-        TBD
+        Update ADC configuration dictionary 
         """
         adc_dict = dict()
         if not self._adc_config:
@@ -152,6 +152,11 @@ class NITask(Task):
 
         if filter_enable:
             adc_dict['filter_enable'] = filter_enable
+        
+        # trigger type
+        if trigger_type:
+            adc_dict['trigger_type'] = trigger_type
+            
          
         self._adc_config[adc_name] = adc_dict
         self._is_run_configured = False
@@ -249,8 +254,8 @@ class NITask(Task):
                                 
         # external trigger
         if config_dict['trigger_type']==2:
-            self.triggers.start_trigger.cfg_anlg_edge_start_trig(trigger_source=config_dict['device_name']   
-                                                                 + '/pfi0')
+            self.triggers.start_trigger.cfg_dig_edge_start_trig(trigger_source='/'+ config_dict['device_name'] 
+                                                                + '/pfi0')
             
 
         # data mode

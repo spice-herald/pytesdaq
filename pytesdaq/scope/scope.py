@@ -141,11 +141,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 voltage_max = int(self._voltage_max_combobox.currentText())
              
 
+                # trigger type
+                trigger_mode = self._trigger_combobox.currentText()
+                trigger_type = 4
+                if trigger_mode=='SigGen':
+                    trigger_type = 2
+                elif trigger_mode=='Threshold':
+                    trigger_type = 3
+
+
                 # get all channels
                 channel_list = list(range(8))
                 status = self._readout.configure('niadc',adc_name=adc_name,channel_list=channel_list,
                                                  sample_rate=sample_rate, trace_length=trace_length,
-                                                 voltage_min=voltage_min, voltage_max=voltage_max)
+                                                 voltage_min=voltage_min, voltage_max=voltage_max,
+                                                 trigger_type=trigger_type)
                 
                 # error
                 if isinstance(status,str):
@@ -328,7 +338,7 @@ class MainWindow(QtWidgets.QMainWindow):
         calc_psd = False
         if waveform_type=='PSD':
             calc_psd = True
-
+      
         # update analysis config
         self._readout.update_analysis_config(calc_psd=calc_psd)
 
@@ -350,7 +360,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if unit=='ADC':
             self._norm_combobox.addItem('None')
             norm = 'None'
-        elif unit=='Volts':
+        elif (unit=='Volts' or unit=='mVolts'):
             self._norm_combobox.addItem('None')
             self._norm_combobox.addItem('OpenLoop')
             if norm == 'OpenLoop':
@@ -549,12 +559,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Trace length
         trace_length_label = QtWidgets.QLabel(self._niadc_tab)
-        trace_length_label.setGeometry(QtCore.QRect(5, 5, 131, 37))
+        trace_length_label.setGeometry(QtCore.QRect(5, 2, 131, 37))
         trace_length_label.setFont(font)
         trace_length_label.setText('Length [ms]')
 
         self._trace_length_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
-        self._trace_length_spinbox.setGeometry(QtCore.QRect(5, 35, 95, 21))
+        self._trace_length_spinbox.setGeometry(QtCore.QRect(5, 32, 95, 21))
         self._trace_length_spinbox.setMaximum(100000)
         self._trace_length_spinbox.setProperty('value', 10)
         self._trace_length_spinbox.setObjectName('traceLengthSpinBox')
@@ -577,20 +587,29 @@ class MainWindow(QtWidgets.QMainWindow):
         separator = QtWidgets.QFrame(self._niadc_tab)
         separator.setFrameShape(QtWidgets.QFrame.VLine)
         separator.setFrameShadow(QtWidgets.QFrame.Sunken)
-        separator.setGeometry(QtCore.QRect(127, 10, 2, 110))
+        separator.setGeometry(QtCore.QRect(125, 10, 2, 110))
       
     
 
-        # voltage range
+        # trigger
+        trigger_label = QtWidgets.QLabel(self._niadc_tab)
+        trigger_label.setGeometry(QtCore.QRect(135, 2, 131, 37))
+        trigger_label.setFont(font)
+        trigger_label.setText('Trigger')
 
-        # Trace length
-        voltage_label = QtWidgets.QLabel(self._niadc_tab)
-        voltage_label.setGeometry(QtCore.QRect(150, 20, 100, 30))
-        voltage_label.setFont(font)
-        voltage_label.setText('Voltage [V]')
+
+        self._trigger_combobox = QtWidgets.QComboBox(self._niadc_tab)
+        self._trigger_combobox.setGeometry(QtCore.QRect(135, 33, 96, 20))
+        self._trigger_combobox.setFont(font)
+        self._trigger_combobox.addItem('Random')
+        self._trigger_combobox.addItem('SigGen')
+        self._trigger_combobox.addItem('Threshold')
+        self._trigger_combobox.setCurrentIndex(0)
+
+
 
         self._voltage_min_combobox = QtWidgets.QComboBox(self._niadc_tab)
-        self._voltage_min_combobox.setGeometry(QtCore.QRect(176, 50, 54, 23))
+        self._voltage_min_combobox.setGeometry(QtCore.QRect(176, 70, 54, 23))
         self._voltage_min_combobox.setFont(font)
         self._voltage_min_combobox.addItem('-1')
         self._voltage_min_combobox.addItem('-2')
@@ -599,7 +618,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._voltage_min_combobox.setCurrentIndex(3)
 
         self._voltage_max_combobox = QtWidgets.QComboBox(self._niadc_tab)
-        self._voltage_max_combobox.setGeometry(QtCore.QRect(176, 75, 54, 23))
+        self._voltage_max_combobox.setGeometry(QtCore.QRect(176, 95, 54, 23))
         self._voltage_max_combobox.setFont(font)
         self._voltage_max_combobox.addItem('+1')
         self._voltage_max_combobox.addItem('+2')
@@ -607,16 +626,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._voltage_max_combobox.addItem('+10')
         self._voltage_max_combobox.setCurrentIndex(3)
 
-        # Trace length
+    
         voltage_min_label = QtWidgets.QLabel(self._niadc_tab)
-        voltage_min_label.setGeometry(QtCore.QRect(143, 45, 31, 30))
+        voltage_min_label.setGeometry(QtCore.QRect(134, 65, 38, 30))
         voltage_min_label.setFont(font)
-        voltage_min_label.setText('Min:')
+        voltage_min_label.setText('Vmin:')
 
         voltage_max_label = QtWidgets.QLabel(self._niadc_tab)
-        voltage_max_label.setGeometry(QtCore.QRect(140, 71, 32, 30))
+        voltage_max_label.setGeometry(QtCore.QRect(131, 91, 41, 30))
         voltage_max_label.setFont(font)
-        voltage_max_label.setText('Max:')
+        voltage_max_label.setText('Vmax:')
 
     
 
@@ -774,6 +793,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._unit_combobox.setObjectName('unitComboBox')
         self._unit_combobox.addItem('ADC')
         self._unit_combobox.addItem('Volts')
+        self._unit_combobox.addItem('mVolts')
         self._unit_combobox.addItem('Amps')
         self._unit_combobox.addItem('pAmps')
        
