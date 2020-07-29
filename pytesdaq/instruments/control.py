@@ -107,9 +107,9 @@ class Control:
 
 
     def set_tes_bias(self, bias, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
         """
         Set TES bias 
@@ -128,9 +128,9 @@ class Control:
 
 
     def set_squid_bias(self, bias, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
         """
         Set SQUID bias 
@@ -150,9 +150,9 @@ class Control:
 
 
     def set_squid_lock_point(self, lock_point, 
-                             tes_channel=str(),
-                             detector_channel= str(),
-                             adc_id=str(), adc_channel=str()):
+                             tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
         
 
         """
@@ -173,9 +173,9 @@ class Control:
 
  
     def set_feedback_gain(self, gain, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -196,9 +196,9 @@ class Control:
 
 
     def set_output_offset(self, offset, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -218,9 +218,9 @@ class Control:
 
 
     def set_output_gain(self, gain, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
         
 
         """
@@ -239,9 +239,9 @@ class Control:
             
 
     def set_feedback_polarity(self, do_invert, 
-                                   tes_channel=str(),
-                                   detector_channel= str(),
-                                   adc_id=str(), adc_channel=str()):
+                                   tes_channel=None,
+                                   detector_channel=None,
+                                   adc_id=None, adc_channel=None):
         
 
         """
@@ -262,9 +262,9 @@ class Control:
         
             
     def set_feedback_loop_state(self, do_open, 
-                                tes_channel=str(),
-                                detector_channel= str(),
-                                adc_id=str(), adc_channel=str()):
+                                tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
         
 
         """
@@ -283,9 +283,9 @@ class Control:
 
 
     def set_source_preamp(self, preamp_source, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -308,9 +308,9 @@ class Control:
 
 
     def connect_signal_gen_feedback(self, do_connect, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
         
         
         """
@@ -333,9 +333,9 @@ class Control:
 
 
     def connect_signal_gen_tes(self, do_connect, 
-                               tes_channel=str(),
-                               detector_channel= str(),
-                               adc_id=str(), adc_channel=str()):
+                               tes_channel=None,
+                               detector_channel=None,
+                               adc_id=None, adc_channel=None):
         
         
         """
@@ -360,9 +360,9 @@ class Control:
 
 
     def get_tes_bias(self, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
 
 
@@ -383,9 +383,9 @@ class Control:
         
         
     def get_squid_bias(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -408,9 +408,9 @@ class Control:
 
 
     def get_lock_point(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -433,9 +433,9 @@ class Control:
 
 
     def get_feedback_gain(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
 
@@ -457,9 +457,9 @@ class Control:
 
 
     def get_output_offset(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
 
@@ -482,9 +482,9 @@ class Control:
 
 
     def get_output_gain(self, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
         
 
 
@@ -507,9 +507,9 @@ class Control:
 
 
     def get_feedback_polarity(self, 
-                              tes_channel=str(),
-                              detector_channel= str(),
-                              adc_id=str(), adc_channel=str()):
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
         
 
 
@@ -530,9 +530,9 @@ class Control:
             
 
     def is_feedback_open(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
 
 
@@ -554,9 +554,9 @@ class Control:
             
 
     def is_source_preamp(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
 
 
@@ -579,9 +579,9 @@ class Control:
 
 
     def is_signal_gen_feedback_connected(self, 
-                                         tes_channel=str(),
-                                         detector_channel= str(),
-                                         adc_id=str(), adc_channel=str()):
+                                         tes_channel=None,
+                                         detector_channel=None,
+                                         adc_id=None, adc_channel=None):
         
 
 
@@ -605,9 +605,9 @@ class Control:
 
 
     def is_signal_gen_tes_connected(self, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
         
         
 
@@ -712,8 +712,9 @@ class Control:
         # get readout controller ID and Channel
         controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
                                                                                  tes_channel=tes_channel,
-                                                                                 detector_channel= detector_channel,
-                                                                                 adc_id=adc_id,adc_channel=adc_channel)
+                                                                                 detector_channel=detector_channel,
+                                                                                 adc_id=adc_id,
+                                                                                 adc_channel=adc_channel)
         
 
         param_val = nan
@@ -834,12 +835,13 @@ class Control:
             
 
         # get readout controller ID and Channel
-        controller_id,controller_channel = connection_utils.get_controller_info(self._connection_table,
+        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
                                                                                 tes_channel=tes_channel,
-                                                                                detector_channel= detector_channel,
-                                                                                adc_id=adc_id,adc_channel=adc_channel)
-        
-
+                                                                                detector_channel=detector_channel,
+                                                                                adc_id=adc_id, 
+                                                                                adc_channel=adc_channel)
+      
+              
         # ================
         # Set value
         # ================
