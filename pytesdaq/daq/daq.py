@@ -17,7 +17,8 @@ class DAQ:
         self._driver = None
         self._driver_name = driver_name
         self._facility = facility
-    
+
+
         # run purpose dict 
         self._run_purpose_dict = {1:'Test', 2:'LowBg', 3:'Calibration',4:'Noise',
                                   100:'Rp',101:'Rn',102: 'IV Sweep', 103: 'dIdV Sweep'}
@@ -123,7 +124,7 @@ class DAQ:
         
         if not config_dict:
             return
-
+       
         if self._driver_name=='polaris' or self._driver_name=='pydaqmx':
             self._driver.set_adc_config_from_dict(config_dict)
           
@@ -147,16 +148,21 @@ class DAQ:
     
 
     def set_detector_config(self, config_dict):
-
+        """
+        Set detector config dictionary
+        """
+        
         if not config_dict:
             return
 
+       
         if self._driver_name=='polaris':
             self._driver.set_detector_config(config_dict)
         
 
 
     def run(self,run_time=60, run_type=1, run_comment='No comment', 
+            data_path = '/data/raw', data_prefix = 'raw',
             write_config=True):
         
         success = False
@@ -169,12 +175,24 @@ class DAQ:
 
         if self._driver_name=='polaris':
 
+            # polaris config
+            polaris_config = self._config.get_polaris_info()
+            if polaris_config:
+                self._driver.set_polaris_config(polaris_config)
+
+        
+
             # run config
             run_config = dict()
             run_config['facility']= self._facility
             run_config['comment'] = run_comment
             run_config['run_purpose'] = run_purpose 
             run_config['run_type'] = run_type
+            prefix = data_path + '/'
+            if data_prefix:
+                prefix =  prefix + data_prefix
+            run_config['prefix'] = prefix
+
             self._driver.set_run_config(run_config)
             
             # run

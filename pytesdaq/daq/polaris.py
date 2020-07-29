@@ -1,5 +1,6 @@
 import subprocess
-import os,time
+import os
+import time
 from datetime import datetime
 import fcntl
 from nidaqmx.utils import flatten_channel_string
@@ -24,7 +25,8 @@ class PolarisTask:
         # ADC/Run: unable to guess, need to be set by user
         self._adc_config = dict()
         self._required_adc_config = ['sample_rate', 'nb_samples', 'channel_list',
-                                     'device_name', 'voltage_min','voltage_max']
+                                     'device_name', 'voltage_min','voltage_max',
+                                     'trigger_type']
         self._run_config = dict()
 
         # Detector config: optional
@@ -113,8 +115,17 @@ class PolarisTask:
         """
         Set Polaris configuration
         """
-        self._polaris_config = config_dict
+       
+        # replace keys in self._polaris_config with
+        # config_dict
 
+        for item in self._polaris_config:
+            if item in config_dict:
+                for key, val in self._polaris_config[item].items():
+                    if key in config_dict[item]:
+                        self._polaris_config[item][key] = config_dict[item][key]
+                        
+                        
 
 
     def set_detector_config(self, config_dict):
@@ -138,6 +149,7 @@ class PolarisTask:
         Set ADC configuration
         """
         self._adc_config = config_dict
+       
         
 
     def get_required_adc_config(self):
@@ -218,7 +230,7 @@ class PolarisTask:
         if self._log_file:
              polaris_cmd = polaris_cmd + ' --log ' + self._log_file
 
-
+        print(polaris_cmd)
        
         # lock
         if self._lock_daq and self._lock_file:
@@ -320,6 +332,7 @@ class PolarisTask:
         
         # adc config
         for adc_name in self._adc_config:
+
             cfg_list.append('\n' + adc_name + ' {\n')
             config_dict = self._adc_config[adc_name]
             
@@ -366,9 +379,18 @@ class PolarisTask:
             cfg_list.append('\tVmax : ' + Vmax + ',\n')
 
                                
-            # FIXME: additonal parameter
-            cfg_list.append('\tdata_mode : cont,\n')
-            cfg_list.append('\tadc_connection : foo1 foo2 arg1,\n')
+            # connection
+            for config in config_dict:
+                if 'connection' in config and 'connections'!= config:
+                    val = ' '.join(map(str,config_dict[config]))
+                    cfg_list.append('\t' + config + ' : ' + val + ',\n')
+
+
+            data_mode = 'cont'
+            if int(config_dict['trigger_type'])==2:
+                data_mode = 'trig-ext'
+            
+            cfg_list.append('\tdata_mode : ' + data_mode + ',\n')
 
             # close section
             cfg_list.append('}\n')
@@ -377,11 +399,17 @@ class PolarisTask:
          
         # detector config
         if self._det_config:
-            for device_key in self._adc_config:
+            for adc_key in self._det_config:
+                device_key = adc_key
+                if adc_key[0:3] == 'adc':
+                    device_key = 'detconfig' + str(adc_key[3:])
                 cfg_list.append('\n'+device_key + ' {\n')
-                config_dict = self._adc_config[device_key]
-                for key in config_dict:
-                    cfg_list.append('\t' + key + ' : ' + str(config_dict[key]) + ',\n')
+                config_dict = self._det_config[adc_key]
+                for key,val_list in config_dict.items():
+                    if not isinstance(val_list, list):
+                        val_list = [val_list]
+                    val_str = ' '.join(map(str,val_list))
+                    cfg_list.append('\t' + key + ' : ' + val_str + ',\n')
                 cfg_list.append('}\n')
 
                         

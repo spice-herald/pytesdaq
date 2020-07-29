@@ -309,7 +309,7 @@ class Config:
         return adc_list
     
  
-    def get_adc_setup(self,adc_name):
+    def get_adc_setup(self,adc_id):
         """
         get ADC set
         
@@ -320,20 +320,25 @@ class Config:
         setup = dict()
 
         # get items
-        item_list = self._get_section(adc_name)
+        item_list = self._get_section(adc_id)
         adc_connections = list()
+
         for item in item_list:
+
             if 'voltage_range' == item[0]:
                 voltage_range = [int(voltage.strip()) for voltage in item[1].split(',')]
                 if len(voltage_range) == 2:
                     voltage_range = (voltage_range[0],voltage_range[1])
                     setup['voltage_range'] = voltage_range
+
             elif ('sample_rate' == item[0] or 'nb_samples'== item[0] or 
                   'trigger_type'== item[0]):
                 setup[item[0]] = int(item[1])
+
             elif 'connection' in item[0]:
+                setup[item[0]] = list() 
                 adc_chan = re.sub(r'\s+','', str(item[0]))[10:]
-                connections = [adc_chan,adc_name]
+                connections = [adc_chan, adc_id]
                 controller_id = 'None'
                 controller_chan= 'None'
                 detector_chan = 'None'
@@ -341,6 +346,7 @@ class Config:
                 val_list = item[1].split(',')
                 for val in val_list:
                     val = re.sub(r'\s+','', str(val))
+                    setup[item[0]].append(val)
                     val_split = val.split(':')
                     if val_split[0]=='controller':
                         id_chan = val_split[1].rsplit('_',1)
@@ -357,18 +363,17 @@ class Config:
                     
                 if tes_chan == 'None':
                     tes_chan = controller_chan
-                        
-                adc_connections.append([adc_chan,adc_name,detector_chan,tes_chan,controller_id,controller_chan])
+                    setup[item[0]].append('tes:'+str(controller_chan))
+
+                adc_connections.append([adc_chan,adc_id,detector_chan,tes_chan,controller_id,controller_chan])
              
             else:
                 setup[item[0]] = item[1]       
                     
 
         connection_table = pd.DataFrame(adc_connections, 
-                                        columns = ['adc_channel','adc_name','detector_channel','tes_channel',
+                                        columns = ['adc_channel','adc_id','detector_channel','tes_channel',
                                                    'controller_id','controller_channel'])
-        #connection_table_indexed = connection_table.set_index(['tes_channel','detector_channel',
-        #                                                       'adc_name','adc_channel'])
         setup['connections'] = connection_table
         
 
@@ -376,7 +381,7 @@ class Config:
         return setup
 
      
-    def get_adc_connections(self,adc_name=''):
+    def get_adc_connections(self,adc_id=''):
         """
         get ADC connections
             
@@ -385,8 +390,8 @@ class Config:
         """
    
         connection_table = []
-        if adc_name:
-            adc_setup = self.get_adc_setup(adc_name)
+        if adc_id:
+            adc_setup = self.get_adc_setup(adc_id)
             if 'connections' in adc_setup:
                 connection_table = adc_setup['connections']
         else:
@@ -434,11 +439,32 @@ class Config:
 
         return feb_info 
 
+    def get_polaris_info(self):
+        """
+        Get Polaris info from setup.ini file
+        """
+        
+        info = dict()
+        if self._has_section('polaris_daq'):
+            info['daq'] = dict()
+            item_list = self._get_section('polaris_daq')
+            for item in  item_list:
+                info['daq'][str(item[0])] = str(item[1]).strip()
+               
+        if self._has_section('polaris_recorder'):
+            info['recorder'] = dict()
+            item_list = self._get_section('polaris_recorder')
+            for item in  item_list:
+                info['recorder'][str(item[0])] = str(item[1]).strip()
+               
+        return info
+
+            
 
 
     def get_redis_info(self):
         """
-        TBD
+        Get redis DB info from setup.ini file
         """
 
         info = dict()
@@ -516,14 +542,14 @@ class Config:
 
     def _get_section(self,section):
         """
-        Get a particular setting from setup.ini. 
+        Get all items from section
         
         Args:
         
         * section (str)
            
         Returns:
-             str - no type conversion happens here!
+             
         """
         return self._cached_config.items(section) 
 
