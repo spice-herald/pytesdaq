@@ -392,6 +392,12 @@ class PolarisTask:
             
             cfg_list.append('\tdata_mode : ' + data_mode + ',\n')
 
+            if data_mode == 'trig-ext':
+                trigger_channel = '/Dev1/pfi0'
+                if 'trigger_channel' in config_dict:
+                    trigger_channel = config_dict['trigger_channel']
+                cfg_list.append('\ttrigger_channel : ' + trigger_channel + ',\n')
+
             # close section
             cfg_list.append('}\n')
                

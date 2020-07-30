@@ -141,7 +141,7 @@ class Sequencer:
           
           
 
-     def _get_adc_setup(self,config_dict,measurement_name):
+     def _get_adc_setup(self, config_dict, measurement_name):
           
           
           adc_dict = dict()
@@ -185,8 +185,9 @@ class Sequencer:
           trigger_type = 1
           if is_didv:
                trigger_type = 2
+               
           
-
+         
           # overwrite dictionary with setup from sequencer.ini
           for adc_id in adc_dict:
                adc_dict[adc_id]['nb_samples'] = int(nb_samples)
@@ -194,6 +195,12 @@ class Sequencer:
                adc_dict[adc_id]['voltage_min'] = float(config_dict['voltage_min'])
                adc_dict[adc_id]['voltage_max'] = float(config_dict['voltage_max'])
                adc_dict[adc_id]['trigger_type'] =  trigger_type
-            
+               if trigger_type==2:
+                    trigger_channel = '/Dev1/pfi0'
+                    if ('device_name' in adc_dict[adc_id] and 
+                        'trigger_channel' in  adc_dict[adc_id]):
+                         trigger_channel = '/' + adc_dict[adc_id]['device_name'] + '/' 
+                         trigger_channel += adc_dict[adc_id]['trigger_channel']
+                    adc_dict[adc_id]['trigger_channel'] = trigger_channel
          
           return adc_dict

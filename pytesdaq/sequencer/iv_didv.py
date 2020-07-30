@@ -81,6 +81,23 @@ class IV_dIdV(Sequencer):
         if not (self._enable_iv or self._enable_didv):
             return True
 
+    
+
+        # display
+        if self._verbose:
+            measurement = str()
+            if self._enable_iv and self._enable_didv:
+                measurement = 'IV and dIdV measurements'
+            elif self._enable_iv:
+                measurement = 'IV measurement'
+            else:
+                measurement = 'dIdV measurement'
+        
+            print('\n===============================')
+            print(measurement) 
+            print('===============================\n')
+
+
 
         # sweep config
         sweep_config = self._sweep_config['iv_didv_sweep']
@@ -309,7 +326,10 @@ class IV_dIdV(Sequencer):
         for measurement_name in  measurement_list:
            
             if self._verbose:
-                print('\n' + measurement_name + ' measurement\n') 
+                print('\n===============================')
+                print(measurement_name + ' measurement') 
+                print('===============================\n')
+
 
             # configuration
             config_dict = self._sweep_config[measurement_name.lower()]
@@ -405,9 +425,6 @@ class IV_dIdV(Sequencer):
                                 
 
         
-
-
-
 
 
 
