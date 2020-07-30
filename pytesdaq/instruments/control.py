@@ -8,7 +8,7 @@ import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
 import pytesdaq.instruments.magnicon as magnicon
 import pytesdaq.io.redis as redis
-from pytesdaq.utils import connections
+from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
 from math import nan
 
@@ -107,9 +107,9 @@ class Control:
 
 
     def set_tes_bias(self, bias, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
         """
         Set TES bias 
@@ -128,9 +128,9 @@ class Control:
 
 
     def set_squid_bias(self, bias, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
         """
         Set SQUID bias 
@@ -150,9 +150,9 @@ class Control:
 
 
     def set_squid_lock_point(self, lock_point, 
-                             tes_channel=str(),
-                             detector_channel= str(),
-                             adc_id=str(), adc_channel=str()):
+                             tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
         
 
         """
@@ -173,9 +173,9 @@ class Control:
 
  
     def set_feedback_gain(self, gain, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -196,9 +196,9 @@ class Control:
 
 
     def set_output_offset(self, offset, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -218,9 +218,9 @@ class Control:
 
 
     def set_output_gain(self, gain, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
         
 
         """
@@ -239,9 +239,9 @@ class Control:
             
 
     def set_feedback_polarity(self, do_invert, 
-                                   tes_channel=str(),
-                                   detector_channel= str(),
-                                   adc_id=str(), adc_channel=str()):
+                                   tes_channel=None,
+                                   detector_channel=None,
+                                   adc_id=None, adc_channel=None):
         
 
         """
@@ -262,9 +262,9 @@ class Control:
         
             
     def set_feedback_loop_state(self, do_open, 
-                                tes_channel=str(),
-                                detector_channel= str(),
-                                adc_id=str(), adc_channel=str()):
+                                tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
         
 
         """
@@ -283,9 +283,9 @@ class Control:
 
 
     def set_source_preamp(self, preamp_source, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -308,9 +308,9 @@ class Control:
 
 
     def connect_signal_gen_feedback(self, do_connect, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
         
         
         """
@@ -333,9 +333,9 @@ class Control:
 
 
     def connect_signal_gen_tes(self, do_connect, 
-                               tes_channel=str(),
-                               detector_channel= str(),
-                               adc_id=str(), adc_channel=str()):
+                               tes_channel=None,
+                               detector_channel=None,
+                               adc_id=None, adc_channel=None):
         
         
         """
@@ -360,9 +360,9 @@ class Control:
 
 
     def get_tes_bias(self, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
 
 
@@ -383,9 +383,9 @@ class Control:
         
         
     def get_squid_bias(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -408,9 +408,9 @@ class Control:
 
 
     def get_lock_point(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -433,9 +433,9 @@ class Control:
 
 
     def get_feedback_gain(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
 
@@ -457,9 +457,9 @@ class Control:
 
 
     def get_output_offset(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
 
@@ -482,9 +482,9 @@ class Control:
 
 
     def get_output_gain(self, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
         
 
 
@@ -507,9 +507,9 @@ class Control:
 
 
     def get_feedback_polarity(self, 
-                              tes_channel=str(),
-                              detector_channel= str(),
-                              adc_id=str(), adc_channel=str()):
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
         
 
 
@@ -530,9 +530,9 @@ class Control:
             
 
     def is_feedback_open(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
 
 
@@ -554,9 +554,9 @@ class Control:
             
 
     def is_source_preamp(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
 
 
@@ -579,9 +579,9 @@ class Control:
 
 
     def is_signal_gen_feedback_connected(self, 
-                                         tes_channel=str(),
-                                         detector_channel= str(),
-                                         adc_id=str(), adc_channel=str()):
+                                         tes_channel=None,
+                                         detector_channel=None,
+                                         adc_id=None, adc_channel=None):
         
 
 
@@ -605,9 +605,9 @@ class Control:
 
 
     def is_signal_gen_tes_connected(self, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
         
         
 
@@ -635,7 +635,9 @@ class Control:
                  adc_id=None,adc_channel_list=None):
         """
         Read from baord all parameters
-        Output in a dictionary: dict['param'] = array value (sorted by adc channels)
+        Output in a dictionary: dict['param'] = array values (index based
+          on input list)
+        
         """
 
         
@@ -646,27 +648,23 @@ class Control:
 
         # channel list 
         channel_type = str()
-        adc_channel_list = list()
-        adc_name_list = list()
-        adc_name = None
+        channel_list = list()
         if tes_channel_list is not None:
             channel_type ='tes'
             channel_list = tes_channel_list
-        elif detector_channel is not None:
+        elif detector_channel_list is not None:
             channel_type ='detector'
             channel_list = detector_channel_list
         elif (adc_id is not None and adc_channel_list is not None):
             channel_type = 'adc'
-            adc_name = adc_id
             channel_list = adc_channel_list
         else:
             raise ValueError('ERROR in control::read_all: No argument given!')
 
-            
-
+       
         # intialize output
         output_dict = dict()
-        output_dict['adc_name'] = adc_name
+        output_dict['adc_name'] = adc_id
         output_dict['channel_type'] = channel_type
         output_dict['channel_list'] = channel_list
         for param in param_list:
@@ -686,7 +684,7 @@ class Control:
                         val = self._get_sensor_val(param,adc_id=adc_id,adc_channel=chan)
                 except:
                     print('WARNING in control::read_all: unable to get value for "' +  param 
-                          + '" (' + channel_type + ' = ' +  chan + ')')
+                          + '" (' + str(channel_type) + ' = ' +  str(chan) + ')')
                     
                 output_dict[param].append(val)  
             
@@ -700,9 +698,9 @@ class Control:
 
 
     def _get_sensor_val(self,param_name, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel= None,
+                        adc_id=None, adc_channel=None):
         
         
 
@@ -710,17 +708,15 @@ class Control:
             print('ERROR: No SQUID controller, check config')
             return nan
             
-
-        # get readout controller ID and Channel
-        controller_id_channel = connections.get_controller_info(self._connection_table,
-                                                                tes_channel=tes_channel,
-                                                                detector_channel= detector_channel,
-                                                                adc_id=adc_id,adc_channel=adc_channel)
-        
-        controller_id = controller_id_channel[0]
-        controller_channel= controller_id_channel[1]
-
       
+        # get readout controller ID and Channel
+        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
+                                                                                 tes_channel=tes_channel,
+                                                                                 detector_channel=detector_channel,
+                                                                                 adc_id=adc_id,
+                                                                                 adc_channel=adc_channel)
+        
+
         param_val = nan
         
         if not self._read_from_redis:
@@ -733,7 +729,7 @@ class Control:
                 slot = int(feb_info[1])
             
                 if self._verbose:
-                    print('Getting setting "' + param_name + '" from FEB')
+                    print('INFO: Getting setting "' + param_name + '" from FEB')
                     print('(subrack = ' + str(subrack) + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
                 
@@ -823,9 +819,9 @@ class Control:
         
         
     def _set_sensor_val(self,param_name,value, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(),adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel= None,
+                        adc_id=None,adc_channel=None):
         
         
         """
@@ -839,14 +835,13 @@ class Control:
             
 
         # get readout controller ID and Channel
-        controller_id_channel = connections.get_controller_info(self._connection_table,
-                                                                tes_channel=tes_channel,
-                                                                detector_channel= detector_channel,
-                                                                adc_id=adc_id,adc_channel=adc_channel)
-        
-        controller_id = controller_id_channel[0]
-        controller_channel= controller_id_channel[1]
-        
+        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
+                                                                                tes_channel=tes_channel,
+                                                                                detector_channel=detector_channel,
+                                                                                adc_id=adc_id, 
+                                                                                adc_channel=adc_channel)
+      
+              
         # ================
         # Set value
         # ================
@@ -966,36 +961,6 @@ class Control:
             
             
 
-    def _get_controller_id_channel(self,
-                                   tes_channel=str(),
-                                   detector_channel= str(),
-                                   adc_id=str(), adc_channel=str()):
-        
-        
-        controller_id_channel = list()
-        index_list = [slice(None),slice(None),slice(None),slice(None)]
-        if tes_channel:
-            index_list[0] = str(tes_channel)
-        if detector_channel:
-            index_list[1] = str(detector_channel)
-        if adc_id:
-            index_list[2] = str(adc_id)
-        if adc_channel:
-            index_list[3] = str(adc_channel)
-     
-            
-        index_tuple = tuple(index_list)
-        
-        try:
-            controller_id_channel = self._connection_table.loc[index_tuple,
-                                                              ('controller_id',
-                                                               'controller_channel')].values[0]
-        except:
-            pass
-
-        return controller_id_channel
-                
-                
 
     def set_signal_gen_amplitude(self, amplitude):
 
@@ -1005,7 +970,7 @@ class Control:
 
         """
         
-        print('Setting signal generator amplitdue to ' + str(amplitude) + 'mV')
+        print('INFO: Setting signal generator amplitdue to ' + str(amplitude) + 'mV')
 
 
     def set_signal_gen_frequency(self, frequency):
@@ -1016,7 +981,7 @@ class Control:
 
         """
         
-        print('Setting signal generator frequency to ' + str(frequency) + 'Hz')
+        print('INFO: Setting signal generator frequency to ' + str(frequency) + 'Hz')
 
 
     
@@ -1031,7 +996,7 @@ class Control:
             5. arbitrary pulse shape
         """
         
-        print('Setting signal generator shape to ' + str(shape)  + 'Hz')
+        print('INFO: Setting signal generator shape to ' + str(shape)  + 'Hz')
 
     
     def get_signal_gen_amplitude(self):

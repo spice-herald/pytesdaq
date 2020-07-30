@@ -52,8 +52,8 @@ class Readout:
         
         # initialize analysis config
         self._analysis_config = dict()
-        self._analysis_config['unit'] = 'adc'
-        self._analysis_config['norm'] = 'none'
+        self._analysis_config['unit'] = 'ADC'
+        self._analysis_config['norm'] = 'None'
         self._analysis_config['calc_psd'] = False
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
@@ -92,7 +92,7 @@ class Readout:
 
     def configure(self,data_source, adc_name = 'adc1', channel_list=[],
                   sample_rate=[], trace_length=[],
-                  voltage_min=[], voltage_max=[],trigger_type=3,
+                  voltage_min=[], voltage_max=[],trigger_type=4,
                   file_list=[]):
         
 
@@ -277,6 +277,7 @@ class Readout:
                 data_array, self._data_config = self._hdf5.read_event(include_metadata=True,
                                                                       adc_name=self._adc_name)
                 
+                
                 # if error -> output is a string
                 if isinstance(data_array,str):
                     if self._is_qt_ui:
@@ -287,7 +288,10 @@ class Readout:
                 self._data_config['channel_list'] = self._data_config['adc_channel_indices']
 
                 if 'event_num' in self._data_config and self._is_qt_ui:
-                    self._status_bar.showMessage('INFO: EventNumber = ' + str(self._data_config['event_num']))
+                    current_file = self._hdf5.get_current_file_name()
+                    current_file = current_file.split('/')[-1]
+                    self._status_bar.showMessage('INFO: File = ' + current_file + ', EventNumber = ' + 
+                                                 str(self._data_config['event_num']))
             
             else:
                 print('Not implemented')
@@ -319,6 +323,7 @@ class Readout:
             selected_data_array = data_array[channel_index_list,:]
             self._data_config['selected_channel_list'] = channel_num_list
             self._data_config['selected_channel_index'] = channel_index_list
+
 
             # process
             selected_data_array = self._analyzer.process(selected_data_array, self._data_config, 
@@ -396,6 +401,15 @@ class Readout:
             self._nb_bins = nbins
             self._first_draw = True
 
+
+        # label
+        ylabel = self._analysis_config['unit']
+        if self._analysis_config['calc_psd']:
+            ylabel = ylabel + '/rtHz'
+            
+        
+
+
         # draw!
         if self._first_draw:
            
@@ -403,13 +417,13 @@ class Readout:
             self._axes.clear()
             if self._analysis_config['calc_psd']:
                 self._axes.set_xlabel('Hz')
-                self._axes.set_ylabel('ADC/rtHz')
+                self._axes.set_ylabel(ylabel)
                 self._axes.set_title('PSD')
                 self._axes.set_yscale('log')
                 self._axes.set_xscale('log')
             else:
                 self._axes.set_xlabel('ms')
-                self._axes.set_ylabel('ADC bins')
+                self._axes.set_ylabel(ylabel)
                 self._axes.set_title('Pulse')
                 self._axes.set_yscale('linear')
                 self._axes.set_xscale('linear')

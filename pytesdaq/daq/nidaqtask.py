@@ -113,12 +113,12 @@ class NITask(Task):
 
 
     def set_adc_config(self,adc_name, device_name = str(), sample_rate=[],nb_samples=[],
-                       voltage_min = [],voltage_max = [], channel_list=list(),
-                       buffer_length = [],filter_enable=[]):
+                       voltage_min = [],voltage_max = [], channel_list=list(), 
+                       trigger_type = [], buffer_length = [],filter_enable=[]):
         
             
         """
-        TBD
+        Update ADC configuration dictionary 
         """
         adc_dict = dict()
         if not self._adc_config:
@@ -152,6 +152,11 @@ class NITask(Task):
 
         if filter_enable:
             adc_dict['filter_enable'] = filter_enable
+        
+        # trigger type
+        if trigger_type:
+            adc_dict['trigger_type'] = trigger_type
+            
          
         self._adc_config[adc_name] = adc_dict
         self._is_run_configured = False
@@ -217,7 +222,7 @@ class NITask(Task):
         # transfer mode (not sure it is doing anything...)
         #ai_voltage_channels.ai_data_xfer_mech = nidaqmx.constants.DataTransferActiveTransferMode.INTERRUP
         #ai_voltage_channels.ai_data_xfer_mech = nidaqmx.constants.DataTransferActiveTransferMode.DMA
-
+        
 
         # sampling rate / trigger mode (continuous vs finite)
         buffer_length = self._nb_samples
@@ -249,8 +254,8 @@ class NITask(Task):
                                 
         # external trigger
         if config_dict['trigger_type']==2:
-            self.triggers.start_trigger.cfg_anlg_edge_start_trig(trigger_source=config_dict['device_name']   
-                                                                 + '/pfi0')
+            self.triggers.start_trigger.cfg_dig_edge_start_trig(trigger_source='/'+ config_dict['device_name'] 
+                                                                + '/pfi0')
             
 
         # data mode
@@ -263,6 +268,15 @@ class NITask(Task):
         self.register_every_n_samples_acquired_into_buffer_event(self._nb_samples,
                                                                  self._read_callback)
 
+        
+        adc_conversion_factor = list()
+        for chan in ai_voltage_channels:
+            adc_conversion_factor.append(chan.ai_dev_scaling_coeff)
+            
+            
+        config_dict['adc_conversion_factor'] = np.array(adc_conversion_factor)
+
+        
 
         self._is_run_configured = True
     
