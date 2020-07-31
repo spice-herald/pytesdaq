@@ -3,12 +3,12 @@ import numpy as np
 from PyQt5.QtCore import QCoreApplication
 from matplotlib import pyplot as plt
 import pytesdaq.daq as daq
+import pytesdaq.instruments.control as instrument
 import pytesdaq.config.settings as settings
-from pytesdaq.utils import  arg_utils
 import pytesdaq.io.redis as redis
 import pytesdaq.io.hdf5 as hdf5
 from pytesdaq.analyzer import analyzer
-
+from pytesdaq.utils import  arg_utils
 
 class Readout:
     
@@ -54,19 +54,24 @@ class Readout:
         self._analysis_config = dict()
         self._analysis_config['unit'] = 'ADC'
         self._analysis_config['norm'] = 'None'
+        self._analysis_config['norm_val'] = 1
         self._analysis_config['calc_psd'] = False
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
         self._analysis_config['nb_events_avg'] = 1
         self._analysis_config['calc_didv'] = False
         self._analysis_config['enable_pilup_rejection'] = False
-      
+        self._do_calc_norm = False
+    
         
 
         # instanciate analyzer
         self._analyzer = analyzer.Analyzer()
         
-       
+        # instrument control
+        self._instrument = None
+        self._detector_settings = None
+    
 
 
     def register_ui(self,axes,canvas,status_bar,colors):
@@ -87,7 +92,7 @@ class Readout:
         self._first_draw = True
         self._analysis_config['reset_running_avg'] = True
         self._selected_channel_list = channels
-
+        self._do_calc_norm = True
 
 
     def configure(self,data_source, adc_name = 'adc1', channel_list=[],
@@ -189,14 +194,18 @@ class Readout:
         return self._is_running
 
 
+
         
     def update_analysis_config(self,norm = None, unit= None, calc_psd =None, calc_didv = None, 
                                enable_pileup_rejection =None,
                                enable_running_avg = None, nb_events_avg=None):
         
-        
+        """
+        Update analysis configuration
+        """
         
         if norm is not None:
+            self._do_calc_norm = True
             self._analysis_config['norm'] = norm
             
         if unit is not None:
@@ -233,6 +242,7 @@ class Readout:
     def set_auto_scale(self,enable_auto_scale):
         self._enable_auto_scale  = enable_auto_scale
         
+
 
 
     def run(self,save_redis=False,do_plot=False):
@@ -324,6 +334,11 @@ class Readout:
             self._data_config['selected_channel_list'] = channel_num_list
             self._data_config['selected_channel_index'] = channel_index_list
 
+
+            # normalization
+            if self._do_calc_norm or 'norm_list' not in self._analysis_config:
+                self._fill_norm_list()
+                self._do_calc_norm = False
 
             # process
             selected_data_array = self._analyzer.process(selected_data_array, self._data_config, 
@@ -458,3 +473,42 @@ class Readout:
         self._canvas.draw()
         self._canvas.flush_events()
             
+ 
+
+    def _fill_norm_list(self):
+        """
+        Fill normalization list and store in analysis dictionary
+        """
+        norm_type = self._analysis_config['norm'] 
+        
+        # instanciate instrument if needed
+        if norm_type=='OpenLoop' or norm_type=='CloseLoop':
+            if self._instrument is None:
+                self._instrument = instrument.Control(dummy_mode= True)
+                
+        
+
+        # normalization independent of the channel
+        norm_val = 1
+        if norm_type=='Gain=10':
+            norm_val = 10
+        elif norm_type=='Gain=100':
+            norm_val = 100
+
+        # loop channel
+        norm_list = list()
+        for chan in self._data_config['selected_channel_list']:
+            
+            # get normalizationn from board
+            if norm_type == 'OpenLoop':
+                norm_val = self._instrument.get_open_loop_norm(adc_id=self._adc_name, 
+                                                               adc_channel=chan)
+            elif  norm_type == 'CloseLoop':
+                norm_val = self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
+                                                                              adc_channel=chan)
+                
+            # fill array
+            norm_list.append(norm_val)
+                
+        self._analysis_config['norm_list'] =  norm_list
+    

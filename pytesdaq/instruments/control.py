@@ -461,8 +461,6 @@ class Control:
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
         
-
-
         """
         Get output offset
         """
@@ -481,31 +479,75 @@ class Control:
 
 
 
-    def get_output_gain(self, 
-                        tes_channel=None,
-                        detector_channel=None,
-                        adc_id=None, adc_channel=None):
+    def get_output_total_gain(self, 
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
         
-
-
         """
         Get output gain
         """
-        output_gain = nan
+        output_variable_gain = 1
         try:
-            output_gain = self._get_sensor_val('output_gain',
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, adc_channel=adc_channel)
+            output_variable_gain = self._get_sensor_val('output_gain',
+                                                        tes_channel=tes_channel,
+                                                        detector_channel=detector_channel,
+                                                        adc_id=adc_id, adc_channel=adc_channel)
             
         except:
             print('ERROR getting output gain')
             
-        return output_gain
+
+        # fix gain
+        output_fix_gain = self._config.get_output_fix_gain()
+        
+        # total gain
+        if output_variable_gain == nan:
+            output_total_gain = output_fix_gain
+        else:
+            output_total_gain = output_fix_gain * output_variable_gain
+            
+            
+        return output_total_gain
 
 
 
 
+    def get_preamp_total_gain(self, 
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
+        
+        """
+        Get preamp gain
+        """
+        preamp_variable_gain = 1
+        try:
+            preamp_variable_gain = self._get_sensor_val('preamp_gain',
+                                                        tes_channel=tes_channel,
+                                                        detector_channel=detector_channel,
+                                                        adc_id=adc_id, adc_channel=adc_channel)
+            
+        except:
+            print('ERROR getting preamp gain')
+            
+
+        # fix gain
+        preamp_fix_gain = self._config.get_preamp_fix_gain()
+        
+        # total gain
+        if preamp_variable_gain == nan:
+            preamp_total_gain = preamp_fix_gain
+        else:
+            preamp_total_gain = preamp_fix_gain * preamp_variable_gain
+            
+            
+        return preamp_total_gain
+
+
+        
+
+        
     def get_feedback_polarity(self, 
                               tes_channel=None,
                               detector_channel=None,
@@ -529,13 +571,14 @@ class Control:
         return feedback_polarity
             
 
+
+
+
     def is_feedback_open(self, 
                          tes_channel=None,
                          detector_channel=None,
                          adc_id=None, adc_channel=None):
         
-
-
         """
         Is feedback open
         """
@@ -552,6 +595,8 @@ class Control:
             
         return is_open
             
+
+
 
     def is_source_preamp(self, 
                          tes_channel=None,
@@ -609,8 +654,6 @@ class Control:
                                     detector_channel=None,
                                     adc_id=None, adc_channel=None):
         
-        
-
         """
         Is signal generator connected to TES line
         """
@@ -627,6 +670,95 @@ class Control:
             
         return is_connected
             
+
+
+
+    def get_feedback_resistor(self,tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
+        """
+        Get feedback resistor (magnicon)
+        """
+        
+        feedback_resistor = nan
+        
+        try:
+            feedback_resistor = self._get_sensor_val('feedback_resistor',
+                                                     tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR getting feedback resistor')
+            
+        return feedback_resistor
+
+
+
+    def get_volts_to_amps_close_loop_norm(self, tes_channel=None,
+                                          detector_channel=None,
+                                          adc_id=None, adc_channel=None):
+        """
+        get normalization to convert output volts to amps
+        in close loop
+        """
+        
+        # driver gain
+        output_total_gain = self.get_output_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+        
+        # feedback resistor
+        feedback_resistor = self.get_feedback_resistor(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        if feedback_resistor==nan:
+            feedback_resistor = self._config.get_feedback_resistor()
+            if feedback_resistor is None:
+                print('ERROR: unable to find feedback resistor. It needs to be added in setup.ini file!')
+                return None
+        
+        
+        # squid loop turn ratio
+        squid_turn_ratio = self._config.get_squid_turn_ratio()
+        if squid_turn_ratio is None:
+            print('ERROR: unable to find SQUID turn ratio. It needs to be added in setup.ini file!')
+            return None
+
+
+        # calculate normalization
+        norm = output_total_gain*feedback_resistor*squid_turn_ratio
+        return norm
+
+
+
+    def get_open_loop_norm(self, tes_channel=None,
+                           detector_channel=None,
+                           adc_id=None, adc_channel=None):
+        """
+        get open loop normalization 
+        
+        """
+        
+        # driver gain
+        output_total_gain = self.get_output_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+      
+        # preamp gain
+        preamp_total_gain = self.get_preamp_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+
+        # calculate normalization
+        norm = output_total_gain*preamp_total_gain
+        return norm
+        
+
+
+
 
 
 
@@ -740,8 +872,8 @@ class Control:
                         param_val = feb.get_phonon_squid_bias(subrack, slot,controller_channel)
                     elif param_name == 'lock_point_voltage':
                         param_val = feb.get_phonon_lock_point(subrack, slot,controller_channel)
-                    elif param_name == 'feedback_gain':
-                        param_val = feb.get_phonon_feedback_gain(subrack, slot,controller_channel)
+                    elif param_name == 'preamp_gain':
+                        param_val = feb.get_phonon_preamp_gain(subrack, slot,controller_channel)
                     elif param_name == 'output_offset':
                         param_val = feb.get_phonon_offset(subrack, slot,controller_channel)
                     elif param_name == 'output_gain':
@@ -775,15 +907,15 @@ class Control:
                     elif param_name == 'lock_point_voltage':
                         # param_val = magnicon.get_phonon_lock_point(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
-                    elif param_name == 'feedback_gain':
-                        # param_val = magnicon.get_phonon_feedback_gain(controller_channel)
+                    elif param_name == 'preamp_gain':
+                        # param_val = magnicon.get_phonon_preamp_gain(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                     elif param_name == 'output_offset':
                         # param_val = magnicon.get_phonon_offset(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                     elif param_name == 'output_gain':
-                        # param_val = magnicon.get_phonon_output_gain(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = 1
+                        # no extra output gain for magnicon
                     elif param_name == 'feedback_polarity':
                         # param_val = magnicon.get_phonon_feedback_polarity(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')

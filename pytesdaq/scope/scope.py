@@ -22,7 +22,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source = 'niadc'
         self._file_list = list()
         self._select_hdf5_dir = False
-        self._default_data_dir = '/data/analysis'
+        self._default_data_dir = './'
 
 
         # initalize main window
@@ -144,7 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 # trigger type
                 trigger_mode = self._trigger_combobox.currentText()
                 trigger_type = 4
-                if trigger_mode=='SigGen':
+                if trigger_mode=='ExtTrig':
                     trigger_type = 2
                 elif trigger_mode=='Threshold':
                     trigger_type = 3
@@ -368,15 +368,18 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self._norm_combobox.setCurrentIndex(0)
                 norm = 'None'
-        elif (unit=='Amps' or unit=='pAmps'):
-            self._norm_combobox.addItem('OpenLoop')
+        elif (unit=='Amps' or unit=='pAmps' or unit=='Watts' or unit=='pWatts'):
             self._norm_combobox.addItem('CloseLoop')
-            if norm=='OpenLoop':
-                self._norm_combobox.setCurrentIndex(0)
-            else:
-                self._norm_combobox.setCurrentIndex(1)
-                norm = 'CloseLoop'
-                
+            self._norm_combobox.setCurrentIndex(0)
+            norm = 'CloseLoop'
+        elif unit=='g':
+            self._norm_combobox.addItem('Gain=1')
+            self._norm_combobox.addItem('Gain=10')
+            self._norm_combobox.addItem('Gain=100')
+            self._norm_combobox.setCurrentIndex(2)
+            norm = 'Gain=100'
+            
+
         # update analysis
         self._readout.update_analysis_config(unit=unit,norm=norm)
         
@@ -602,7 +605,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._trigger_combobox.setGeometry(QtCore.QRect(135, 33, 96, 20))
         self._trigger_combobox.setFont(font)
         self._trigger_combobox.addItem('Random')
-        self._trigger_combobox.addItem('SigGen')
+        self._trigger_combobox.addItem('ExtTrig')
         self._trigger_combobox.addItem('Threshold')
         self._trigger_combobox.setCurrentIndex(0)
 
@@ -796,6 +799,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._unit_combobox.addItem('mVolts')
         self._unit_combobox.addItem('Amps')
         self._unit_combobox.addItem('pAmps')
+        self._unit_combobox.addItem('Watts')
+        self._unit_combobox.addItem('pWatts')
+        self._unit_combobox.addItem('g')
+        
        
         # norm
         font.setBold(True)

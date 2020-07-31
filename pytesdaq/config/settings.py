@@ -231,7 +231,7 @@ class Config:
 
 
     def get_shunt_resistance(self):
-        r_shunt = []
+        r_shunt = None
         try:
             r_shunt =  int(self._get_setting('setup','shunt_resistance'))
         except:
@@ -242,49 +242,49 @@ class Config:
 
 
 
-    def get_squid_loop_ratio(self):
-        squid_loop_ratio = []
+    def get_squid_turn_ratio(self):
+        squid_turn_ratio = None
         try:
-            squid_loop_ratio =  float(self._get_setting('setup','squid_loop_ratio'))
+            squid_turn_ratio =  float(self._get_setting('setup','squid_turn_ratio'))
         except:
-            print('WARNING: "squid_loop_ratio" parameter required!')
+            print('WARNING: "squid_turn_ratio" parameter required!')
          
     
-        return squid_loop_ratio 
+        return squid_turn_ratio 
 
 
 
     def get_preamp_fix_gain(self):
-        preamp_fix_gain = []
-        try:
+        """
+        Get SQUID readout preamp fix gain
+        """
+        preamp_fix_gain = 1
+        if self._has_setting('setup','preamp_fix_gain'):
             preamp_fix_gain =  float(self._get_setting('setup','preamp_fix_gain'))
-        except:
-            print('WARNING: "preamp_fix_gain" parameter not available!')
-          
-    
         return preamp_fix_gain
 
 
 
     def get_output_fix_gain(self):
-        output_fix_gain = []
-        try:
+        """
+        Get SQUID readout output driver fix gain
+        """
+        output_fix_gain = 1
+        if self._has_setting('setup','output_fix_gain'):
             output_fix_gain =  float(self._get_setting('setup','output_fix_gain'))
-        except:
-            print('WARNING: "output_fix_gain" parameter not available!')
-          
-    
         return output_fix_gain
 
 
 
     def get_feedback_resistance(self):
-        feedback_resistance = []
-        try:
+        """
+        Get feedback resistance
+        Magnicon: variable feedback resistance can be read directly from electronics
+        """
+
+        feedback_resistance = None
+        if self._has_setting('setup','feedback_resistance'):
             feedback_resistance =  float(self._get_setting('setup','feedback_resistance'))
-        except:
-            print('WARNING: "feedback_resistance" parameter not available!')
-           
         return feedback_resistance
         
 

@@ -189,7 +189,7 @@ class FEB(object):
         self._set_feb(subrack, slot, FEBSettings.SQUIDLOCK, channel, value, millisec_delay)
 
     ### this value should be from 20 to 100
-    def set_phonon_feedback_gain(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_preamp_gain(self,subrack, slot, channel, value, millisec_delay = 0.160):
         self._set_feb(subrack, slot, FEBSettings.SQUIDGAIN, channel, value, millisec_delay)
 
     ### this is just SquidDriver in the Java code
@@ -412,7 +412,7 @@ class FEB(object):
     def get_phonon_lock_point(self,subrack, slot, channel, millisec_delay = 0.160):
         return self._get_feb(subrack, slot, FEBSettings.SQUIDLOCK, channel, millisec_delay)
             
-    def get_phonon_feedback_gain(self,subrack, slot, channel, millisec_delay = 0.160):
+    def get_phonon_preamp_gain(self,subrack, slot, channel, millisec_delay = 0.160):
         return self._get_feb(subrack, slot, FEBSettings.SQUIDGAIN, channel, millisec_delay)
 
     #this is just SquidDriver in the Java code
