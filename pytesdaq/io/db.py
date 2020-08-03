@@ -4,7 +4,6 @@ from mysql.connector import errorcode
 import time
 
 
-
 class MySQLCore:
     
     def __init__(self, dbname = 'tesdaq'):
@@ -121,10 +120,14 @@ class MySQLCore:
             insert_cmd+='NOW(),'
 
         for key in columns:
-            insert_cmd+= '{},'.format(data_dict[key])
+            if type(data_dict[key]) == str:
+                insert_cmd+= '"{}",'.format(data_dict[key])
+            else:
+                insert_cmd+= '{},'.format(data_dict[key])
+            
         insert_cmd =  insert_cmd[0:len(insert_cmd)-1]
         insert_cmd += ');'
-            
+           
         #print(insert_cmd)
         
         # insert database
