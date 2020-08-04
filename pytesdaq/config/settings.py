@@ -4,7 +4,7 @@ import os,string
 import pandas as pd
 import re
 import traceback
-
+from pytesdaq.utils import connection_utils
 
 class Config:
     
@@ -322,7 +322,7 @@ class Config:
         # get items
         item_list = self._get_section(adc_id)
         adc_connections = list()
-
+        column_list = list()
         for item in item_list:
 
             if 'voltage_range' == item[0]:
@@ -335,46 +335,20 @@ class Config:
                   'trigger_type'== item[0]):
                 setup[item[0]] = int(item[1])
 
-            elif 'connection' in item[0]:
-                setup[item[0]] = list() 
+            elif 'connection' in item[0] and 'connection_table'!=item[0]:
                 adc_chan = re.sub(r'\s+','', str(item[0]))[10:]
-                connections = [adc_chan, adc_id]
-                controller_id = 'None'
-                controller_chan= 'None'
-                detector_chan = 'None'
-                tes_chan = 'None'
-                val_list = item[1].split(',')
-                for val in val_list:
-                    val = re.sub(r'\s+','', str(val))
-                    setup[item[0]].append(val)
-                    val_split = val.split(':')
-                    if val_split[0]=='controller':
-                        id_chan = val_split[1].rsplit('_',1)
-                        if len(id_chan)!=2:
-                            raise ValueError('Wrong controller config format: It should be "controller:[id]_[chan]"!')
-                        controller_id = id_chan[0]
-                        controller_chan = id_chan[1]
-
-                    if val_split[0]=='tes':
-                        tes_chan = val_split[1]
-
-                    if val_split[0]=='detector':
-                        detector_chan = val_split[1]
-                    
-                if tes_chan == 'None':
-                    tes_chan = controller_chan
-                    setup[item[0]].append('tes:'+str(controller_chan))
-
-                adc_connections.append([adc_chan,adc_id,detector_chan,tes_chan,controller_id,controller_chan])
+                name_val_list, name_list, val_list  = connection_utils.extract_adc_connection(item[1])
+                setup[item[0]] = name_val_list
+                val_list  = [adc_id,adc_chan] + val_list
+                adc_connections.append(val_list)
+                column_list = ['adc_id','adc_channel'] + name_list
              
             else:
                 setup[item[0]] = item[1]       
                     
 
-        connection_table = pd.DataFrame(adc_connections, 
-                                        columns = ['adc_channel','adc_id','detector_channel','tes_channel',
-                                                   'controller_id','controller_channel'])
-        setup['connections'] = connection_table
+        connection_table = pd.DataFrame(adc_connections, columns = column_list)
+        setup['connection_table'] = connection_table
         
 
 
@@ -392,15 +366,15 @@ class Config:
         connection_table = []
         if adc_id:
             adc_setup = self.get_adc_setup(adc_id)
-            if 'connections' in adc_setup:
-                connection_table = adc_setup['connections']
+            if 'connection_table' in adc_setup:
+                connection_table = adc_setup['connection_table']
         else:
             adc_list = self.get_adc_list()
             connection_table_list = []
             for adc in adc_list:
                 adc_setup = self.get_adc_setup(adc)
-                if 'connections' in adc_setup:
-                    connection_table_list.append(adc_setup['connections'])
+                if 'connection_table' in adc_setup:
+                    connection_table_list.append(adc_setup['connection_table'])
             if connection_table_list:
                 connection_table = pd.concat(connection_table_list)
             

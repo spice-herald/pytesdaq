@@ -295,7 +295,11 @@ class Readout:
                     break
 
                 # add channel list
-                self._data_config['channel_list'] = self._data_config['adc_channel_indices']
+                if isinstance(self._data_config['adc_channel_indices'],np.int32):
+                    self._data_config['channel_list'] = [self._data_config['adc_channel_indices']]
+                else:
+                    self._data_config['channel_list'] = list(self._data_config['adc_channel_indices'])
+
 
                 if 'event_num' in self._data_config and self._is_qt_ui:
                     current_file = self._hdf5.get_current_file_name()
