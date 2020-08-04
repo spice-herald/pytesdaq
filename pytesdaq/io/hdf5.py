@@ -131,6 +131,10 @@ class H5Core:
         return array
 
 
+    def get_current_file_name(self):
+        return self._current_file_name
+        
+
     def get_file_info(self,file_name=str(),group_name=str(),dataset_name=str()):
         """
         Function to get file metadata.

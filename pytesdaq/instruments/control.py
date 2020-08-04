@@ -6,8 +6,9 @@ import time
 import numpy
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
+import pytesdaq.instruments.magnicon as magnicon
 import pytesdaq.io.redis as redis
-from pytesdaq.utils import connections
+from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
 from math import nan
 
@@ -53,26 +54,37 @@ class Control:
 
     	# Magnicon
         if self._squid_controller == 'magnicon' and not self._dummy_mode:
+            mag_control_info = self._config.get_magnicon_controller_info()
             mag_conn_info = self._config.get_magnicon_connection_info()
+            self._mag_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
+                                               default_active=mag_control_info['default_active'],
+                                               reset_active=mag_control_info['reset_active'],
+                                               conn_info=mag_conn_info)
+            self._mag_inst.set_remote_inst()
+            self._mag_inst.connect()
+            self._mag_inst.chdir()
+            self._mag_inst.listen_for(None)
             if mag_conn_info:
                 if self._verbose:
                     print('SSH connection info for Magnicon:')
                     print('Hostname:', mag_conn_info['hostname'])
                     print('Username:', mag_conn_info['username'])
-                    print('Port:', mag_conn_info['port'])
+                    print('Port:', str(mag_conn_info['port']))
                     print('RSA key:', mag_conn_info['rsa_key'])
-                    print('Log file', mag_conn_info['log_file'])
-            self._remote = remote.Remote(hostname=mag_conn_info['hostname'],
-                                         port=mag_conn_info['port'],
-                                         username=mag_conn_info['username'],
-                                         auth_method='rsa',
-                                         auth_val=mag_conn_info['rsa_key'],
-                                         log_file=mag_conn_info['log_file'])
+                    print('Log file:', mag_conn_info['log_file'])
+                    print('Executable location:', mag_conn_info['exe_location'])
+            if mag_control_info:
+                if self._verbose:
+                    print('Controller info for Magnicon:')
+                    print('Channel list:', str(mag_control_info['channel_list']))
+                    print('Default active channel:', str(mag_control_info['default_active']))
+                    print('Reset active channel after every step:', str(mag_control_info['reset_active']))
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
-        
-               
+
+
+
     @property
     def verbose(self):
         return self._verbose
@@ -95,9 +107,9 @@ class Control:
 
 
     def set_tes_bias(self, bias, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
         """
         Set TES bias 
@@ -116,9 +128,9 @@ class Control:
 
 
     def set_squid_bias(self, bias, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
         """
         Set SQUID bias 
@@ -138,16 +150,16 @@ class Control:
 
 
     def set_squid_lock_point(self, lock_point, 
-                             tes_channel=str(),
-                             detector_channel= str(),
-                             adc_id=str(), adc_channel=str()):
+                             tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
         
 
         """
         Set SQUID lock point
         """
         try:
-            self._set_sensor_val('lock_point', bias,
+            self._set_sensor_val('lock_point_voltage', bias,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -161,9 +173,9 @@ class Control:
 
  
     def set_feedback_gain(self, gain, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -184,9 +196,9 @@ class Control:
 
 
     def set_output_offset(self, offset, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -206,9 +218,9 @@ class Control:
 
 
     def set_output_gain(self, gain, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
         
 
         """
@@ -227,9 +239,9 @@ class Control:
             
 
     def set_feedback_polarity(self, do_invert, 
-                                   tes_channel=str(),
-                                   detector_channel= str(),
-                                   adc_id=str(), adc_channel=str()):
+                                   tes_channel=None,
+                                   detector_channel=None,
+                                   adc_id=None, adc_channel=None):
         
 
         """
@@ -250,9 +262,9 @@ class Control:
         
             
     def set_feedback_loop_state(self, do_open, 
-                                tes_channel=str(),
-                                detector_channel= str(),
-                                adc_id=str(), adc_channel=str()):
+                                tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
         
 
         """
@@ -271,9 +283,9 @@ class Control:
 
 
     def set_source_preamp(self, preamp_source, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
         """
@@ -296,9 +308,9 @@ class Control:
 
 
     def connect_signal_gen_feedback(self, do_connect, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
         
         
         """
@@ -321,9 +333,9 @@ class Control:
 
 
     def connect_signal_gen_tes(self, do_connect, 
-                               tes_channel=str(),
-                               detector_channel= str(),
-                               adc_id=str(), adc_channel=str()):
+                               tes_channel=None,
+                               detector_channel=None,
+                               adc_id=None, adc_channel=None):
         
         
         """
@@ -348,9 +360,9 @@ class Control:
 
 
     def get_tes_bias(self, 
-                     tes_channel=str(),
-                     detector_channel= str(),
-                     adc_id=str(), adc_channel=str()):
+                     tes_channel=None,
+                     detector_channel=None,
+                     adc_id=None, adc_channel=None):
         
 
 
@@ -371,9 +383,9 @@ class Control:
         
         
     def get_squid_bias(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -396,9 +408,9 @@ class Control:
 
 
     def get_lock_point(self, 
-                       tes_channel=str(),
-                       detector_channel= str(),
-                       adc_id=str(), adc_channel=str()):
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
 
@@ -407,7 +419,7 @@ class Control:
         """
         lock_point = nan
         try:
-            lock_point = self._get_sensor_val('lock_point',
+            lock_point = self._get_sensor_val('lock_point_voltage',
                                               tes_channel=tes_channel,
                                               detector_channel=detector_channel,
                                               adc_id=adc_id, adc_channel=adc_channel)
@@ -421,9 +433,9 @@ class Control:
 
 
     def get_feedback_gain(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
 
 
@@ -445,12 +457,10 @@ class Control:
 
 
     def get_output_offset(self, 
-                          tes_channel=str(),
-                          detector_channel= str(),
-                          adc_id=str(), adc_channel=str()):
+                          tes_channel=None,
+                          detector_channel=None,
+                          adc_id=None, adc_channel=None):
         
-
-
         """
         Get output offset
         """
@@ -469,33 +479,79 @@ class Control:
 
 
 
-    def get_output_gain(self, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+    def get_output_total_gain(self, 
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
         
-
-
         """
         Get output gain
         """
-        output_gain = nan
+        output_variable_gain = 1
         try:
-            output_gain = self._get_sensor_val('output_gain',
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, adc_channel=adc_channel)
+            output_variable_gain = self._get_sensor_val('output_gain',
+                                                        tes_channel=tes_channel,
+                                                        detector_channel=detector_channel,
+                                                        adc_id=adc_id, adc_channel=adc_channel)
             
         except:
             print('ERROR getting output gain')
             
-        return output_gain
+
+        # fix gain
+        output_fix_gain = self._config.get_output_fix_gain()
+        
+        # total gain
+        if output_variable_gain == nan:
+            output_total_gain = output_fix_gain
+        else:
+            output_total_gain = output_fix_gain * output_variable_gain
+            
+            
+        return output_total_gain
 
 
+
+
+    def get_preamp_total_gain(self, 
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
+        
+        """
+        Get preamp gain
+        """
+        preamp_variable_gain = 1
+        try:
+            preamp_variable_gain = self._get_sensor_val('preamp_gain',
+                                                        tes_channel=tes_channel,
+                                                        detector_channel=detector_channel,
+                                                        adc_id=adc_id, adc_channel=adc_channel)
+            
+        except:
+            print('ERROR getting preamp gain')
+            
+
+        # fix gain
+        preamp_fix_gain = self._config.get_preamp_fix_gain()
+        
+        # total gain
+        if preamp_variable_gain == nan:
+            preamp_total_gain = preamp_fix_gain
+        else:
+            preamp_total_gain = preamp_fix_gain * preamp_variable_gain
+            
+            
+        return preamp_total_gain
+
+
+        
+
+        
     def get_feedback_polarity(self, 
-                              tes_channel=str(),
-                              detector_channel= str(),
-                              adc_id=str(), adc_channel=str()):
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
         
 
 
@@ -515,13 +571,14 @@ class Control:
         return feedback_polarity
             
 
+
+
+
     def is_feedback_open(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
-
-
         """
         Is feedback open
         """
@@ -539,10 +596,12 @@ class Control:
         return is_open
             
 
+
+
     def is_source_preamp(self, 
-                         tes_channel=str(),
-                         detector_channel= str(),
-                         adc_id=str(), adc_channel=str()):
+                         tes_channel=None,
+                         detector_channel=None,
+                         adc_id=None, adc_channel=None):
         
 
 
@@ -565,9 +624,9 @@ class Control:
 
 
     def is_signal_gen_feedback_connected(self, 
-                                         tes_channel=str(),
-                                         detector_channel= str(),
-                                         adc_id=str(), adc_channel=str()):
+                                         tes_channel=None,
+                                         detector_channel=None,
+                                         adc_id=None, adc_channel=None):
         
 
 
@@ -589,13 +648,12 @@ class Control:
             
 
 
-    def is_signal_gen_tes_connected(self, 
-                                    tes_channel=str(),
-                                    detector_channel= str(),
-                                    adc_id=str(), adc_channel=str()):
-        
-        
 
+    def is_signal_gen_tes_connected(self, 
+                                    tes_channel=None,
+                                    detector_channel=None,
+                                    adc_id=None, adc_channel=None):
+        
         """
         Is signal generator connected to TES line
         """
@@ -615,11 +673,166 @@ class Control:
 
 
 
+    def get_feedback_resistor(self,tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
+        """
+        Get feedback resistor (magnicon)
+        """
+        
+        feedback_resistor = nan
+        
+        try:
+            feedback_resistor = self._get_sensor_val('feedback_resistor',
+                                                     tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR getting feedback resistor')
+            
+        return feedback_resistor
+
+
+
+    def get_volts_to_amps_close_loop_norm(self, tes_channel=None,
+                                          detector_channel=None,
+                                          adc_id=None, adc_channel=None):
+        """
+        get normalization to convert output volts to amps
+        in close loop
+        """
+        
+        # driver gain
+        output_total_gain = self.get_output_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+        
+        # feedback resistor
+        feedback_resistor = self.get_feedback_resistor(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        if feedback_resistor==nan:
+            feedback_resistor = self._config.get_feedback_resistor()
+            if feedback_resistor is None:
+                print('ERROR: unable to find feedback resistor. It needs to be added in setup.ini file!')
+                return None
+        
+        
+        # squid loop turn ratio
+        squid_turn_ratio = self._config.get_squid_turn_ratio()
+        if squid_turn_ratio is None:
+            print('ERROR: unable to find SQUID turn ratio. It needs to be added in setup.ini file!')
+            return None
+
+
+        # calculate normalization
+        norm = output_total_gain*feedback_resistor*squid_turn_ratio
+        return norm
+
+
+
+    def get_open_loop_norm(self, tes_channel=None,
+                           detector_channel=None,
+                           adc_id=None, adc_channel=None):
+        """
+        get open loop normalization 
+        
+        """
+        
+        # driver gain
+        output_total_gain = self.get_output_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+      
+        # preamp gain
+        preamp_total_gain = self.get_preamp_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+
+        # calculate normalization
+        norm = output_total_gain*preamp_total_gain
+        return norm
+        
+
+
+
+
+
+
+
+    def read_all(self, tes_channel_list=None, detector_channel_list= None,
+                 adc_id=None,adc_channel_list=None):
+        """
+        Read from baord all parameters
+        Output in a dictionary: dict['param'] = array values (index based
+          on input list)
+        
+        """
+
+        
+        # parameter list
+        param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
+                      'output_gain','feedback_polarity','feedback_open']
+                      
+
+        # channel list 
+        channel_type = str()
+        channel_list = list()
+        if tes_channel_list is not None:
+            channel_type ='tes'
+            channel_list = tes_channel_list
+        elif detector_channel_list is not None:
+            channel_type ='detector'
+            channel_list = detector_channel_list
+        elif (adc_id is not None and adc_channel_list is not None):
+            channel_type = 'adc'
+            channel_list = adc_channel_list
+        else:
+            raise ValueError('ERROR in control::read_all: No argument given!')
+
+       
+        # intialize output
+        output_dict = dict()
+        output_dict['adc_name'] = adc_id
+        output_dict['channel_type'] = channel_type
+        output_dict['channel_list'] = channel_list
+        for param in param_list:
+            output_dict[param] = list()
+
+        # loop channels
+        for chan in channel_list:
+            # loop parameters
+            for param in param_list:
+                val = nan
+                try:
+                    if channel_type =='tes':
+                        val = self._get_sensor_val(param,tes_channel=chan)
+                    elif channel_type == 'detector':
+                        val = self._get_sensor_val(param,detector_channel=chan)
+                    else:
+                        val = self._get_sensor_val(param,adc_id=adc_id,adc_channel=chan)
+                except:
+                    print('WARNING in control::read_all: unable to get value for "' +  param 
+                          + '" (' + str(channel_type) + ' = ' +  str(chan) + ')')
+                    
+                output_dict[param].append(val)  
+            
+                # wait
+                time.sleep(0.1)
+        
+        return output_dict
+        
+        
+
+
 
     def _get_sensor_val(self,param_name, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(), adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel= None,
+                        adc_id=None, adc_channel=None):
         
         
 
@@ -627,17 +840,15 @@ class Control:
             print('ERROR: No SQUID controller, check config')
             return nan
             
-
-        # get readout controller ID and Channel
-        controller_id_channel = connections.get_controller_info(self._connection_table,
-                                                                tes_channel=tes_channel,
-                                                                detector_channel= detector_channel,
-                                                                adc_id=adc_id,adc_channel=adc_channel)
-        
-        controller_id = controller_id_channel[0]
-        controller_channel= controller_id_channel[1]
-
       
+        # get readout controller ID and Channel
+        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
+                                                                                 tes_channel=tes_channel,
+                                                                                 detector_channel=detector_channel,
+                                                                                 adc_id=adc_id,
+                                                                                 adc_channel=adc_channel)
+        
+
         param_val = nan
         
         if not self._read_from_redis:
@@ -650,7 +861,7 @@ class Control:
                 slot = int(feb_info[1])
             
                 if self._verbose:
-                    print('Getting setting "' + param_name + '" from FEB')
+                    print('INFO: Getting setting "' + param_name + '" from FEB')
                     print('(subrack = ' + str(subrack) + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
                 
@@ -659,10 +870,10 @@ class Control:
                         param_val = feb.get_phonon_qet_bias(subrack, slot,controller_channel)
                     elif param_name == 'squid_bias':
                         param_val = feb.get_phonon_squid_bias(subrack, slot,controller_channel)
-                    elif param_name == 'lock_point':
+                    elif param_name == 'lock_point_voltage':
                         param_val = feb.get_phonon_lock_point(subrack, slot,controller_channel)
-                    elif param_name == 'feedback_gain':
-                        param_val = feb.get_phonon_feedback_gain(subrack, slot,controller_channel)
+                    elif param_name == 'preamp_gain':
+                        param_val = feb.get_phonon_preamp_gain(subrack, slot,controller_channel)
                     elif param_name == 'output_offset':
                         param_val = feb.get_phonon_offset(subrack, slot,controller_channel)
                     elif param_name == 'output_gain':
@@ -685,28 +896,26 @@ class Control:
             elif self._squid_controller=='magnicon':
 
                 if self._verbose:
-                    print('Getting setting "' + param_name + '" from Magnicon')
-                    print('(channel = ' + str(controller_channel) + ')')
+                    print('INFO: Getting "' + param_name + ' for channel ' 
+                          + str(controller_channel) + ' (Magnicon)')
 
                 if not self._dummy_mode:
                     if param_name == 'tes_bias':
-                        # param_val = magnicon.get_phonon_qet_bias(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = magnicon.get_tes_current_bias(controller_channel)
                     elif param_name == 'squid_bias':
-                        # param_val = magnicon.get_phonon_squid_bias(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
-                    elif param_name == 'lock_point':
+                        param_val = self._mag_inst.get_squid_current_bias(controller_channel)
+                    elif param_name == 'lock_point_voltage':
                         # param_val = magnicon.get_phonon_lock_point(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
-                    elif param_name == 'feedback_gain':
-                        # param_val = magnicon.get_phonon_feedback_gain(controller_channel)
+                    elif param_name == 'preamp_gain':
+                        # param_val = magnicon.get_phonon_preamp_gain(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                     elif param_name == 'output_offset':
                         # param_val = magnicon.get_phonon_offset(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
                     elif param_name == 'output_gain':
-                        # param_val = magnicon.get_phonon_output_gain(controller_channel)
-                        print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                        param_val = 1
+                        # no extra output gain for magnicon
                     elif param_name == 'feedback_polarity':
                         # param_val = magnicon.get_phonon_feedback_polarity(controller_channel)
                         print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
@@ -742,9 +951,9 @@ class Control:
         
         
     def _set_sensor_val(self,param_name,value, 
-                        tes_channel=str(),
-                        detector_channel= str(),
-                        adc_id=str(),adc_channel=str()):
+                        tes_channel=None,
+                        detector_channel= None,
+                        adc_id=None,adc_channel=None):
         
         
         """
@@ -758,14 +967,13 @@ class Control:
             
 
         # get readout controller ID and Channel
-        controller_id_channel = connections.get_controller_info(self._connection_table,
-                                                                tes_channel=tes_channel,
-                                                                detector_channel= detector_channel,
-                                                                adc_id=adc_id,adc_channel=adc_channel)
-        
-        controller_id = controller_id_channel[0]
-        controller_channel= controller_id_channel[1]
-        
+        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
+                                                                                tes_channel=tes_channel,
+                                                                                detector_channel=detector_channel,
+                                                                                adc_id=adc_id, 
+                                                                                adc_channel=adc_channel)
+      
+              
         # ================
         # Set value
         # ================
@@ -787,7 +995,7 @@ class Control:
                     feb.set_phonon_qet_bias(subrack, slot,controller_channel,value)
                 elif param_name == 'squid_bias':
                     feb.set_phonon_squid_bias(subrack, slot,controller_channel,value)
-                elif param_name == 'lock_point':
+                elif param_name == 'lock_point_voltage':
                     feb.set_phonon_lock_point(subrack, slot,controller_channel,value)
                 elif param_name == 'feedback_gain':
                     feb.set_phonon_feedback_gain(subrack, slot,controller_channel,value)
@@ -806,9 +1014,45 @@ class Control:
                 elif param_name == 'signal_gen_tes_connected':
                     feb.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
-        elif self._squid_controller=='magnicon' and not self._dummy_mode:
-            # Magnicon
-            print('Magnicon')
+
+        elif self._squid_controller=='magnicon':
+            
+            if self._verbose:
+                print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
+                      + str(controller_channel) + ' (Magnicon)!')
+
+            if not self._dummy_mode:
+                if param_name == 'tes_bias':
+                    magnicon.set_tes_current_bias(controller_channel, value, mode=None)
+                elif param_name == 'squid_bias':
+                    self._mag_inst.set_squid_current_bias(controller_channel, value)
+                elif param_name == 'lock_point_voltage':
+                    # magnicon.set_phonon_lock_point(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_gain':
+                    # magnicon.set_phonon_feedback_gain(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'output_offset':
+                    # magnicon.set_phonon_offset(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'output_gain':
+                    # magnicon.set_phonon_output_gain(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_polarity':
+                    # magnicon.set_phonon_feedback_polarity(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'feedback_loop_open':
+                    # magnicon.set_phonon_feedback_loop(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'preamp_source':
+                    # magnicon.set_phonon_source_preamp(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'signal_gen_feedback_connected':
+                    # magnicon.connect_signal_generator_feedback(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
+                elif param_name == 'signal_gen_tes_connected':
+                    # magnicon.connect_signal_generator_tes(controller_channel, value)
+                    print('ERROR: This feature is not yet implemented for the Magnicon SQUID controller.')
             
         else:
             print('ERROR: Unknow SQUID controller "' + 
@@ -849,36 +1093,6 @@ class Control:
             
             
 
-    def _get_controller_id_channel(self,
-                                   tes_channel=str(),
-                                   detector_channel= str(),
-                                   adc_id=str(), adc_channel=str()):
-        
-        
-        controller_id_channel = list()
-        index_list = [slice(None),slice(None),slice(None),slice(None)]
-        if tes_channel:
-            index_list[0] = str(tes_channel)
-        if detector_channel:
-            index_list[1] = str(detector_channel)
-        if adc_id:
-            index_list[2] = str(adc_id)
-        if adc_channel:
-            index_list[3] = str(adc_channel)
-     
-            
-        index_tuple = tuple(index_list)
-        
-        try:
-            controller_id_channel = self._connection_table.loc[index_tuple,
-                                                              ('controller_id',
-                                                               'controller_channel')].values[0]
-        except:
-            pass
-
-        return controller_id_channel
-                
-                
 
     def set_signal_gen_amplitude(self, amplitude):
 
@@ -888,7 +1102,7 @@ class Control:
 
         """
         
-        print('Setting signal generator amplitdue to ' + str(amplitude) + 'mV')
+        print('INFO: Setting signal generator amplitdue to ' + str(amplitude) + 'mV')
 
 
     def set_signal_gen_frequency(self, frequency):
@@ -899,7 +1113,7 @@ class Control:
 
         """
         
-        print('Setting signal generator frequency to ' + str(frequency) + 'Hz')
+        print('INFO: Setting signal generator frequency to ' + str(frequency) + 'Hz')
 
 
     
@@ -914,7 +1128,7 @@ class Control:
             5. arbitrary pulse shape
         """
         
-        print('Setting signal generator shape to ' + str(shape)  + 'Hz')
+        print('INFO: Setting signal generator shape to ' + str(shape)  + 'Hz')
 
     
     def get_signal_gen_amplitude(self):
