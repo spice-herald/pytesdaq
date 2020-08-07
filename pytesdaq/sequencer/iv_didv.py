@@ -168,8 +168,8 @@ class IV_dIdV(Sequencer):
                     # set detector
                     for channel in self._selected_channel_list:
                     
-                        # disconnect signal generator, ("turn off?")
-                        self._instrument.connect_signal_gen_tes(False,tes_channel=channel) 
+                        # disconnect signal generator
+                        self._instrument.set_signal_gen_onoff('off',tes_channel=channel)
                         
                         # other parameters
                         if 'output_gain' in iv_config:
@@ -218,12 +218,17 @@ class IV_dIdV(Sequencer):
                     # set detector
                     for channel in self._selected_channel_list:
                     
-                        # signal generator, ("turn on?")
-                        self._instrument.set_signal_gen_amplitude(didv_config['signal_gen_amplitude'])
-                        self._instrument.set_signal_gen_frequency(didv_config['signal_gen_frequency'])
-                        self._instrument.set_signal_gen_shape(didv_config['signal_gen_shape'])
-                        self._instrument.connect_signal_gen_tes(True,tes_channel=channel) 
-                
+                        # signal generator
+                        self._instrument.set_signal_gen_params(tes_channel=channel,
+                                                               source='tes', 
+                                                               amplitude=didv_config['signal_gen_amplitude'], 
+                                                               frequency=didv_config['signal_gen_frequency'],
+                                                               shape='square')
+                        
+                        self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
+                        
+
+                        
                         # other parameters
                         if 'output_gain' in iv_config:
                             self._instrument.set_output_gain(iv_config['output_gain'],tes_channel=channel)
@@ -258,8 +263,9 @@ class IV_dIdV(Sequencer):
                                 print('ERROR taking data! Stopping sequencer')
                                 return False
                      
-                            # disconnect!
-                            self._instrument.connect_signal_gen_tes(False,tes_channel=channel) 
+                            # turn off signal genrator
+                            self._instrument.set_signal_gen_onoff('off',tes_channel=channel)
+                         
 
                     # take data (if all channels)
                     if not didv_config['loop_channels']:
@@ -346,16 +352,12 @@ class IV_dIdV(Sequencer):
                          
 
 
-                # disconnect signal generator
-                self._instrument.connect_signal_gen_tes(False,tes_channel=channel) 
+                #  turn off signal generator (avoid cross talk)
+                self._instrument.set_signal_gen_onoff('off',tes_channel=channel)
+                          
+                # Eventually close loop, relock, zero once, etc. 
+                
 
-                # set signal generator
-                self._instrument.set_signal_gen_amplitude(config_dict['signal_gen_amplitude'])
-                self._instrument.set_signal_gen_frequency(config_dict['signal_gen_frequency'])
-                self._instrument.set_signal_gen_shape(config_dict['signal_gen_shape'])
-                
-                # eventually close loop, relock, zero once, etc. 
-                
             
             # wait 5 seconds
             time.sleep(5)
@@ -371,8 +373,15 @@ class IV_dIdV(Sequencer):
                 
             for channel in self._selected_channel_list:
                 
-                # connect to TES line
-                self._instrument.connect_signal_gen_tes(True,tes_channel=channel) 
+                
+                # signal generator
+                self._instrument.set_signal_gen_params(tes_channel=channel,
+                                                       source='tes', 
+                                                       amplitude=config_dict['signal_gen_amplitude'], 
+                                                       frequency=config_dict['signal_gen_frequency'],
+                                                       shape='square')
+                
+                self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
                 time.sleep(2)
 
                
@@ -399,7 +408,8 @@ class IV_dIdV(Sequencer):
                         return False
                       
                     # disconnect
-                    self._instrument.connect_signal_gen_tes(False,tes_channel=channel) 
+                    self._instrument.set_signal_gen_onoff('off',tes_channel=channel)
+                    
 
 
             # take data (case all channels together)

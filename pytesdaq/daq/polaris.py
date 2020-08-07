@@ -381,7 +381,7 @@ class PolarisTask:
                                
             # connection
             for config in config_dict:
-                if 'connection' in config and 'connections'!= config:
+                if 'connection' in config and 'connection_table'!= config:
                     val = ' '.join(map(str,config_dict[config]))
                     cfg_list.append('\t' + config + ' : ' + val + ',\n')
 

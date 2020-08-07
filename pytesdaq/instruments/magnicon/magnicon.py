@@ -1,8 +1,5 @@
 import sys
-sys.path.insert(0, '/home/vetri/GithubRepos/pytesdaq/pytesdaq/instruments/magnicon/')
-sys.path.insert(0, '/home/vetri/GithubRepos/pytesdaq/pytesdaq/utils/')
-import remote
-# import pytesdaq.utils.remote as remote
+import pytesdaq.utils.remote as remote
 import numpy as np
 import time
 
