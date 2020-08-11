@@ -261,6 +261,32 @@ class Control:
         return True  
             
 
+
+    def set_preamp_polarity(self, val,
+                              tes_channel=None,
+                              detector_channel=None,
+                              adc_id=None, adc_channel=None):
+
+
+        """
+        Set preamp gain polarity
+        positive = +1
+        negative = -1
+        error = 0
+        """
+        try:
+            self._set_sensor_val('preamp_polarity',val,
+                                 tes_channel=tes_channel,
+                                 detector_channel=detector_channel,
+                                 adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR setting preamp polarity')
+            return False
+
+        return True
+
+
+
     def set_feedback_polarity(self, val, 
                               tes_channel=None,
                               detector_channel=None,
@@ -365,7 +391,7 @@ class Control:
                 gen2_onoff = on_off_flag.upper()
 
 
-            rb_onoff1, rb_onoff, rb_mon_onoff = set_generator_onoff(controller_channel, 
+            rb_onoff1, rb_onoff, rb_mon_onoff = self._mag_inst.set_generator_onoff(controller_channel, 
                                                                     gen1_onoff, gen2_onoff, mon_onoff)
                 
 
@@ -433,12 +459,75 @@ class Control:
                                                                              frequency, source, shape, 
                                                                              phase_shift, freq_div, half_pp_offset, 
                                                                              amplitude)
-                
 
 
 
+    def set_squid_dummy(self, val,
+                        tes_channel=None,
+                        detector_channel=None,
+                        adc_id=None, adc_channel=None):
+
+        """
+        Set status of SQUID electronics in the dummy state (Magnicon)
+        The val must be 'OFF' or 'ON' (case-insensitive)
+        Note: this is independent of whether pytesdaq is in the dummy state.
+        """
+
+        try:
+            self._set_sensor_val('squid_dummy', val.upper(),
+                                 tes_channel=tes_channel,
+                                 detector_channel=detector_channel,
+                                 adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR setting SQUID dummy status')
+            return False
+
+        return True
 
 
+
+    def set_flux_bias_disconnect(self, val,
+                                 tes_channel=None,
+                                 detector_channel=None,
+                                 adc_id=None, adc_channel=None):
+
+        """
+        Set status of SQUID electronics in the dummy state (Magnicon)
+        The val must be 'DISCONNECTED' or 'CONNECTED' (case-insensitive)
+        """
+
+        try:
+            self._set_sensor_val('flux_bias_disconnect', val.upper(),
+                                 tes_channel=tes_channel,
+                                 detector_channel=detector_channel,
+                                 adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR setting flux bias connection status')
+            return False
+
+        return True
+
+
+
+    def set_output_coupling(self, val,
+                            tes_channel=None,
+                            detector_channel=None,
+                            adc_id=None, adc_channel=None):
+
+        """
+        Set output coupling (Magnicon). Must be 'AC' or 'DC' (case-insensitive).
+        """
+
+        try:
+            self._set_sensor_val('output_coupling', val.upper(),
+                                 tes_channel=tes_channel,
+                                 detector_channel=detector_channel,
+                                 adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR setting output coupling')
+            return False
+
+        return True
 
 
 
@@ -682,7 +771,30 @@ class Control:
 
         
 
-        
+
+    def get_preamp_polarity(self,
+                            tes_channel=None,
+                            detector_channel=None,
+                            adc_id=None, adc_channel=None):
+
+        """
+        Get preamp gain polarity
+        """
+        preamp_polarity = nan
+        try:
+            preamp_polarity = self._get_sensor_val('preamp_polarity',
+                                                   tes_channel=tes_channel,
+                                                   detector_channel=detector_channel,
+                                                   adc_id=adc_id, adc_channel=adc_channel)
+
+        except:
+            print('ERROR getting preamp polarity')
+
+
+        return preamp_polarity
+
+
+
     def get_feedback_polarity(self, 
                               tes_channel=None,
                               detector_channel=None,
@@ -1032,8 +1144,69 @@ class Control:
         
 
 
+    def get_squid_dummy(self,tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
+        """
+        Get status of SQUID electronics in the dummy state (Magnicon)
+        Returns on, off, or fail.
+        Note: this is independent of whether pytesdaq is in the dummy state.
+        """
+
+        squid_dummy = ''
+
+        try:
+            squid_dummy = self._get_sensor_val('squid_dummy',
+                                               tes_channel=tes_channel,
+                                               detector_channel=detector_channel,
+                                               adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR getting SQUID dummy')
+
+        return squid_dummy.lower()
 
 
+
+    def get_flux_bias_disconnect(self,tes_channel=None,
+                                 detector_channel=None,
+                                 adc_id=None, adc_channel=None):
+        """
+        Get status of flux bias connection (Magnicon)
+        Returns 'CONNECTED', 'DISCONNECTED', or 'FAIL'.
+        """
+
+        flux_bias_disconnect = ''
+
+        try:
+            flux_bias_disconnect = self._get_sensor_val('flux_bias_disconnect',
+                                               tes_channel=tes_channel,
+                                               detector_channel=detector_channel,
+                                               adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR getting flux bias disconnect')
+
+        return flux_bias_disconnect.upper()
+
+
+
+    def get_output_coupling(self,tes_channel=None,
+                                 detector_channel=None,
+                                 adc_id=None, adc_channel=None):
+        """
+        Get output coupling. Returns 'AC', 'DC', or 'FAIL'.
+        """
+
+        coupling = ''
+
+        try:
+            coupling = self._get_sensor_val('output coupling',
+                                            tes_channel=tes_channel,
+                                            detector_channel=detector_channel,
+                                            adc_id=adc_id, adc_channel=adc_channel)
+        except:
+            print('ERROR getting output coupling')
+
+        return coupling.upper()
 
 
 
@@ -1284,6 +1457,9 @@ class Control:
                     elif param_name == 'preamp_bandwidth':
                         amp, bw = self._mag_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = bw
+
+                    elif param_name == 'preamp_polarity':
+                        param_val = self._mag_inst.get_amp_gain_sign(controller_channel)
                         
                     elif param_name == 'feedback_polarity':
                         param_val = self.mag_inst.get_squid_gain_sign(controller_channel)
@@ -1299,6 +1475,15 @@ class Control:
                      
                     elif param_name == 'feedback_resistance':
                         param_val = self.mag_inst.get_feedback_resistor(controller_channel)
+
+                    elif param_name == 'squid_dummy':
+                        param_val = self._mag_inst.get_dummy(controller_channel)
+
+                    elif param_name == 'flux_bias_disconnect':
+                        param_val = self._mag_inst.get_flux_bias_disconnect(controller_channel)
+
+                    elif param_name == 'output_coupling':
+                        param_val = self._mag_inst.get_output_coupling(controller_channel)
 
                     else:
                         pass
@@ -1419,19 +1604,15 @@ class Control:
                 elif param_name == 'feedback_gain':
                     readback_val = self._mag_inst.set_GBP(controller_channel, value)
                     
-                elif param_name == 'preamp_gain':
+                elif param_name == 'preamp_gain' or param_name == 'preamp_bandwidth':
                     if isinstance(value,tuple) and len(value)==2:
                         amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
 
-                elif param_name == 'preamp_bandwidth':
-                    if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
-                        readback_val = (amp,bw)
-                    else:
-                        print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
+                elif param_name == 'preamp_polarity':
+                    readback_val = self._mag_inst.set_amp_gain_sign(controller_channel, value)
 
                 elif param_name == 'feedback_polarity':
                     readback_val = self._mag_inst.set_squid_gain_sign(controller_channel, value)
@@ -1444,6 +1625,15 @@ class Control:
 
                 elif param_name == 'feedback_resistance':
                     readback_val = self._mag_inst.set_feedback_resistor(controller_channel, value)
+
+                elif param_name == 'squid_dummy':
+                    readback_val = self._mag_inst.set_dummy(controller_channel, value)
+
+                elif param_name == 'flux_bias_disconnect':
+                    readback_val = self._mag_inst.set_flux_bias_disconnect(controller_channel, value)
+
+                elif param_name == 'output_coupling':
+                    readback_val = self._mag_inst.set_output_coupling(controller_channel, value)
 
 
         else:
