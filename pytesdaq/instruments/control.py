@@ -1419,21 +1419,31 @@ class Control:
                 elif param_name == 'feedback_gain':
                     readback_val = self._mag_inst.set_GBP(controller_channel, value)
                     
-                elif param_name == 'feedback_polarity':
-                    readback_val = self.mag_inst.set_squid_gain_sign(controller_channel, value)
-                
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
+
+                elif param_name == 'preamp_bandwidth':
+                    if isinstance(value,tuple) and len(value)==2:
+                        amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
+                        readback_val = (amp,bw)
+                    else:
+                        print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
+
+                elif param_name == 'feedback_polarity':
+                    readback_val = self._mag_inst.set_squid_gain_sign(controller_channel, value)
 
                 elif param_name == 'feedback_mode':
                     mode = 'AMP'
                     if value=='close':
                         value='FLL'
-                    readback_val = self.mag_inst.set_amp_or_fll(controller_channel, value)
+                    readback_val = self._mag_inst.set_amp_or_fll(controller_channel, value)
+
+                elif param_name == 'feedback_resistance':
+                    readback_val = self._mag_inst.set_feedback_resistor(controller_channel, value)
 
 
         else:
