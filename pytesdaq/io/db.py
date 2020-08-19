@@ -5,7 +5,7 @@ import time
 
 
 class MySQLCore:
-    
+
     def __init__(self, dbname = 'tesdaq'):
 
         self._dbname = dbname
@@ -14,7 +14,7 @@ class MySQLCore:
         self._port = None
         self._password = None
         self._user = None
-        
+
 
 
     def connect_manual(self,host,port,user,password):
@@ -27,8 +27,8 @@ class MySQLCore:
 
         if self._cnx is None:
             try:
-                self._cnx = mysql.connector.connect(user=self._user, password=self._password, 
-                                                    host=self._host, port=self._port, 
+                self._cnx = mysql.connector.connect(user=self._user, password=self._password,
+                                                    host=self._host, port=self._port,
                                                     database=self._dbname)
             except mysql.connector.Error as err:
                 if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
@@ -39,40 +39,40 @@ class MySQLCore:
                     print(err)
             else:
                 print('Database successfully connected!')
-        return True    
-                    
-    
+        return True
+
+
     def disconnect(self):
         if self._cnx is None:
             print('Not connected to any database!')
             return False
         self._cnx.close()
         self._cnx = None
-        
-    
+
+
 
     """
     def create_fridge_database(self):
-        
+
         # sanity check
         if self._cnx is None:
             print('Not connected to any database!')
             return False
-        
+
         # create command
         TABLES = {}
-        create_stmt = 'CREATE TABLE test_db (Id INT PRIMARY KEY AUTO_INCREMENT, fridgeTime DATETIME, 
+        create_stmt = 'CREATE TABLE test_db (Id INT PRIMARY KEY AUTO_INCREMENT, fridgeTime DATETIME,
         daqTime BIGINT NOT NULL DEFAULT 0'
         for i in range(1, 16):
-            create_stmt += ', lakeshore372_res{} FLOAT NOT NULL DEFAULT 0, lakeshore372_temp{} FLOAT NOT 
+            create_stmt += ', lakeshore372_res{} FLOAT NOT NULL DEFAULT 0, lakeshore372_temp{} FLOAT NOT
             NULL DEFAULT 0, lakeshore372_temp{}_extrap FLOAT NOT NULL DEFAULT 0'.format(i, i, i)
         create_stmt += ');'
         TABLES['test_db'] = (create_stmt)
-      
+
         # execute
         cursor = self._cnx.cursor()
         for name, ddl in TABLES.items():
-            try:    
+            try:
                 print('Creating table {}: '.format(name), end = '')
                 #cursor.execute('DROP TABLE test_db;')
                 cursor.execute(ddl)
@@ -83,15 +83,15 @@ class MySQLCore:
                     print (err.msg)
             else:
                 print('Table successfully created!')
-        
-        cursor.close()  
+
+        cursor.close()
         return True
    """
 
-                                             
-    
+
+
     def insert(self, table_name, data_dict,add_datetime=False):
-    
+
         '''
         # sanity checks
         if self._cnx is None:
@@ -101,10 +101,10 @@ class MySQLCore:
 
         # get columns
         columns = list(data_dict.keys())
-      
+
         # create insert command
         insert_cmd = 'INSERT INTO {} ('.format(table_name)
-        
+
         if add_datetime:
             insert_cmd+='datetime,'
 
@@ -124,20 +124,20 @@ class MySQLCore:
                 insert_cmd+= '"{}",'.format(data_dict[key])
             else:
                 insert_cmd+= '{},'.format(data_dict[key])
-            
+
         insert_cmd =  insert_cmd[0:len(insert_cmd)-1]
         insert_cmd += ');'
-           
+
         #print(insert_cmd)
-        
+
         # insert database
         cursor = self._cnx.cursor()
-        try:    
+        try:
             cursor.execute(insert_cmd)
             self._cnx.commit()
         except mysql.connector.Error as err:
             print (err.msg)
-                       
+
         cursor.close()
 
         # done
@@ -147,7 +147,7 @@ class MySQLCore:
 
 
     def print(self, table_name):
-        
+
         # sanity checks
         if self._cnx is None:
             print('Not connected to any database!')
@@ -155,18 +155,52 @@ class MySQLCore:
 
         # select statement
         select_stmt = 'SELECT * from {};'.format(table_name)
-        
+
         # access database
         cursor = self._cnx.cursor()
-        try:    
+        try:
             cursor.execute(select_stmt)
             for x in cursor:
                 print(x)
         except mysql.connector.Error as err:
             print (err.msg)
-                       
+
         cursor.close()
-        
-        
-        
-    
+
+
+# Useful code to add hdf5 file to database
+def add_to_db(info): # info is hdf5 file that's been read by python into a dict
+
+    # gather data we want to insert
+    nameset = ['series_num', 'run_type', 'timestamp', 'comment'] # data that is present in hdf5 test file
+    dataset = {}
+    for name in nameset:
+        dataset[name] = info[name]
+    dataset['nb_events']=info['adc1']['nb_events'] # nb_events not in main
+                                                    # part of dictionary
+
+    # create server object (assumes the server includes a databse called 'tesdaq')
+    server = MySQLCore()
+
+    # connect to tesdaq database
+    # password changes depending on server, but port and user should stay the same
+
+    server.connect_manual(host="localhost", port=3306, user="root", password="password123")
+
+    # insert data into "test_data" table (insert whatever table name is needed)
+    server.insert("test_data", dataset)
+
+    # test_data SQL table initialized with the following data types:
+
+        # id → INT
+        # series_name → VARCHAR(40)
+        # series_num → BIGINT
+        # facility_num → INT
+        # fridge_run → INT
+        # run_type → INT
+        # run_mode → VARCHAR(40)
+        # timestamp → BIGINT
+        # nb_events → INT
+        # nb_dumps → INT
+        # comment → VARCHAR(512)
+        # user_comment → VARCHAR(512)
