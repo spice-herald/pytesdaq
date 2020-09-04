@@ -486,7 +486,7 @@ class Config:
         try:
             info['channel_list'] = [int(x) for x in self._get_setting('magnicon', 'channel_list').split(',')]
             info['default_active'] = int(self._get_setting('magnicon', 'default_active'))
-            info['reset_active'] = bool(self._get_setting('magnicon', 'reset_active'))
+            info['reset_active'] = int(self._get_setting('magnicon', 'reset_active'))
         except Exception as e:
             print('ERROR: Could not get complete controller info for Magnicon')
             print(str(e))
