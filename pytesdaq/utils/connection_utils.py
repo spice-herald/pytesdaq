@@ -162,7 +162,11 @@ def _get_info(connection_table, info,
         return None
         
     if info=='controller':
-        return output_info['controller_id'], output_info['controller_channel']
+        controller_channel = output_info['controller_channel']
+        controller_id = output_info['controller_id']
+        if controller_id=='magnicon':
+           controller_channel = int(controller_channel) 
+        return controller_id, controller_channel
     elif info=='adc':
         return output_info['adc_id'], output_info['adc_channel']
     else:
