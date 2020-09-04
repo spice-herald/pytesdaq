@@ -168,6 +168,12 @@ class Remote(object):
 
             # check server's host key -- this is important.
             key = transport.get_remote_server_key()
+            print('Known keys:')
+            print(keys.keys())
+            print('')
+            print('Our key:', keys['128.32.239.62'].keys())
+            print('Server key:', key.get_name())
+            print('')
             if self._hostname not in keys:
                 print("*** WARNING: Unknown host key!")
             elif key.get_name() not in keys[self._hostname]:
