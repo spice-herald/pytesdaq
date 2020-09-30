@@ -47,10 +47,10 @@ class Control:
             address = self._config.get_feb_address()
             if address:
                 if self._verbose:
-                    print('FEB address: ' + address)
+                    print('INFO in control.py: FEB address: ' + address)
                 self._feb_inst = feb.FEB(address)
             else:
-                print('ERROR: Unable to find GPIB address')
+                raise ValueError('Unable to find GPIB address. It will not work!')
 
     	# Magnicon
         if self._squid_controller == 'magnicon' and not self._dummy_mode:
@@ -505,14 +505,14 @@ class Control:
         Get TES bias 
         """
         bias = nan
-        try:
-            bias = self._get_sensor_val('tes_bias',
-                                        tes_channel=tes_channel,
-                                        detector_channel=detector_channel,
-                                        adc_id=adc_id, adc_channel=adc_channel)
+        #try:
+        bias = self._get_sensor_val('tes_bias',
+                                    tes_channel=tes_channel,
+                                    detector_channel=detector_channel,
+                                    adc_id=adc_id, adc_channel=adc_channel)
             
-        except:
-            print('ERROR getting TES bias')
+        #except:
+        #    print('ERROR getting TES bias')
             
         return bias
         
@@ -1177,27 +1177,24 @@ class Control:
         
         
 
-        if not self._dummy_mode and not self.squid_controller:
+        if not self._dummy_mode and not self._squid_controller:
             print('ERROR: No SQUID controller, check config')
             return nan
             
-      
         # get readout controller ID and Channel
         controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
                                                                                  tes_channel=tes_channel,
                                                                                  detector_channel=detector_channel,
                                                                                  adc_id=adc_id,
                                                                                  adc_channel=adc_channel)
-        
-
         param_val = nan
-        
         if not self._read_from_redis:
 
             if self._squid_controller=='feb':
                 # CDMS FEB device
                 
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
+              
                 subrack = int(feb_info[0])
                 slot = int(feb_info[1])
             
@@ -1329,7 +1326,7 @@ class Control:
         TBD
         """
 
-        if not self._dummy_mode and not self.squid_controller:
+        if not self._dummy_mode and not self._squid_controller:
             print('ERROR: No SQUID controller, check config')
             return nan
             
