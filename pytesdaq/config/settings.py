@@ -627,3 +627,23 @@ class Config:
     
         return [s.strip() for s in setting_str.split(',')]
 
+
+    
+    def get_signal_generator_address(self,signalgen_name):
+        """
+        get function generators
+        
+        Returns:
+            str - no type conversion happens here!
+        """
+
+        key = signalgen_name + '_address'
+        
+        address=str()
+        try:
+            address =  self._get_setting('signal_generators',key)
+        except:
+            pass
+    
+        return address
+

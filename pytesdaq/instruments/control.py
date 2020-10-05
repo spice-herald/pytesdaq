@@ -1,12 +1,12 @@
 """
-Main instrumentation class
-
+Main instrumentation control class
 """
 import time
 import numpy
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
 import pytesdaq.instruments.magnicon as magnicon
+import pytesdaq.instruments.funcgenerators as funcgenerators
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
@@ -18,18 +18,15 @@ class Control:
     Control TES related instruments
     """
     
-    def __init__(self,verbose=True, dummy_mode = True):
+    def __init__(self, verbose=True, dummy_mode=True):
         
         # for code development
         self._dummy_mode = dummy_mode
         self._verbose = verbose
 
-        # initialize
+        # config
         self._config = settings.Config()
-        self._squid_controller = self._config.get_squid_controller()
-        self._signal_generator = self._config.get_signal_generator()
-        self._temperature_controller = self._config.get_temperature_controller()
-
+        
         # redis
         self._enable_redis = self._config.enable_redis()
         self._read_from_redis = False
@@ -40,57 +37,32 @@ class Control:
         # readback
         self._enable_readback = self._config.enable_redis()
 
-        # instantiate / check instruments
-
-        # FEB
-        if self._squid_controller == 'feb' and not self._dummy_mode:
-            address = self._config.get_feb_address()
-            if address:
-                if self._verbose:
-                    print('INFO in control.py: FEB address: ' + address)
-                self._feb_inst = feb.FEB(address)
-            else:
-                raise ValueError('Unable to find GPIB address. It will not work!')
-
-    	# Magnicon
-        if self._squid_controller == 'magnicon' and not self._dummy_mode:
-            mag_control_info = self._config.get_magnicon_controller_info()
-            mag_conn_info = self._config.get_magnicon_connection_info()
-            self._mag_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
-                                               default_active=mag_control_info['default_active'],
-                                               reset_active=mag_control_info['reset_active'],
-                                               conn_info=mag_conn_info)
-            self._mag_inst.set_remote_inst()
-            self._mag_inst.connect()
-            self._mag_inst.chdir()
-            self._mag_inst.listen_for(None)
-            if mag_conn_info:
-                if self._verbose:
-                    print('SSH connection info for Magnicon:')
-                    print('Hostname:', mag_conn_info['hostname'])
-                    print('Username:', mag_conn_info['username'])
-                    print('Port:', str(mag_conn_info['port']))
-                    print('RSA key:', mag_conn_info['rsa_key'])
-                    print('Log file:', mag_conn_info['log_file'])
-                    print('Executable location:', mag_conn_info['exe_location'])
-            if mag_control_info:
-                if self._verbose:
-                    print('Controller info for Magnicon:')
-                    print('Channel list:', str(mag_control_info['channel_list']))
-                    print('Default active channel:', str(mag_control_info['default_active']))
-                    print('Reset active channel after every step:', str(mag_control_info['reset_active']))
-
-        # get connection map
+        # signal connection map
         self._connection_table= self._config.get_adc_connections()
+       
+        
+        # controllers
+        self._squid_controller_name = self._config.get_squid_controller()
+        self._signal_generator_name = self._config.get_signal_generator()
+        self._temperature_controller_name = self._config.get_temperature_controller()
 
+        self._feb_inst = None
+        self._magnicon_inst = None
+        self._signal_generator_inst = None
+        self._tempcontroller_inst = None
 
+        if not self._dummy_mode:
+            self._connect_instruments()
 
+           
+
+                        
     @property
     def verbose(self):
         return self._verbose
         
     @verbose.setter
-    def verbose(self,value):
+    def verbose(self, value):
         self._verbose=value
         
     @property
@@ -98,13 +70,15 @@ class Control:
         return self._read_from_redis
         
     @read_from_redis.setter
-    def read_from_redis(self,value):
+    def read_from_redis(self, value):
         if value and not self._enable_redis:
             print('WARNING: unable to read from Redis! Redis DB not enabled...)')
         else:
             self._read_from_redis=value
         
 
+
+            
 
     def set_tes_bias(self, bias, 
                      tes_channel=None,
@@ -227,7 +201,7 @@ class Control:
         Set output offset
         """
         try:
-            self._set_sensor_val('output_offset',offset,
+            self._set_sensor_val('output_offset', offset,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -250,7 +224,7 @@ class Control:
         Set output gain
         """
         try:
-            self._set_sensor_val('output_gain',gain,
+            self._set_sensor_val('output_gain', gain,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -273,7 +247,7 @@ class Control:
         non invert = False
         """
         try:
-            self._set_sensor_val('feedback_polarity',val,
+            self._set_sensor_val('feedback_polarity', val,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -318,7 +292,7 @@ class Control:
         
 
         try:
-            self._set_sensor_val('signal_source',source,
+            self._set_sensor_val('signal_source', source,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -328,6 +302,9 @@ class Control:
 
         return True   
 
+
+
+    
 
     def set_signal_gen_onoff(self, on_off_flag, signal_gen_num=1, tes_channel=None,
                              detector_channel=None, adc_id=None, adc_channel=None):
@@ -353,13 +330,12 @@ class Control:
                                                                                  adc_id=adc_id,
                                                                                  adc_channel=adc_channel)
         
-
-        if self._squid_controller=='magnicon':
-
+        if self._signal_generator_name == 'magnicon':
+            
             mon_onoff = 'OFF'
             gen1_onoff = 'OFF'
             gen2_onoff = 'OFF'
-            if signal_gen_num==1:
+            if signal_gen_num == 1:
                 gen1_onoff = on_off_flag.upper()
             else:
                 gen2_onoff = on_off_flag.upper()
@@ -367,24 +343,27 @@ class Control:
 
             rb_onoff1, rb_onoff, rb_mon_onoff = set_generator_onoff(controller_channel, 
                                                                     gen1_onoff, gen2_onoff, mon_onoff)
-                
 
-    
-        
+
+        else:
+            self._signal_generator_inst.set_generator_onoff(on_off_flag.lower(),
+                                                            source=signal_gen_num)
+            
+            
 
     
     def set_signal_gen_params(self, tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None,
                               signal_gen_num=1, 
-                              source=None, amplitude=None, frequency=100,
+                              source=None, amplitude=None, frequency=None,
                               shape='square', phase_shift=0, freq_div=0, half_pp_offset='OFF'):
 
         """
         Set signal generator parameters
 
         source:  'tes' or 'feedback' (required)
-        amplitude: peak-to-peak amplitude, magnicon [uA], Keysight [mV]
+        amplitude: peak-to-peak amplitude, magnicon [uA], Keysight [mVpp]
         frequency: Float [Hz] (Default = 100 Hz)
         shape: 'triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise'
         """
@@ -393,11 +372,11 @@ class Control:
 
 
         # check parameters
-        if source is None or amplitude is None:
+        if source is None or amplitude is None or frequency is None:
             print('ERROR: Required parameters = "source" and "amplitude"')
             return
 
-        if source!='tes' and source!='feedback':
+        if source != 'tes' and source != 'feedback':
             print('ERROR: Source can be either "tes" or "feedback"')
             
         # get readout controller ID and Channel
@@ -422,22 +401,63 @@ class Control:
         readback_freq = nan
 
         # magnicon
-        if self._squid_controller=='magnicon':
+        if self._signal_generator_name == 'magnicon': 
             
             # convert some parameters
             source_magnicon = 'I'
-            if source!='feedback':
+            if source != 'feedback':
                 source_magnicon = 'Ib'
 
-            readback_amp, readback_freq = self.mag_inst.set_generator_params(controller_channel,signal_gen_num, 
-                                                                             frequency, source, shape, 
-                                                                             phase_shift, freq_div, half_pp_offset, 
-                                                                             amplitude)
+            readback_amp, readback_freq = self._magnicon_inst.set_generator_params(controller_channel, signal_gen_num, 
+                                                                                   frequency, source, shape, 
+                                                                                   phase_shift, freq_div, half_pp_offset, 
+                                                                                   amplitude)
+            
+
+        # External function generator
+        else:
+
+            # shape
+            if shape == 'sawtoothpos' or shape == 'sawtoothneg':
+                shape = 'ramp'
                 
+            self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
+            
+            # amplitude
+            self._signal_generator_inst.set_amplitude(amplitude, unit='mVpp', source=signal_gen_num)
+
+            # frequency
+            self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
 
 
+            # source
+            if self._squid_controller_name == 'feb':
 
-
+                connect_to_tes = False
+                connect_to_feedback = False
+                
+                if source == 'tes':
+                    connect_to_tes = True
+                if source == 'feedback':
+                    connect_to_feedback = True
+                    
+                self.connect_signal_gen_to_tes(connect_to_tes,
+                                               tes_channel=tes_channel,
+                                               detector_channel=detector_channel,
+                                               adc_id=adc_id,
+                                               adc_channel=adc_channel)
+                
+                self.connect_signal_gen_to_feedback(connect_to_feedback,
+                                                    tes_channel=tes_channel,
+                                                    detector_channel=detector_channel,
+                                                    adc_id=adc_id,
+                                                    adc_channel=adc_channel)
+                
+                            
+            
+            # phase shift, half_pp_offset, not implemented
+                        
+            
 
 
 
@@ -480,7 +500,7 @@ class Control:
         
 
         try:
-            self._set_sensor_val('signal_gen_tes_connection',bool(do_connect),
+            self._set_sensor_val('signal_gen_tes_connection', bool(do_connect),
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -721,9 +741,9 @@ class Control:
         mode = nan
         try:
             mode = self._get_sensor_val('feedback_mode',
-                                           tes_channel=tes_channel,
-                                           detector_channel=detector_channel,
-                                           adc_id=adc_id, adc_channel=adc_channel)
+                                        tes_channel=tes_channel,
+                                        detector_channel=detector_channel,
+                                        adc_id=adc_id, adc_channel=adc_channel)
             
         except:
             print('ERROR getting  feedback polarity')
@@ -804,15 +824,17 @@ class Control:
         
 
         val = nan
-        if self._squid_controller == 'magnicon':
-            gen1_onoff, gen2_onoff, mon_onoff = self._mag_inst.get_generator_onoff(controller_channel)
+        if self._signal_generator_name == 'magnicon':
+            gen1_onoff, gen2_onoff, mon_onoff = self._magnicon_inst.get_generator_onoff(controller_channel)
             if signal_gen_num == 1:
                 val = gen1_onoff.lower()
             else:
                 val = gen2_onoff.lower()
 
-
+        else:
+            val = self._signal_generator_inst.get_generator_onoff(source=signal_gen_num)
             
+                        
 
         return val
 
@@ -831,9 +853,9 @@ class Control:
                                         adc_id=adc_id, adc_channel=adc_channel)
 
         val_bool = None
-        if val=='on':
+        if val == 'on':
             val_bool = True
-        elif  val=='off':
+        elif  val == 'off':
             val_bool = False
         else:
             val_bool = val
@@ -866,12 +888,12 @@ class Control:
         
         # initialize dictionay
         output_dict = dict()
-        output_dict['source']=nan
-        output_dict['amplitude']= nan
-        output_dict['frequency']= nan
-        output_dict['shape']= nan
-        output_dict['phase_shift']= nan
-        output_dict['freq_div']= nan
+        output_dict['source'] = nan
+        output_dict['amplitude'] = nan
+        output_dict['frequency'] = nan
+        output_dict['shape'] = nan
+        output_dict['phase_shift'] = nan
+        output_dict['freq_div'] = nan
         output_dict['half_pp_offset'] = nan
        
 
@@ -883,14 +905,13 @@ class Control:
 
 
         # magnicon
-        if self._squid_controller=='magnicon':
+        if self._signal_generator_name == 'magnicon' and self._squid_controller_name == 'magnicon':
 
             # convert some parameters
             source_magnicon = 'I'
            
-
-            source,shape,freq,freq_div,shift,amp,offset = self.mag_inst.get_generator_params(controller_channel,
-                                                                                             signal_gen_num)
+            source,shape,freq,freq_div,shift,amp,offset = self._magnicon_inst.get_generator_params(controller_channel,
+                                                                                                   signal_gen_num)
 
             # fill dictionary
             if source=='I':
@@ -900,13 +921,46 @@ class Control:
             else:
                 output_dict['source'] = source
 
-            output_dict['amplitude']= amp
-            output_dict['frequency']= freq
-            output_dict['shape']= shape
-            output_dict['phase_shift']= shift
-            output_dict['freq_div']= freq_div
+            output_dict['amplitude'] = amp
+            output_dict['frequency'] = freq
+            output_dict['shape'] = shape
+            output_dict['phase_shift'] = shift
+            output_dict['freq_div'] = freq_div
             output_dict['half_pp_offset'] = offset
-                         
+
+
+
+        # external signal generator
+        else:
+
+            # signal generator parameter
+            output_dict['amplitude'] = self._signal_generator_inst.get_amplitude(source=signal_gen_num)
+            output_dict['frequency'] = self._signal_generator_inst.get_frequency(source=signal_gen_num)
+            output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
+
+            # source
+            if self._squid_controller_name == 'feb':
+                
+                is_connected_to_tes = self.is_signal_gen_connected_to_tes(tes_channel=tes_channel,
+                                                                          detector_channel=detector_channel,
+                                                                          adc_id=adc_id, adc_channel=adc_channel)
+
+
+                is_connected_to_feedback = self.is_signal_gen_connected_to_feedback(tes_channel=tes_channel,
+                                                                                    detector_channel=detector_channel,
+                                                                                    adc_id=adc_id, adc_channel=adc_channel)
+                
+
+                if is_connected_to_tes and is_connected_to_feedback:
+                    print('WARNING: Signal generator connected to both TES AND Feedback!')
+                    
+                if is_connected_to_tes:
+                    output_dict['source'] = 'tes'
+
+                if is_connected_to_feedback:
+                    output_dict['source'] = 'feedback'
+                    
+                
         return output_dict
 
 
@@ -937,7 +991,7 @@ class Control:
 
 
 
-    def get_feedback_resistance(self,tes_channel=None,
+    def get_feedback_resistance(self, tes_channel=None,
                                 detector_channel=None,
                                 adc_id=None, adc_channel=None):
         """
@@ -948,15 +1002,15 @@ class Control:
         
         try:
             feedback_resistance = self._get_sensor_val('feedback_resistance',
-                                                     tes_channel=tes_channel,
-                                                     detector_channel=detector_channel,
-                                                     adc_id=adc_id, adc_channel=adc_channel)
+                                                       tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
         except:
             print('ERROR getting feedback resistance')
 
 
         # if needed get it from config file
-        if feedback_resistance==nan:
+        if feedback_resistance == nan:
             feedback_resistance = self._config.get_feedback_resistance()
 
 
@@ -983,10 +1037,10 @@ class Control:
         
         # feedback resistance
         feedback_resistance = self.get_feedback_resistance(tes_channel=tes_channel,
-                                                       detector_channel=detector_channel,
-                                                       adc_id=adc_id, adc_channel=adc_channel)
+                                                           detector_channel=detector_channel,
+                                                           adc_id=adc_id, adc_channel=adc_channel)
       
-        if feedback_resistance==nan or feedback_resistance is None:
+        if feedback_resistance == nan or feedback_resistance is None:
             print('ERROR: unable to find feedback resistance. It needs to be added in setup.ini file!')
             return None
         
@@ -1122,7 +1176,7 @@ class Control:
                           + '" (' + str(channel_type) + ' = ' +  str(chan) + ')')
                     
 
-                if val==nan or val is None:
+                if val == nan or val is None:
                     val = -999999
                 output_dict[param].append(val)  
             
@@ -1177,7 +1231,7 @@ class Control:
         
         
 
-        if not self._dummy_mode and not self._squid_controller:
+        if not self._dummy_mode and self._squid_controller_name is None:
             print('ERROR: No SQUID controller, check config')
             return nan
             
@@ -1190,7 +1244,7 @@ class Control:
         param_val = nan
         if not self._read_from_redis:
 
-            if self._squid_controller=='feb':
+            if self._squid_controller_name == 'feb':
                 # CDMS FEB device
                 
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1253,7 +1307,7 @@ class Control:
                 else:
                     param_val= 1
 
-            elif self._squid_controller=='magnicon':
+            elif self._squid_controller_name == 'magnicon':
 
                 if self._verbose:
                     print('INFO: Getting "' + param_name + ' for channel ' 
@@ -1263,30 +1317,30 @@ class Control:
                 if not self._dummy_mode:
                     
                     if param_name == 'tes_bias':
-                        param_val = self._mag_inst.get_tes_current_bias(controller_channel)
+                        param_val = self._magnicon_inst.get_tes_current_bias(controller_channel)
                     
                     elif param_name == 'squid_bias':
-                        param_val = self._mag_inst.get_squid_bias(controller_channel,'I')
+                        param_val = self._magnicon_inst.get_squid_bias(controller_channel,'I')
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._mag_inst.get_squid_bias(controller_channel,'V')
+                        param_val = self._magnicon_inst.get_squid_bias(controller_channel,'V')
 
                     elif param_name == 'feedback_gain':
-                        param_val = self._mag_inst.get_GBP(controller_channel)
+                        param_val = self._magnicon_inst.get_GBP(controller_channel)
                
                     elif param_name == 'preamp_gain':
-                        amp, bw = self._mag_inst.get_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._magnicon_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = amp
 
                     elif param_name == 'preamp_bandwidth':
-                        amp, bw = self._mag_inst.get_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._magnicon_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = bw
                         
                     elif param_name == 'feedback_polarity':
-                        param_val = self.mag_inst.get_squid_gain_sign(controller_channel)
+                        param_val = self._magnicon_inst.get_squid_gain_sign(controller_channel)
 
                     elif param_name == 'feedback_mode':
-                        val = self.mag_inst.get_amp_or_fll(controller_channel)
+                        val = self._magnicon_inst.get_amp_or_fll(controller_channel)
                         if val=='AMP':
                             param_val = 'open'
                         elif val=='FLL':
@@ -1295,7 +1349,7 @@ class Control:
                             param_val = val
                      
                     elif param_name == 'feedback_resistance':
-                        param_val = self.mag_inst.get_feedback_resistor(controller_channel)
+                        param_val = self._magnicon_inst.get_feedback_resistor(controller_channel)
 
                     else:
                         pass
@@ -1304,7 +1358,7 @@ class Control:
 
             else:
                 print('ERROR: Unknown SQUID controller "' + 
-                      self._squid_controller + '"!')
+                      self._squid_controller_name + '"!')
 
         else:
             print('ERROR: Reading from redis N/A')
@@ -1326,7 +1380,7 @@ class Control:
         TBD
         """
 
-        if not self._dummy_mode and not self._squid_controller:
+        if not self._dummy_mode and self._squid_controller_name is None:
             print('ERROR: No SQUID controller, check config')
             return nan
             
@@ -1334,11 +1388,11 @@ class Control:
 
         # get readout controller ID and Channel
         controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                tes_channel=tes_channel,
-                                                                                detector_channel=detector_channel,
-                                                                                adc_id=adc_id, 
-                                                                                adc_channel=adc_channel)
-      
+                                                                                 tes_channel=tes_channel,
+                                                                                 detector_channel=detector_channel,
+                                                                                 adc_id=adc_id, 
+                                                                                 adc_channel=adc_channel)
+        
               
         # ================
         # Set value
@@ -1346,7 +1400,7 @@ class Control:
         
         readback_val = None
 
-        if self._squid_controller=='feb':
+        if self._squid_controller_name == 'feb':
             # CDMS FEB device
             
             feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1396,7 +1450,7 @@ class Control:
                     self._feb_inst.connect_signal_generator_tes(subrack, slot,controller_channel,value)
                            
 
-        elif self._squid_controller=='magnicon':
+        elif self._squid_controller_name == 'magnicon':
             
             if self._verbose:
                 print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
@@ -1405,23 +1459,23 @@ class Control:
             if not self._dummy_mode:
                 
                 if param_name == 'tes_bias':
-                    readback_val = self._mag_inst.set_tes_current_bias(controller_channel, value, mode=None)
+                    readback_val = self._magnicon_inst.set_tes_current_bias(controller_channel, value, mode=None)
                 
                 elif param_name == 'squid_bias':
-                    readback_val = self._mag_inst.set_squid_bias(controller_channel, 'I',value)
+                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'I',value)
                 
                 elif param_name == 'lock_point_voltage':
-                    readback_val = self._mag_inst.set_squid_bias(controller_channel, 'V',value)
+                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'V',value)
                 
                 elif param_name == 'feedback_gain':
-                    readback_val = self._mag_inst.set_GBP(controller_channel, value)
+                    readback_val = self._magnicon_inst.set_GBP(controller_channel, value)
                     
                 elif param_name == 'feedback_polarity':
-                    readback_val = self.mag_inst.set_squid_gain_sign(controller_channel, value)
+                    readback_val = self._magnicon_inst.set_squid_gain_sign(controller_channel, value)
                 
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._mag_inst.set_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel)
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
@@ -1430,12 +1484,12 @@ class Control:
                     mode = 'AMP'
                     if value=='close':
                         value='FLL'
-                    readback_val = self.mag_inst.set_amp_or_fll(controller_channel, value)
+                    readback_val = self._magnicon_inst.set_amp_or_fll(controller_channel, value)
 
 
         else:
             print('ERROR: Unknow SQUID controller "' + 
-                  self._squid_controller + '"!')
+                  self._squid_controller_name + '"!')
         
     
         # ================
@@ -1446,7 +1500,7 @@ class Control:
         if  self._enable_readback and not self._dummy_mode:
 
             # FEB
-            if self._squid_controller=='feb':
+            if self._squid_controller_name == 'feb':
                 readback_val= self._get_sensor_val(param_name,
                                                    tes_channel=tes_channel,
                                                    detector_channel=detector_channel,
@@ -1476,52 +1530,6 @@ class Control:
                 print('ERROR adding value in redis!')
             
             
-
-
-
-
-
-
-    '''
-    def get_signal_gen_amplitude(self):
-
-        """
-        Signal Generator Amplitude [mVpp]
-        (assume only 1 signal generator available?)
-
-        """
-        
-        return 20.0
-
-
-
-    def get_signal_gen_frequency(self):
-
-        """
-        Signal generator frequency [Hz]
-        (assume only 1 signal generator available?)
-
-        """
-
-        return 100.0
-
-    
-    def get_signal_gen_shape(self):
-
-        """
-        Signal generator shape
-        (assume only 1 signal generator available?)
-            1. square wave
-            2. sine wave
-            3. triangle wave
-            4. DC constant
-            5. arbitrary pulse shape
-        """
-        
-        return 1
-
-
-    '''
 
 
 
@@ -1575,3 +1583,65 @@ class Control:
         """
         return 99999
          
+
+
+
+
+    def _connect_instruments(self):
+        """
+        Connect instruments
+        """
+                    
+        # ----------
+        # CDMS FEB
+        # ----------
+        if self._squid_controller_name == 'feb':
+            address = self._config.get_feb_address()
+            if address:
+                if self._verbose:
+                    print('INFO: Instantiating FEB using address: ' + address)
+                self._feb_inst = feb.FEB(address)
+            else:
+                raise ValueError('Unable to find GPIB address. It will not work!')
+
+        # ----------
+        # Magnicon
+        # ----------
+        if (self._squid_controller_name == 'magnicon' or self._signal_generator_name == 'magnicon'):
+            mag_control_info = self._config.get_magnicon_controller_info()
+            mag_conn_info = self._config.get_magnicon_connection_info()
+            self._magnicon_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
+                                                    default_active=mag_control_info['default_active'],
+                                                    reset_active=mag_control_info['reset_active'],
+                                                    conn_info=mag_conn_info)
+            self._magnicon_inst.set_remote_inst()
+            self._magnicon_inst.connect()
+            self._magnicon_inst.chdir()
+            self._magnicon_inst.listen_for(None)
+
+            # verbose
+            if self._verbose:
+                if mag_conn_info:
+                    print('SSH connection info for Magnicon:')
+                    print('Hostname:', mag_conn_info['hostname'])
+                    print('Username:', mag_conn_info['username'])
+                    print('Port:', str(mag_conn_info['port']))
+                    print('RSA key:', mag_conn_info['rsa_key'])
+                    print('Log file:', mag_conn_info['log_file'])
+                    print('Executable location:', mag_conn_info['exe_location'])
+                if mag_control_info:
+                    print('Controller info for Magnicon:')
+                    print('Channel list:', str(mag_control_info['channel_list']))
+                    print('Default active channel:', str(mag_control_info['default_active']))
+                    print('Reset active channel after every step:', str(mag_control_info['reset_active']))
+   
+
+                    
+        # ----------
+        # Keysight 
+        # ----------
+        if self._signal_generator_name == 'keysight':
+            address = self._config.get_signal_generator_address('keysight')
+            self._signal_generator_inst = funcgenerators.KeysightFuncGenerator(address)
+            
+            

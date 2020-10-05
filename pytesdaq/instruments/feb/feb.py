@@ -1,8 +1,7 @@
 import math
 import time
-import pyvisa as visa
 from enum import Enum
-
+from pytesdaq.instruments.visa_instruments import VisaInstrument
 
 _HEADER = "c4d"
 _FOOTER = "00zx"
@@ -25,16 +24,14 @@ class FEBChannels(Enum):
 
 
 
-class FEB(object):
+class FEB(VisaInstrument):
     """
     FEB control
     """
 
-    def __init__(self,gpib_address):
-    
-        # open instrument
-        rm=visa.ResourceManager()
-        self.inst=rm.open_resource(gpib_address)
+    def __init__(self,gpib_address,verbose=True):
+        super().__init__(gpib_address,verbose=verbose)
+        
         
 
 
@@ -48,7 +45,7 @@ class FEB(object):
 
 
 
-    def _set_feb(self,subrack, slot, setting, channel, value, millisec_delay = 0.160):
+    def _set_param(self,subrack, slot, setting, channel, value, millisec_delay = 0.160):
         """
         Set FEB parameter
         """
@@ -74,10 +71,10 @@ class FEB(object):
             data = int(round(4095.0 * (5.0 - value) / 10.0))
         
         time.sleep(millisec_delay)
-        self._write(subrack, address, data)
+        self._write_feb(subrack, address, data)
         
 
-    def _get_feb(self,subrack, slot, setting, channel, millisec_delay = 0.160):
+    def _get_param(self,subrack, slot, setting, channel, millisec_delay = 0.160):
         """
         Get FEB parameter
         """
@@ -92,7 +89,7 @@ class FEB(object):
         address = (slot << 8) + (setting << 4) + channel
         time.sleep(millisec_delay)
 
-        bias_val_hex = self._read(subrack, address)
+        bias_val_hex = self._read_feb(subrack, address)
         decimal_result = int(bias_val_hex, 16) & 4095
 
         if setting == FEBSettings.SENSORBIAS.value:
@@ -109,7 +106,7 @@ class FEB(object):
         return output_val
     
 
-    def _get_feb_driver_CSR(subrack, slot):
+    def _get_param_driver_CSR(subrack, slot):
         """
         Get FEB driver CSR
         """
@@ -119,7 +116,7 @@ class FEB(object):
         
         # read
         address = (slot << 8) + (14 << 4) + 2
-        driver_csr = self._read(subrack, address)
+        driver_csr = self._read_feb(subrack, address)
 
         # build output
         decimal_result = int(driver_csr, 16)
@@ -131,7 +128,7 @@ class FEB(object):
 
 
     
-    def _get_feb_CSR(self,subrack, slot, millisec_delay = 0.16):
+    def _get_param_CSR(self,subrack, slot, millisec_delay = 0.16):
         """
         Get FEB driver CSR
         """
@@ -140,7 +137,7 @@ class FEB(object):
 
         #read 
         address = (slot << 8) + (14 << 4) + 1
-        driver_csr = self._read(subrack, address)
+        driver_csr = self._read_feb(subrack, address)
 
         # build output
         output_CSR = [True] * 16
@@ -158,7 +155,7 @@ class FEB(object):
 
         #read
         address = (slot << 8) + (14 << 4)
-        sense_bias_csr = self._read(subrack, address)
+        sense_bias_csr = self._read_feb(subrack, address)
         
 
         # build output
@@ -172,31 +169,31 @@ class FEB(object):
 
     ### this value should be from -2000 to 2000
     def set_phonon_qet_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
-        self._set_feb(subrack, slot, FEBSettings.SENSORBIAS.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SENSORBIAS.value, channel, value, millisec_delay)
                 
     ### this value should be from -200 to 200 microamps
     def set_phonon_squid_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
-        self._set_feb(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, value, millisec_delay)
                 
     ### this value should be from -8 to 8 (millivolt)
     def set_phonon_lock_point(self,subrack, slot, channel, value, millisec_delay = 0.160):
-        self._set_feb(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, value, millisec_delay)
 
     ### this value should be from 20 to 100
     def set_phonon_preamp_gain(self,subrack, slot, channel, value, millisec_delay = 0.160):
-        self._set_feb(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, value, millisec_delay)
 
     ### this is just SquidDriver in the Java code
     ### this value shousld be from -5V to 5V
     def set_phonon_offset(self,subrack, slot, channel, value, millisec_delay = 0.160):
-        self._set_feb(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, value, millisec_delay)
 
 
     def set_phonon_output_gain(self,subrack, slot, channel, gain):
         if gain >= -50.0 and gain <= 50.0:
             address = (slot << 8) + (14 << 4) + 2
             channel -= 10
-            old_driver_CSR = self._get_feb_driver_CSR(subrack, slot)
+            old_driver_CSR = self._get_param_driver_CSR(subrack, slot)
             data = 0
             
             if gain == 1.43:
@@ -236,7 +233,7 @@ class FEB(object):
                 if i != channel * 4 and i != channel * 4 + 1 and i != channel * 4 + 2 and i != channel * 4 + 3:
                     data += int(old_driver_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
 
 	
         else:
@@ -247,7 +244,7 @@ class FEB(object):
         if channel >= FEBChannels.A.value and channel <= FEBChannels.D.value:
             address = (slot << 8) + (14 << 4) + 1
             data = 0
-            squid_CSR = self._get_feb_CSR(subrack, slot)
+            squid_CSR = self._get_param_CSR(subrack, slot)
             if channel == FEBChannels.A.value:
                 data += int(not closed)
                 for i in range (1, len(squid_CSR)):
@@ -268,7 +265,7 @@ class FEB(object):
                     if i != 3:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else:
             raise Exception("FEB: Invalid channel value specified for setSquidFeedbackCO(): " + str(channel))
 
@@ -277,7 +274,7 @@ class FEB(object):
         if (channel >= FEBChannels.A.value and channel <= FEBChannels.D.value):
             address = (slot << 8) + (14 << 4) + 1
             data = 0
-            squid_CSR = self._get_feb_CSR(subrack, slot)
+            squid_CSR = self._get_param_CSR(subrack, slot)
             if channel == FEBChannels.A.value:
                 data += int(not inverted) << 4
                 for i in range (0, len(squid_CSR)):
@@ -299,7 +296,7 @@ class FEB(object):
                     if i != 7:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setSquidFeedbackPolarity(): " + str(channel))
 
@@ -309,7 +306,7 @@ class FEB(object):
         if (channel >= FEBChannels.A.value and channel <= FEBChannels.D.value):
             address = (slot << 8) + (14 << 4) + 1
             data = 0
-            squid_CSR = self._get_feb_CSR(subrack, slot)
+            squid_CSR = self._get_param_CSR(subrack, slot)
             if channel == FEBChannels.A.value:
                 data += int(not enabled) << 12
                 for i in range (0, len(squid_CSR)):
@@ -331,7 +328,7 @@ class FEB(object):
                     if i != 15:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setSquidFeedbackPreamp(): " + str(channel))
 
@@ -339,7 +336,7 @@ class FEB(object):
         if (channel >= FEBChannels.A.value and channel <= FEBChannels.D.value):
             address = (slot << 8) + (14 << 4) + 1
             data = 0
-            squid_CSR = self._get_feb_CSR(subrack, slot)
+            squid_CSR = self._get_param_CSR(subrack, slot)
             if channel == FEBChannels.A.value:
                 data += int(enabled) << 8
                 for i in range (0, len(squid_CSR)):
@@ -361,7 +358,7 @@ class FEB(object):
                     if i != 11:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setSquidExternalSignal(): " + str(channel))
 
@@ -391,32 +388,32 @@ class FEB(object):
                     if i != 3:
                         data += int(sense_bias_CSR[i]) << i
             time.sleep(0.16)
-            self._write(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setExternalEnable(): " + str(channel))
 
 
 
     def get_phonon_qet_bias(self,subrack, slot, channel, millisec_delay = 0.160):
-        return self._get_feb(subrack, slot, FEBSettings.SENSORBIAS.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SENSORBIAS.value, channel, millisec_delay)
         
     def get_phonon_squid_bias(self,subrack, slot, channel, millisec_delay = 0.160):
-        return self._get_feb(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, millisec_delay)
         
     def get_phonon_lock_point(self,subrack, slot, channel, millisec_delay = 0.160):
-        return self._get_feb(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, millisec_delay)
             
     def get_phonon_preamp_gain(self,subrack, slot, channel, millisec_delay = 0.160):
-        return self._get_feb(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, millisec_delay)
 
     #this is just SquidDriver in the Java code
     def get_phonon_offset(self,subrack, slot, channel, millisec_delay = 0.160):
-        return self._get_feb(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, millisec_delay)
         
     def get_phonon_output_gain(self,subrack, slot, channel):
         address = (slot << 8) + (14 << 4) + 2
         channel -= 10
-        old_driver_CSR = self._get_feb_driver_CSR(subrack, slot)
+        old_driver_CSR = self._get_param_driver_CSR(subrack, slot)
         data = 0
         for i in range(channel * 4, channel * 4 + 4):
             if old_driver_CSR[i]:
@@ -457,7 +454,7 @@ class FEB(object):
             raise Exception("FEB: Unable to return a valid phonon channel's gain. Readval: " + str(data))		
 
     def is_phonon_feedback_open(self,subrack, slot, channel):
-        squid_CSR = self._get_feb_CSR(subrack, slot)
+        squid_CSR = self._get_param_CSR(subrack, slot)
         if channel == FEBChannels.A.value:
             return not squid_CSR[0]
         elif channel == FEBChannels.B.value:
@@ -470,7 +467,7 @@ class FEB(object):
             raise Exception("FEB: Invalid channel value specified for getSquidFeedbackCO() " + str(channel))
 
     def get_phonon_feedback_polarity(self,subrack, slot, channel):
-        squid_CSR = self._get_feb_CSR(subrack, slot)
+        squid_CSR = self._get_param_CSR(subrack, slot)
         if channel == FEBChannels.A.value:
             return not squid_CSR[4]
         elif channel == FEBChannels.B.value:
@@ -483,7 +480,7 @@ class FEB(object):
             raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPolarity() " + str(channel))
 	
     def is_phonon_source_preamp(self,subrack, slot, channel):
-        squid_CSR = self._get_feb_CSR(subrack, slot)
+        squid_CSR = self._get_param_CSR(subrack, slot)
         if channel == FEBChannels.A.value:
             return not squid_CSR[12]
         elif channel == FEBChannels.B.value:
@@ -496,7 +493,7 @@ class FEB(object):
             raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPreamp() " + str(channel))
                 
     def is_signal_generator_feedback_connected(self,subrack, slot, channel):
-        squid_CSR = self._get_feb_CSR(subrack, slot)
+        squid_CSR = self._get_param_CSR(subrack, slot)
         if channel == FEBChannels.A.value:
             return squid_CSR[8]
         elif channel == FEBChannels.B.value:
@@ -524,19 +521,19 @@ class FEB(object):
 
 
 
-    def _write(self,subrack, address, data):
+    def _write_feb(self,subrack, address, data):
         subrack_with_address_bit = subrack | 8
         address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
         data_str = _HEADER + format(data, "x") + "0" + format(subrack, "x") + _FOOTER
-        self.inst.write(address_str)
-        self.inst.write(data_str)
+        self._write(address_str)
+        self._write(data_str)
         time.sleep(0.16)
 	
 
-    def _read(self,subrack, address):
+    def _read_feb(self,subrack, address):
         subrack_with_address_bit = subrack | 8
         address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
-        self.inst.write(address_str)
-        self.inst.write(_READ_COMMAND)
-        data = self.inst.read()
+        self._write(address_str)
+        self._write(_READ_COMMAND)
+        data = self._read()
         return data[:4]
