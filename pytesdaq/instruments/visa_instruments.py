@@ -42,6 +42,11 @@ class VisaInstrument:
         self._write("*CLR")
         
 
+    def close(self):
+        self._inst.close()
+        if self._verbose:
+            print('INFO: Session closed!')
+        
     def _write(self, message):
         if self._verbose:
             print('INFO: Write ' + message)

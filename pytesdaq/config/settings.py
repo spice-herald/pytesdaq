@@ -8,7 +8,7 @@ from pytesdaq.utils import connection_utils
 
 class Config:
     
-    def __init__(self,setup_file=str(),sequencer_file=str()):
+    def __init__(self, setup_file=str(), sequencer_file=str()):
         
     
         # config files
@@ -114,13 +114,13 @@ class Config:
         if self._has_section('rp'):
             config_section =  self._get_section('rp')
             for config in config_section:
-                if len(config)==2 and config[1].strip() != '':
+                if len(config) == 2 and config[1].strip() != '':
                     iv_didv_config['rp'][config[0]] = config[1]
    
         if self._has_section('rn'):
             config_section =  self._get_section('rn')
             for config in config_section:
-                if len(config)==2 and config[1].strip() != '':
+                if len(config) == 2 and config[1].strip() != '':
                     iv_didv_config['rn'][config[0]] = config[1]
       
         return iv_didv_config
@@ -355,7 +355,7 @@ class Config:
         return setup
 
      
-    def get_adc_connections(self,adc_id=''):
+    def get_adc_connections(self, adc_id=''):
         """
         get ADC connections
             
@@ -495,8 +495,45 @@ class Config:
         return info
 
 
+    def get_signal_generator_address(self, device_name):
+        """
+        get function generators
+        
+        Returns:
+            str - no type conversion happens here!
+        """
+
+        key = device_name + '_address'
+        
+        address=str()
+        try:
+            address =  self._get_setting('signal_generators',key)
+        except:
+            pass
+    
+        return address
 
 
+    def get_temperature_controller_address(self, device_name):
+        """
+        get function generators
+        
+        Returns:
+            str - no type conversion happens here!
+        """
+
+        key = device_name + '_address'
+        
+        address=str()
+        try:
+            address =  self._get_setting('temperature_controllers',key)
+        except:
+            pass
+    
+        return address
+    
+
+    
     def _get_ini_path(self,ini_filename):
         """
         Get the path where the ini files live. ini files
@@ -567,7 +604,7 @@ class Config:
 
     
 
-    def _has_setting(self,section, name):
+    def _has_setting(self, section, name):
         """
         check is setting exist
         
@@ -589,7 +626,7 @@ class Config:
         return has_option
 
 
-    def _get_boolean_setting(self,section, name):
+    def _get_boolean_setting(self, section, name):
         """
         Get a particular setting from setup.ini. 
         
@@ -603,7 +640,8 @@ class Config:
         """
         return self._cached_config.getboolean(section, name) 
 
-    def _get_comma_separated_setting(self,section, name):
+    
+    def _get_comma_separated_setting(self, section, name):
         """
         Get comma-separated list from setup.ini
      
@@ -629,21 +667,3 @@ class Config:
 
 
     
-    def get_signal_generator_address(self,signalgen_name):
-        """
-        get function generators
-        
-        Returns:
-            str - no type conversion happens here!
-        """
-
-        key = signalgen_name + '_address'
-        
-        address=str()
-        try:
-            address =  self._get_setting('signal_generators',key)
-        except:
-            pass
-    
-        return address
-

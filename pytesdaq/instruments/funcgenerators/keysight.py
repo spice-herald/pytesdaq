@@ -96,7 +96,7 @@ class KeysightFuncGenerator(VisaInstrument):
         if shape == 'nois':
             shapew = 'noise'
             
-        return shape.lower()
+        return shape
 
 
 
