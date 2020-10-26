@@ -15,7 +15,7 @@ class Analyzer:
         # default analysis configuration
         self._analysis_config = dict()
         self._analysis_config['unit'] = 'ADC'
-        self._analysis_config['norm'] = 'None'
+        self._analysis_config['norm'] = None
         self._analysis_config['calc_psd'] = False
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
@@ -58,7 +58,7 @@ class Analyzer:
         # ---------------------
         # normalization
         # ---------------------
-        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm']!='None':
+        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm'] is not None:
             data_array = self.normalize(data_array,data_config,
                                         self._analysis_config['unit'],self._analysis_config['norm'])
 
@@ -122,12 +122,14 @@ class Analyzer:
             data_array_norm[ichan,:] = poly(data_array[ichan,:])
             
             # normalize
-            if self._analysis_config['norm']!='None':
+            if self._analysis_config['norm'] is not None:
                 data_array_norm[ichan,:] /= self._analysis_config['norm_list'][ichan]
 
             # unit
             if self._analysis_config['unit']=='mVolts':
                 data_array_norm[ichan,:] *= 1000
+            elif self._analysis_config['unit']=='nVolts':
+                data_array_norm[ichan,:] *= 10**9
             elif self._analysis_config['unit']=='pAmps':
                 data_array_norm[ichan,:] *= 10**12
                 

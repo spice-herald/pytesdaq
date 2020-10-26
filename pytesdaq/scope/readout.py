@@ -71,6 +71,10 @@ class Readout:
         # instrument control
         self._instrument = None
         self._detector_settings = None
+
+
+        # selected  data array
+        self._selected_data_array = None
     
 
 
@@ -171,7 +175,7 @@ class Readout:
                 error_msg = 'ERROR from readout: No files provided'
                 return error_msg
 
-            self._hdf5 = hdf5.H5Core()
+            self._hdf5 = hdf5.H5Reader()
             self._hdf5.set_files(file_list)
             
                 
@@ -345,9 +349,9 @@ class Readout:
                 self._do_calc_norm = False
 
             # process
-            selected_data_array = self._analyzer.process(selected_data_array, self._data_config, 
-                                                         self._analysis_config)
-         
+            self._selected_data_array = self._analyzer.process(selected_data_array, self._data_config, 
+                                                               self._analysis_config)
+            
  
 
 
@@ -369,7 +373,7 @@ class Readout:
             # ------------------
         
             if do_plot:
-                self._plot_data(selected_data_array,self._analyzer.freq_array)
+                self._plot_data(self._selected_data_array,self._analyzer.freq_array)
                 
                 
           
@@ -390,7 +394,14 @@ class Readout:
 
 
 
+    def save_data(self, filename):
+        if self._selected_data_array is not None:
+            np.save(filename,self._selected_data_array)
+            np.save(filename+'_freq',self._analyzer.freq_array)
+            print('File ' + filename + '.npy saved!')
 
+
+        
 
     def _plot_data(self, data_array,freq_array=[]):
 
@@ -486,9 +497,9 @@ class Readout:
         norm_type = self._analysis_config['norm'] 
         
         # instanciate instrument if needed
-        if norm_type=='OpenLoop' or norm_type=='CloseLoop':
+        if norm_type.find('OpenLoop')!=-1 or norm_type=='CloseLoop':
             if self._instrument is None:
-                self._instrument = instrument.Control(dummy_mode= True)
+                self._instrument = instrument.Control(dummy_mode=False)
                 
         
 
@@ -503,13 +514,18 @@ class Readout:
         norm_list = list()
         for chan in self._data_config['selected_channel_list']:
             
-            # get normalizationn from board
-            if norm_type == 'OpenLoop':
-                norm_val = self._instrument.get_open_loop_norm(adc_id=self._adc_name, 
-                                                               adc_channel=chan)
+            if norm_type == 'OpenLoop PreAmp':
+                norm_val = abs(self._instrument.get_open_loop_preamp_norm(adc_id=self._adc_name, 
+                                                                          adc_channel=chan))
+            elif norm_type == 'OpenLoop Full':
+            
+                norm_val = abs(self._instrument.get_open_loop_full_norm(adc_id=self._adc_name, 
+                                                                        adc_channel=chan))
             elif  norm_type == 'CloseLoop':
-                norm_val = self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
-                                                                              adc_channel=chan)
+                norm_val = abs(self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
+                                                                                  adc_channel=chan))
+
+            print('INFO: Normalization for channel ' + str(chan) + ' = ' + str(norm_val))
                 
             # fill array
             norm_list.append(norm_val)

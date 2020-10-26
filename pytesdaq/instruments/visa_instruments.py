@@ -7,14 +7,14 @@ class VisaInstrument:
     Manage instruments controled using VISA
     """
     
-    def __init__(self,resource_address, termination=None, raise_errors=True, verbose=True):
+    def __init__(self,resource_address, termination=None, raise_errors=True, verbose=False):
 
         self._verbose = verbose
         self._raise_errors = raise_errors
         self._inst = None
 
         # open resource
-        rm = visa.ResourceManager()        
+        rm = visa.ResourceManager('/usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0')        
         try:
             if self._verbose:
                 print('Opening VISA resource "{}"'.format(resource_address))
@@ -53,8 +53,8 @@ class VisaInstrument:
         
         self._inst.write(message)
 
-    def _read(self, message):
-        data = self._inst.read(message)
+    def _read(self):
+        data = self._inst.read()
         return data
     
     def _query(self, message):

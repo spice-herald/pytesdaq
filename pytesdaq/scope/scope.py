@@ -289,6 +289,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
+    def _handle_save_data(self):
+
+        # select directory
+        options = QtWidgets.QFileDialog.Options()
+        options |= QtWidgets.QFileDialog.DontUseNativeDialog
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(self,'Choose file name to save to',self._default_data_dir,
+                                                        'Numpy File (*.npy)', options=options)
+        
+
+        self._readout.save_data(filename)
+        
+
+
+            
+
     def _handle_channel_selection(self):
         """
         Handle channel buttons selection (Signal/Slot connection)
@@ -360,11 +375,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if unit=='ADC':
             self._norm_combobox.addItem('None')
             norm = 'None'
-        elif (unit=='Volts' or unit=='mVolts'):
+        elif (unit=='Volts' or unit=='mVolts' or unit=='nVolts'):
             self._norm_combobox.addItem('None')
-            self._norm_combobox.addItem('OpenLoop')
-            if norm == 'OpenLoop':
+            self._norm_combobox.addItem('OpenLoop PreAmp')
+            self._norm_combobox.addItem('OpenLoop Full')
+            if norm == 'OpenLoop PreAmp':
                 self._norm_combobox.setCurrentIndex(1)
+            elif norm == 'OpenLoop Full':
+                self._norm_combobox.setCurrentIndex(2)
             else:
                 self._norm_combobox.setCurrentIndex(0)
                 norm = 'None'
@@ -784,19 +802,20 @@ class MainWindow(QtWidgets.QMainWindow):
         # unit
         font.setBold(True)
         unit_label = QtWidgets.QLabel(self._display_frame)
-        unit_label.setGeometry(QtCore.QRect(155, 30, 31, 25))
+        unit_label.setGeometry(QtCore.QRect(152, 30, 31, 25))
         unit_label.setFont(font)
         unit_label.setText('Unit:')
 
 
         font.setBold(False)
         self._unit_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._unit_combobox.setGeometry(QtCore.QRect(190, 30, 100, 25))
+        self._unit_combobox.setGeometry(QtCore.QRect(189, 30, 80, 25))
         self._unit_combobox.setFont(font)
         self._unit_combobox.setObjectName('unitComboBox')
         self._unit_combobox.addItem('ADC')
         self._unit_combobox.addItem('Volts')
         self._unit_combobox.addItem('mVolts')
+        self._unit_combobox.addItem('nVolts')
         self._unit_combobox.addItem('Amps')
         self._unit_combobox.addItem('pAmps')
         self._unit_combobox.addItem('Watts')
@@ -807,14 +826,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # norm
         font.setBold(True)
         norm_label = QtWidgets.QLabel(self._display_frame)
-        norm_label.setGeometry(QtCore.QRect(305, 30, 60, 25))
+        norm_label.setGeometry(QtCore.QRect(284, 30, 60, 25))
         norm_label.setFont(font)
         norm_label.setText('Norm:')
 
 
         font.setBold(False)
         self._norm_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._norm_combobox.setGeometry(QtCore.QRect(350, 30, 100, 25))
+        self._norm_combobox.setGeometry(QtCore.QRect(330, 30, 141, 25))
         self._norm_combobox.setFont(font)
         self._norm_combobox.setObjectName('normComboBox')
         self._norm_combobox.addItem('None')
@@ -825,7 +844,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # auto_scale
         font.setBold(True)
         self._auto_scale_checkbox =  QtWidgets.QCheckBox(self._display_frame)
-        self._auto_scale_checkbox.setGeometry(QtCore.QRect(470, 30, 101, 25))
+        self._auto_scale_checkbox.setGeometry(QtCore.QRect(483, 30, 101, 25))
         self._auto_scale_checkbox.setFont(font)
         self._auto_scale_checkbox.setText('Auto Scale')
         self._auto_scale_checkbox.setChecked(True)
@@ -851,6 +870,9 @@ class MainWindow(QtWidgets.QMainWindow):
         vbox.addWidget(self._canvas_toolbar)
     
 
+
+
+        
         # connect
         self._waveform_combobox.activated.connect(self._handle_waveform_type)
         self._unit_combobox.activated.connect(self._handle_waveform_unit)
@@ -938,7 +960,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add tools button
         self._tools_button = QtWidgets.QPushButton(self._tools_frame)
-        self._tools_button.setGeometry(QtCore.QRect(156, 32, 89, 65))
+        self._tools_button.setGeometry(QtCore.QRect(156, 25, 89, 50))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -948,6 +970,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tools_button.setText('Tools')
         self._tools_button.setEnabled(False)
 
+        self._save_button = QtWidgets.QPushButton(self._tools_frame)
+        self._save_button.setGeometry(QtCore.QRect(156, 90, 89, 40))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self._save_button.setFont(font)
+        self._save_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._save_button.setObjectName('saveButton')
+        self._save_button.setText('Save Data')
+        self._save_button.setEnabled(True)
+
+
+
+        
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
         self._running_avg_checkbox.setGeometry(QtCore.QRect(16, 16, 109, 21))
@@ -992,7 +1028,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # connect 
         self._running_avg_checkbox.toggled.connect(self._handle_running_avg)
         self._running_avg_spinbox.valueChanged.connect(self._handle_running_avg)
-
+        self._save_button.clicked.connect(self._handle_save_data)
+        
         #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
 
 

@@ -254,24 +254,57 @@ class Config:
 
 
 
-    def get_preamp_fix_gain(self):
+    def get_preamp_fix_gain(self, controller_name=None):
         """
         Get SQUID readout preamp fix gain
         """
+
+        # default
         preamp_fix_gain = 1
-        if self._has_setting('setup','preamp_fix_gain'):
-            preamp_fix_gain =  float(self._get_setting('setup','preamp_fix_gain'))
+        
+        if controller_name is None:
+            controller_name = self.get_squid_controller()
+
+
+        if self._has_setting(controller_name,'preamp_fix_gain'):
+            preamp_fix_gain =  float(self._get_setting(controller_name,'preamp_fix_gain'))
+            
+            
         return preamp_fix_gain
 
+    
+    def get_feedback_fix_gain(self, controller_name=None):
+        """
+        Get SQUID readout feedback fix gain
+        """
+
+        # default
+        feedback_fix_gain = 1
+        
+        if controller_name is None:
+            controller_name = self.get_squid_controller()
 
 
-    def get_output_fix_gain(self):
+        if self._has_setting(controller_name,'feedback_fix_gain'):
+            feedback_fix_gain =  float(self._get_setting(controller_name,'feedback_fix_gain'))
+            
+            
+        return feedback_fix_gain
+
+
+    def get_output_fix_gain(self, controller_name=None):
         """
         Get SQUID readout output driver fix gain
         """
         output_fix_gain = 1
-        if self._has_setting('setup','output_fix_gain'):
-            output_fix_gain =  float(self._get_setting('setup','output_fix_gain'))
+
+        if controller_name is None:
+            controller_name = self.get_squid_controller()
+
+        
+        if self._has_setting('controller_name','output_fix_gain'):
+            output_fix_gain =  float(self._get_setting(controller_name,'output_fix_gain'))
+            
         return output_fix_gain
 
 

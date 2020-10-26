@@ -5,7 +5,9 @@ import pandas as pd
 from glob import glob
 from pytesdaq.utils import connection_utils
 
-class H5Core:
+
+
+class H5Reader:
     
     def __init__(self):
 

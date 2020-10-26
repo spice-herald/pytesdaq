@@ -1,6 +1,7 @@
 import argparse
 import pytesdaq.daq as daq
 import pytesdaq.config.settings as settings
+import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import  arg_utils
 import numpy as np
 
@@ -88,7 +89,7 @@ if __name__ == "__main__":
     if args.devices:
         adc_list = list()
         adc_config = dict()
-        adc_num_list =  arg_utils.arg_utils.hyphen_range(args.devices)
+        adc_num_list =  arg_utils.hyphen_range(args.devices)
         for adc_num in adc_num_list:
             adc_name = 'adc' + str(adc_num)
             adc_list.append(adc_name)
@@ -108,7 +109,7 @@ if __name__ == "__main__":
         if args.voltage_max:
             config['voltage_max'] = float(args.voltage_max)
         if args.channels:
-            config['channel_list'] = args.channels
+            config['channel_list'] =  arg_utils.hyphen_range(args.channels)
         if args.trigger_type:
             config['trigger_type'] = int(args.trigger_type)
         adc_config[adc_name] = config
@@ -118,7 +119,12 @@ if __name__ == "__main__":
     # Detector config
     # ======================== 
     det_config = dict()
-
+    myinstrument = instrument.Control(dummy_mode=False,verbose=True)
+    for adc_name in adc_list:
+        config = adc_config[adc_name]
+        det_config[adc_name] = myinstrument.read_all(adc_id=adc_name, adc_channel_list=config['channel_list'])
+        
+        
 
     # ========================
     # Run DAQ

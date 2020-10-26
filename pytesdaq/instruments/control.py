@@ -123,10 +123,10 @@ class Control:
 
 
 
-    def set_squid_lock_point(self, lock_point, 
-                             tes_channel=None,
-                             detector_channel=None,
-                             adc_id=None, adc_channel=None):
+    def set_lock_point(self, lock_point, 
+                       tes_channel=None,
+                       detector_channel=None,
+                       adc_id=None, adc_channel=None):
         
 
         """
@@ -674,7 +674,7 @@ class Control:
                               adc_id=None, adc_channel=None):
         
         """
-        Get preamp gain
+        Get preamp gain (variable*fix gain)
         """
         preamp_variable_gain = 1
         try:
@@ -700,6 +700,26 @@ class Control:
         return preamp_total_gain
 
 
+    
+
+    def get_squid_loop_total_gain(self, 
+                                  tes_channel=None,
+                                  detector_channel=None,
+                                  adc_id=None, adc_channel=None):
+        
+        
+        # preamp gain
+        preamp_gain = self.get_preamp_total_gain(tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id, adc_channel=adc_channel)
+        
+        # feedback gain (outside preamp)
+        # FIXME: Only fix gain??
+        feedback_gain = self._config.get_feedback_fix_gain()
+
+        
+        gain = preamp_gain * feedback_gain
+        return gain
         
 
         
@@ -1060,11 +1080,11 @@ class Control:
 
 
 
-    def get_open_loop_norm(self, tes_channel=None,
-                           detector_channel=None,
-                           adc_id=None, adc_channel=None):
+    def get_open_loop_preamp_norm(self, tes_channel=None,
+                                  detector_channel=None,
+                                  adc_id=None, adc_channel=None):
         """
-        get open loop normalization 
+        get open loop preamp normalization 
         
         """
         
@@ -1086,7 +1106,30 @@ class Control:
         
 
 
+    def get_open_loop_full_norm(self, tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
+        """
+        get open loop preamp normalization 
+        
+        """
+        
+        # driver gain
+        output_total_gain = self.get_output_total_gain(tes_channel=tes_channel,
+                                                       detector_channel=detector_channel,
+                                                       adc_id=adc_id, adc_channel=adc_channel)
+        
+      
+        # preamp gain
+        loop_total_gain = self.get_squid_loop_total_gain(tes_channel=tes_channel,
+                                                           detector_channel=detector_channel,
+                                                           adc_id=adc_id, adc_channel=adc_channel)
+        
 
+        
+        # calculate normalization
+        norm = output_total_gain*loop_total_gain
+        return norm
 
 
 
@@ -1106,7 +1149,7 @@ class Control:
         
         # TES parameter list
         param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
-                      'output_gain','feedback_polarity','feedback_mode',
+                      'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source']
                       
 
@@ -1134,18 +1177,18 @@ class Control:
         for param in param_list:
             output_dict[param] = list()
             
-        output_dict['signal_gen_amplitude'] = list()
-        output_dict['signal_gen_frequency'] = list()
-        output_dict['signal_gen_shape'] = list()
-        output_dict['signal_gen_phase_shift'] = list()
-        output_dict['signal_gen_source'] = list()
-        output_dict['signal_gen_onoff'] = list()
+        #output_dict['signal_gen_amplitude'] = list()
+        #output_dict['signal_gen_frequency'] = list()
+        #output_dict['signal_gen_shape'] = list()
+        #output_dict['signal_gen_phase_shift'] = list()
+        #output_dict['signal_gen_source'] = list()
+        #output_dict['signal_gen_onoff'] = list()
         output_dict['feedback_resistance'] =  list()
         output_dict['squid_turn_ratio'] = list()
-        #output_dict['shunt_resistance'] = list()
+        output_dict['shunt_resistance'] = list()
         output_dict['close_loop_norm'] = list()
-        output_dict['open_loop_norm'] = list()
-
+        output_dict['open_loop_preamp_norm'] = list()
+        output_dict['open_loop_full_norm'] = list()
         # loop channels
         for ichan in range(nb_channels):
 
@@ -1172,8 +1215,7 @@ class Control:
                     val = self._get_sensor_val(param, tes_channel=tes_chan, detector_channel=detector_chan, 
                                                adc_id=adc_chan_id, adc_channel=adc_chan)
                 except:
-                    print('WARNING in control::read_all: unable to get value for "' +  param 
-                          + '" (' + str(channel_type) + ' = ' +  str(chan) + ')')
+                    print('WARNING in control::read_all: unable to get value for "' +  param)
                     
 
                 if val == nan or val is None:
@@ -1184,20 +1226,21 @@ class Control:
                 time.sleep(0.1)
         
             # Signal generator
-            sig_gen_dict = self.get_signal_gen_params(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
-                                                      adc_id=adc_chan_id, adc_channel=adc_chan)
+            
+            #sig_gen_dict = self.get_signal_gen_params(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
+            #                                          adc_id=adc_chan_id, adc_channel=adc_chan)
 
-            onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
-                                              adc_id=adc_chan_id, adc_channel=adc_chan)
+            #onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
+            #                                  adc_id=adc_chan_id, adc_channel=adc_chan)
             
 
-            output_dict['signal_gen_amplitude'].append(sig_gen_dict['amplitude'])
-            output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
-            output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
-            output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
-            output_dict['signal_gen_source'].append(sig_gen_dict['source'])
-            output_dict['signal_gen_onoff'].append(onoff)
-            
+            #output_dict['signal_gen_amplitude'].append(sig_gen_dict['amplitude'])
+            #output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
+            #output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
+            #output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
+            #output_dict['signal_gen_source'].append(sig_gen_dict['source'])
+            #output_dict['signal_gen_onoff'].append(onoff)
+        
 
             
             # other parameter
@@ -1208,13 +1251,17 @@ class Control:
             output_dict['close_loop_norm'].append(self.get_volts_to_amps_close_loop_norm(tes_channel=tes_chan, 
                                                                                          detector_channel=detector_chan, 
                                                                                          adc_id=adc_chan_id, adc_channel=adc_chan))
-            output_dict['open_loop_norm'].append(self.get_open_loop_norm(tes_channel=tes_chan, 
-                                                                         detector_channel=detector_chan, 
-                                                                         adc_id=adc_chan_id, adc_channel=adc_chan))
-   
+            output_dict['open_loop_preamp_norm'].append(self.get_open_loop_preamp_norm(tes_channel=tes_chan, 
+                                                                                       detector_channel=detector_chan, 
+                                                                                       adc_id=adc_chan_id, adc_channel=adc_chan))
+            
+            output_dict['open_loop_full_norm'].append(self.get_open_loop_full_norm(tes_channel=tes_chan, 
+                                                                                   detector_channel=detector_chan, 
+                                                                                   adc_id=adc_chan_id, adc_channel=adc_chan))
+            
 
             output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
-            #output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
+            output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
             
 
 
@@ -1260,25 +1307,25 @@ class Control:
                 if not self._dummy_mode:
 
                     if param_name == 'tes_bias':
-                        param_val = self._feb_inst.get_phonon_qet_bias(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
 
                     elif param_name == 'squid_bias':
-                        param_val = self._feb_inst.get_phonon_squid_bias(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_squid_bias(subrack, slot, controller_channel)
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._feb_inst.get_phonon_lock_point(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_lock_point(subrack, slot, controller_channel)
 
                     elif param_name == 'preamp_gain':
-                        param_val = self._feb_inst.get_phonon_preamp_gain(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_preamp_gain(subrack, slot, controller_channel)
 
                     elif param_name == 'output_offset':
-                        param_val = self._feb_inst.get_phonon_offset(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_offset(subrack, slot, controller_channel)
 
                     elif param_name == 'output_gain':
-                        param_val = self._feb_inst.get_phonon_output_gain(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.get_phonon_output_gain(subrack, slot, controller_channel)
 
                     elif param_name == 'feedback_polarity':
-                        is_inverted = self._feb_inst.get_phonon_feedback_polarity(subrack, slot,controller_channel)
+                        is_inverted = self._feb_inst.get_phonon_feedback_polarity(subrack, slot, controller_channel)
                         param_val = 1
                         if is_inverted:
                             param_val = -1
@@ -1422,8 +1469,8 @@ class Control:
                 elif param_name == 'lock_point_voltage':
                     self._feb_inst.set_phonon_lock_point(subrack, slot,controller_channel,value)
                 
-                elif param_name == 'feedback_gain':
-                    self._feb_inst.set_phonon_feedback_gain(subrack, slot,controller_channel,value)
+                elif param_name == 'preamp_gain':
+                    self._feb_inst.set_phonon_preamp_gain(subrack, slot,controller_channel,value)
                 
                 elif param_name == 'output_offset':
                     self._feb_inst.set_phonon_offset(subrack, slot,controller_channel,value)
@@ -1475,7 +1522,7 @@ class Control:
                 
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel,value[0],value[1])
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')

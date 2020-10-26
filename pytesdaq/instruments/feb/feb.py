@@ -29,143 +29,10 @@ class FEB(VisaInstrument):
     FEB control
     """
 
-    def __init__(self,gpib_address,verbose=True):
+    def __init__(self,gpib_address,verbose=False):
         super().__init__(gpib_address,verbose=verbose)
         
         
-
-
-    def _fourdigit(self,input_str):
-        """
-        makes strings that are shorter than 4 digits 4 digits by filling the front with "0"s
-        """
-        while len(input_str) < 4:
-            input_str = "0" + input_str
-        return input_str
-
-
-
-    def _set_param(self,subrack, slot, setting, channel, value, millisec_delay = 0.160):
-        """
-        Set FEB parameter
-        """
-
-        # channel
-        if isinstance(channel,str):
-            channel = int(FEBChannels[channel].value)
-
-            # address  number
-        address = (slot << 8) + (setting << 4) + channel
-
-        # data number
-        data = 0
-        if setting == FEBSettings.SENSORBIAS.value:
-            data = int(round(4095.0 * (2000.0 + value) / 4000.0))
-        if setting == FEBSettings.SQUIDBIAS.value:
-            data = int(round(4095.0 * (200.0 + value) / 400.0))
-        if setting == FEBSettings.SQUIDLOCK.value:
-            data = int(round(4095.0 * (8.0 - value) / 16.0))
-        if setting == FEBSettings.SQUIDGAIN.value:
-            data = int(round(4095.0 * (5.0 - value / 20.0) / 10.0))
-        if setting == FEBSettings.SQUIDDRIVER.value:
-            data = int(round(4095.0 * (5.0 - value) / 10.0))
-        
-        time.sleep(millisec_delay)
-        self._write_feb(subrack, address, data)
-        
-
-    def _get_param(self,subrack, slot, setting, channel, millisec_delay = 0.160):
-        """
-        Get FEB parameter
-        """
-
-        output_val = -999999
-        
-        # channel
-        if isinstance(channel,str):
-            channel = int(FEBChannels[channel].value)
-                     
-        # address  number
-        address = (slot << 8) + (setting << 4) + channel
-        time.sleep(millisec_delay)
-
-        bias_val_hex = self._read_feb(subrack, address)
-        decimal_result = int(bias_val_hex, 16) & 4095
-
-        if setting == FEBSettings.SENSORBIAS.value:
-            output_val = 4000.0 * float(decimal_result) / 4095.0 - 2000.0
-        elif setting == FEBSettings.SQUIDBIAS.value:
-            output_val = 400.0 * float(decimal_result) / 4095.0 - 200.0
-        elif setting == FEBSettings.SQUIDLOCK.value:
-            output_val = -16.0 * float(decimal_result) / 4095.0 + 8.0
-        elif setting == FEBSettings.SQUIDGAIN.value:
-            output_val = 20.0 * (5.0 - 10.0 * float(decimal_result) / 4095)
-        elif setting == FEBSettings.SQUIDDRIVER.value:
-            output_val = -(10.0 * float(decimal_result) / 4095.0 - 5.0)
-            
-        return output_val
-    
-
-    def _get_param_driver_CSR(subrack, slot):
-        """
-        Get FEB driver CSR
-        """
-
-        # wait
-        time.sleep(0.16)
-        
-        # read
-        address = (slot << 8) + (14 << 4) + 2
-        driver_csr = self._read_feb(subrack, address)
-
-        # build output
-        decimal_result = int(driver_csr, 16)
-        output_driver_CSR = [True] * 16
-        for inum in range(16):
-            output_driver_CSR[inum] = (decimal_result & 2**inum) != 0
-
-        return output_driver_CSR
-
-
-    
-    def _get_param_CSR(self,subrack, slot, millisec_delay = 0.16):
-        """
-        Get FEB driver CSR
-        """
-        # wait
-        time.sleep(millisec_delay)
-
-        #read 
-        address = (slot << 8) + (14 << 4) + 1
-        driver_csr = self._read_feb(subrack, address)
-
-        # build output
-        output_CSR = [True] * 16
-        decimal_result = int(driver_csr, 16)
-        for inum in range(16):
-            output_CSR[inum] = (decimal_result & 2**inum) != 0
-        
-        return output_CSR
-
-    def _get_sense_bias(self,subrack, slot, millisec_delay = 0.16):
-
-        # wait
-        time.sleep(millisec_delay)
-
-
-        #read
-        address = (slot << 8) + (14 << 4)
-        sense_bias_csr = self._read_feb(subrack, address)
-        
-
-        # build output
-        output_sense_bias_CSR = [True] * 16
-        decimal_result = int(sense_bias_csr, 16)
-        for inum in range(16):
-            output_sense_bias_CSR[inum] = (decimal_result & 2**inum) != 0
-
-        return output_sense_bias_CSR
-                
 
     ### this value should be from -2000 to 2000
     def set_phonon_qet_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
@@ -400,24 +267,33 @@ class FEB(VisaInstrument):
     def get_phonon_squid_bias(self,subrack, slot, channel, millisec_delay = 0.160):
         return self._get_param(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, millisec_delay)
         
-    def get_phonon_lock_point(self,subrack, slot, channel, millisec_delay = 0.160):
+    def get_phonon_lock_point(self, subrack, slot, channel, millisec_delay = 0.160):
         return self._get_param(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, millisec_delay)
             
-    def get_phonon_preamp_gain(self,subrack, slot, channel, millisec_delay = 0.160):
+    def get_phonon_preamp_gain(self, subrack, slot, channel, millisec_delay = 0.160):
         return self._get_param(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, millisec_delay)
 
     #this is just SquidDriver in the Java code
-    def get_phonon_offset(self,subrack, slot, channel, millisec_delay = 0.160):
+    def get_phonon_offset(self, subrack, slot, channel, millisec_delay = 0.160):
         return self._get_param(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, millisec_delay)
         
-    def get_phonon_output_gain(self,subrack, slot, channel):
-        address = (slot << 8) + (14 << 4) + 2
+    def get_phonon_output_gain(self, subrack, slot, channel):
+
+        #address = (slot << 8) + (14 << 4) + 2
+
+        # channel
+        if isinstance(channel,str):
+            channel = int(FEBChannels[channel].value)  
         channel -= 10
+
+        # get CSR
         old_driver_CSR = self._get_param_driver_CSR(subrack, slot)
+      
         data = 0
         for i in range(channel * 4, channel * 4 + 4):
             if old_driver_CSR[i]:
                 data += 1 << (i % 4)
+   
         if data == 0:
             return 1.0
         elif data == 1:
@@ -521,7 +397,7 @@ class FEB(VisaInstrument):
 
 
 
-    def _write_feb(self,subrack, address, data):
+    def _write_feb(self, subrack, address, data):
         subrack_with_address_bit = subrack | 8
         address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
         data_str = _HEADER + format(data, "x") + "0" + format(subrack, "x") + _FOOTER
@@ -530,10 +406,145 @@ class FEB(VisaInstrument):
         time.sleep(0.16)
 	
 
-    def _read_feb(self,subrack, address):
+    def _read_feb(self, subrack, address):
         subrack_with_address_bit = subrack | 8
         address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
         self._write(address_str)
         self._write(_READ_COMMAND)
         data = self._read()
         return data[:4]
+
+
+
+    
+    def _fourdigit(self,input_str):
+        """
+        makes strings that are shorter than 4 digits 4 digits by filling the front with "0"s
+        """
+        while len(input_str) < 4:
+            input_str = "0" + input_str
+        return input_str
+
+
+
+    def _set_param(self,subrack, slot, setting, channel, value, millisec_delay = 0.160):
+        """
+        Set FEB parameter
+        """
+
+        # channel
+        if isinstance(channel,str):
+            channel = int(FEBChannels[channel].value)
+
+            # address  number
+        address = (slot << 8) + (setting << 4) + channel
+
+        # data number
+        data = 0
+        if setting == FEBSettings.SENSORBIAS.value:
+            data = int(round(4095.0 * (2000.0 + value) / 4000.0))
+        if setting == FEBSettings.SQUIDBIAS.value:
+            data = int(round(4095.0 * (200.0 + value) / 400.0))
+        if setting == FEBSettings.SQUIDLOCK.value:
+            data = int(round(4095.0 * (8.0 - value) / 16.0))
+        if setting == FEBSettings.SQUIDGAIN.value:
+            data = int(round(4095.0 * (5.0 - value / 20.0) / 10.0))
+        if setting == FEBSettings.SQUIDDRIVER.value:
+            data = int(round(4095.0 * (5.0 - value) / 10.0))
+        
+        time.sleep(millisec_delay)
+        self._write_feb(subrack, address, data)
+        
+
+    def _get_param(self, subrack, slot, setting, channel, millisec_delay = 0.160):
+        """
+        Get FEB parameter
+        """
+
+        output_val = -999999
+        
+        # channel
+        if isinstance(channel,str):
+            channel = int(FEBChannels[channel].value)
+                     
+        # address  number
+        address = (slot << 8) + (setting << 4) + channel
+        time.sleep(millisec_delay)
+
+        bias_val_hex = self._read_feb(subrack, address)
+        decimal_result = int(bias_val_hex, 16) & 4095
+
+        if setting == FEBSettings.SENSORBIAS.value:
+            output_val = 4000.0 * float(decimal_result) / 4095.0 - 2000.0
+        elif setting == FEBSettings.SQUIDBIAS.value:
+            output_val = 400.0 * float(decimal_result) / 4095.0 - 200.0
+        elif setting == FEBSettings.SQUIDLOCK.value:
+            output_val = -16.0 * float(decimal_result) / 4095.0 + 8.0
+        elif setting == FEBSettings.SQUIDGAIN.value:
+            output_val = 20.0 * (5.0 - 10.0 * float(decimal_result) / 4095)
+        elif setting == FEBSettings.SQUIDDRIVER.value:
+            output_val = -(10.0 * float(decimal_result) / 4095.0 - 5.0)
+            
+        return output_val
+    
+
+    def _get_param_driver_CSR(self, subrack, slot):
+        """
+        Get FEB driver CSR
+        """
+
+        # wait
+        time.sleep(0.16)
+        
+        # read
+        address = (slot << 8) + (14 << 4) + 2
+        driver_csr = self._read_feb(subrack, address)
+
+        # build output
+        decimal_result = int(driver_csr, 16)
+        output_driver_CSR = [True] * 16
+        for inum in range(16):
+            output_driver_CSR[inum] = (decimal_result & 2**inum) != 0
+
+        return output_driver_CSR
+
+
+    
+    def _get_param_CSR(self, subrack, slot, millisec_delay = 0.16):
+        """
+        Get FEB driver CSR
+        """
+        # wait
+        time.sleep(millisec_delay)
+
+        #read 
+        address = (slot << 8) + (14 << 4) + 1
+        driver_csr = self._read_feb(subrack, address)
+
+        # build output
+        output_CSR = [True] * 16
+        decimal_result = int(driver_csr, 16)
+        for inum in range(16):
+            output_CSR[inum] = (decimal_result & 2**inum) != 0
+        
+        return output_CSR
+
+    def _get_sense_bias(self, subrack, slot, millisec_delay = 0.16):
+
+        # wait
+        time.sleep(millisec_delay)
+
+
+        #read
+        address = (slot << 8) + (14 << 4)
+        sense_bias_csr = self._read_feb(subrack, address)
+        
+
+        # build output
+        output_sense_bias_CSR = [True] * 16
+        decimal_result = int(sense_bias_csr, 16)
+        for inum in range(16):
+            output_sense_bias_CSR[inum] = (decimal_result & 2**inum) != 0
+
+        return output_sense_bias_CSR
+                
