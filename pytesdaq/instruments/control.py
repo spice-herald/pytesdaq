@@ -82,7 +82,7 @@ class Control:
 
         # get connection map
         self._connection_table= self._config.get_adc_connections()
-
+        
 
 
     @property
@@ -889,7 +889,7 @@ class Control:
             source_magnicon = 'I'
            
 
-            source,shape,freq,freq_div,shift,amp,offset = self.mag_inst.get_generator_params(controller_channel,
+            source,shape,freq,freq_div,shift,amp,offset = self._mag_inst.get_generator_params(int(controller_channel),
                                                                                              signal_gen_num)
 
             # fill dictionary
@@ -1177,10 +1177,13 @@ class Control:
         
         
 
-        if not self._dummy_mode and not self.squid_controller:
-            print('ERROR: No SQUID controller, check config')
-            return nan
+        print('We are starting here')
+        #if not self._dummy_mode and not self.squid_controller:
+        #    print('ERROR: No SQUID controller, check config')
+        #    return nan
             
+        print(self._connection_table)
+        print(tes_channel)
       
         # get readout controller ID and Channel
         controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
@@ -1189,10 +1192,13 @@ class Control:
                                                                                  adc_id=adc_id,
                                                                                  adc_channel=adc_channel)
         
+        print('controller ID', controller_id)
+        print('controller channel', controller_channel)
 
         param_val = nan
         
         if not self._read_from_redis:
+            print('Into Redis block')
 
             if self._squid_controller=='feb':
                 # CDMS FEB device
@@ -1257,6 +1263,8 @@ class Control:
                     param_val= 1
 
             elif self._squid_controller=='magnicon':
+                print('Into magnicon block')
+                controller_channel = int(controller_channel)
 
                 if self._verbose:
                     print('INFO: Getting "' + param_name + ' for channel ' 
@@ -1267,7 +1275,7 @@ class Control:
                     
                     if param_name == 'tes_bias':
                         param_val = self._mag_inst.get_tes_current_bias(controller_channel)
-                    
+                        print('Hello', param_val)
                     elif param_name == 'squid_bias':
                         param_val = self._mag_inst.get_squid_bias(controller_channel,'I')
 
@@ -1286,10 +1294,10 @@ class Control:
                         param_val = bw
                         
                     elif param_name == 'feedback_polarity':
-                        param_val = self.mag_inst.get_squid_gain_sign(controller_channel)
+                        param_val = self._mag_inst.get_squid_gain_sign(controller_channel)
 
                     elif param_name == 'feedback_mode':
-                        val = self.mag_inst.get_amp_or_fll(controller_channel)
+                        val = self._mag_inst.get_amp_or_fll(controller_channel)
                         if val=='AMP':
                             param_val = 'open'
                         elif val=='FLL':
@@ -1298,7 +1306,7 @@ class Control:
                             param_val = val
                      
                     elif param_name == 'feedback_resistance':
-                        param_val = self.mag_inst.get_feedback_resistor(controller_channel)
+                        param_val = self._mag_inst.get_feedback_resistor(controller_channel)
 
                     else:
                         pass
@@ -1323,13 +1331,14 @@ class Control:
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None,adc_channel=None):
+
         
         
         """
         TBD
         """
 
-        if not self._dummy_mode and not self.squid_controller:
+        if not self._dummy_mode and not self._squid_controller:
             print('ERROR: No SQUID controller, check config')
             return nan
             
@@ -1401,6 +1410,8 @@ class Control:
 
         elif self._squid_controller=='magnicon':
             
+            controller_channel = int(controller_channel)
+
             if self._verbose:
                 print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
                       + str(controller_channel) + ' (Magnicon)!')

@@ -655,6 +655,7 @@ class Magnicon(object):
         """
 
         command = '.\\get_tes_current_bias.exe %d %d\n' % (controller_channel, self._reset_active)
+        time.sleep(1)
         self._remote_inst.send_command(command)
         s = self.listen_for(['Iaux', 'ERROR', 'Error'])
         s = self.remove_terminal_output(s, [command], True, True)
