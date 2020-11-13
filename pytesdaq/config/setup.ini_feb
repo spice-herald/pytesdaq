@@ -13,7 +13,7 @@ fridge_run = 10
 #               "feedback_resistance","sign_gen_tes_resistance"
 
 shunt_resistance = 0.02
-squid_turn_ratio = 2.4
+squid_turn_ratio = 10
 
 
 
@@ -46,9 +46,10 @@ trigger_channel = pfi0
 #   Controller ->  "controller:[name]_[channel]"
 #   TES wiring ->  "tes:[channel]  (optional if same as controller channel)
 #   Detector   ->  "detector:[name]_[channel]"  (set to "None" if no parameter
-connection0 = tes:1, controller:feb1_D, detector:PD2
-connection1 = tes:2, controller:feb1_B, detector:G124_PAS2
-connection2 = tes:3, controller:feb1_C, detector:G124_PBS1
+connection0 = tes:1, controller:feb1_A
+connection1 = tes:2, controller:feb1_B
+connection2 = tes:3, controller:feb1_C
+connection3 = tes:4, controller:feb1_D
 
 
 # default adc settings 
@@ -56,23 +57,21 @@ sample_rate = 1250000
 nb_samples = 8192
 voltage_min = -5
 voltage_max = 5
-channel_list = 0-7 
+channel_list = 0-3
 trigger_type = 3
 
 
 
 
 [polaris_daq]
-lib = ./lib/libnidaq.so
-#lib = /data/polaris_daq/nidaq/lib/libnidaq.so
+lib = /data/DAQ/nidaq/lib/libnidaq.so
 fcn = NIdaq
 enable = true 
 next = recorder
 
 
 [polaris_recorder]
-#lib = /data/polaris_daq/nidaq/lib/libnidaq.so
-lib = ./lib/libnidaq.so
+lib = /data/DAQ/nidaq/lib/libnidaq.so
 fcn = HDF5Recorder
 enable = true
 next = daq
@@ -91,8 +90,17 @@ visa_address = GPIB0::18::INSTR
 
 # FEBs, each FEB has 4 channels (A,B,C,D)
 # Format: subrack, slot
-feb1 = 1,3
+feb1 = 1,4
 feb2 = 1,7
+
+# fixed gains (total SQUID loop gain  is preamp * feedback gains)
+preamp_fix_gain = 1
+feedback_fix_gain = 21
+output_fix_gain = 1
+
+# Note: FEB preamp fix gain is actually 20 but it is taken into account
+# with variable gain read from FEB
+
 
 
 [magnicon]
@@ -108,7 +116,17 @@ channel_list = 1,2,3
 default_active = 1
 reset_active = 1
 
+# fixed gains (total SQUID loop gain  is preamp * feedback gains)
+preamp_fix_gain = 1
+feedback_fix_gain = 1
+output_fix_gain = 1
+
+
+
 
 [signal_generators]
 keysight_address = TCPIP::192.168.0.4::5025::SOCKET
-		 
+
+
+[temperature_controllers]
+lakeshore_address =  TCPIP::192.168.0.3::7777::SOCKET
