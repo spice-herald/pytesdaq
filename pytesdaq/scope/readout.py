@@ -345,7 +345,7 @@ class Readout:
 
             # normalization
             if self._do_calc_norm or 'norm_list' not in self._analysis_config:
-                self._fill_norm_list()
+                self._fill_norm()
                 self._do_calc_norm = False
 
             # process
@@ -401,7 +401,69 @@ class Readout:
             print('File ' + filename + '.npy saved!')
 
 
+
+
+    def read_from_board(self):
+        """
+        Read from board, FEB/Magnicon or signal generator
+        Save in analysis config
+        """
+
+        # check what should be read
+
+        # normalizaton
+        read_norm = False
+        norm_type = self._analysis_config['norm']
+        if norm_type.find('OpenLoop')!=-1 or norm_type.find('CloseLoop')!=-1:
+            read_norm = True
+
+        # signal gen
+        read_signal_gen = False
+
+
+        # Return if nothing to do
+        if not read_norm and not read_signal_gen:
+            return
+            
         
+        # Instantiate instrument
+        if self._instrument is None:
+            self._instrument = instrument.Control(dummy_mode=False)
+
+
+        # Read normalization
+        if read_norm:
+
+            # intialize
+            norm_val = 1
+            norm_list = list()
+
+            # loop selected channels and get norm
+            for chan in self._data_config['selected_channel_list']:
+            
+                if norm_type == 'OpenLoop PreAmp':
+                    norm_val = abs(self._instrument.get_open_loop_preamp_norm(adc_id=self._adc_name, 
+                                                                              adc_channel=chan))
+                elif norm_type == 'OpenLoop PreAmp+FB':
+                    norm_val = abs(self._instrument.get_open_loop_full_norm(adc_id=self._adc_name, 
+                                                                            adc_channel=chan))
+                elif norm_type == 'CloseLoop':
+                    norm_val = abs(self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
+                                                                                      adc_channel=chan))
+
+                print('INFO: Normalization for channel ' + str(chan) + ' = ' + str(norm_val))
+                
+                # fill array
+                norm_list.append(norm_val)
+                
+            self._analysis_config['norm_list'] =  norm_list
+
+            
+        # Signal Gen
+        #if read_signal_gen:
+            
+
+            
 
     def _plot_data(self, data_array,freq_array=[]):
 
@@ -488,47 +550,36 @@ class Readout:
         self._canvas.draw()
         self._canvas.flush_events()
             
- 
 
-    def _fill_norm_list(self):
+        
+    def _fill_norm(self):
         """
         Fill normalization list and store in analysis dictionary
         """
+
+        # find current normalization type
         norm_type = self._analysis_config['norm'] 
-        
-        # instanciate instrument if needed
-        if norm_type.find('OpenLoop')!=-1 or norm_type=='CloseLoop':
-            if self._instrument is None:
-                self._instrument = instrument.Control(dummy_mode=False)
-                
-        
 
-        # normalization independent of the channel
+        # initialize norm val
         norm_val = 1
-        if norm_type=='Gain=10':
-            norm_val = 10
-        elif norm_type=='Gain=100':
-            norm_val = 100
 
-        # loop channel
-        norm_list = list()
-        for chan in self._data_config['selected_channel_list']:
+        # case open/closed loop -> read from board
+        if norm_type.find('OpenLoop')!=-1 or norm_type=='CloseLoop':
+            self.read_from_board(read_norm=True)
+        else:
             
-            if norm_type == 'OpenLoop PreAmp':
-                norm_val = abs(self._instrument.get_open_loop_preamp_norm(adc_id=self._adc_name, 
-                                                                          adc_channel=chan))
-            elif norm_type == 'OpenLoop Full':
+            if norm_type=='Gain=10':
+                norm_val = 10
+            elif norm_type=='Gain=100':
+                norm_val = 100
             
-                norm_val = abs(self._instrument.get_open_loop_full_norm(adc_id=self._adc_name, 
-                                                                        adc_channel=chan))
-            elif  norm_type == 'CloseLoop':
-                norm_val = abs(self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
-                                                                                  adc_channel=chan))
+            # add to analysis config
+            norm_list = list()
+            for chan in self._data_config['selected_channel_list']:
+                norm_list.append(norm_val)
+            self._analysis_config['norm_list'] =  norm_list
+        
 
-            print('INFO: Normalization for channel ' + str(chan) + ' = ' + str(norm_val))
-                
-            # fill array
-            norm_list.append(norm_val)
-                
-        self._analysis_config['norm_list'] =  norm_list
-    
+
+
+        

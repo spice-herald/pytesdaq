@@ -57,6 +57,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_channel_frame()
         self._init_tools_frame()
 
+        # tools
+        self._tools = None
+
+
+        
         # show
         self.show()
         
@@ -72,7 +77,9 @@ class MainWindow(QtWidgets.QMainWindow):
                                   self._channels_color_map)
         
 
-    
+
+   
+        
     def closeEvent(self,event):
         """
         This function is called when exiting window
@@ -88,7 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 time.sleep(0.01)
                 
         
-            
+        self._tools = None
         print('Exiting Pulse Display UI')
         
 
@@ -378,10 +385,10 @@ class MainWindow(QtWidgets.QMainWindow):
         elif (unit=='Volts' or unit=='mVolts' or unit=='nVolts'):
             self._norm_combobox.addItem('None')
             self._norm_combobox.addItem('OpenLoop PreAmp')
-            self._norm_combobox.addItem('OpenLoop Full')
+            self._norm_combobox.addItem('OpenLoop PreAmp+FB')
             if norm == 'OpenLoop PreAmp':
                 self._norm_combobox.setCurrentIndex(1)
-            elif norm == 'OpenLoop Full':
+            elif norm == 'OpenLoop PreAmp+FB':
                 self._norm_combobox.setCurrentIndex(2)
             else:
                 self._norm_combobox.setCurrentIndex(0)
@@ -399,7 +406,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
 
         # update analysis
-        self._readout.update_analysis_config(unit=unit,norm=norm)
+        self._readout.update_analysis_config(unit=unit, norm=norm)
         
 
 
@@ -636,7 +643,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._voltage_min_combobox.addItem('-2')
         self._voltage_min_combobox.addItem('-5')
         self._voltage_min_combobox.addItem('-10')
-        self._voltage_min_combobox.setCurrentIndex(3)
+        self._voltage_min_combobox.setCurrentIndex(2)
 
         self._voltage_max_combobox = QtWidgets.QComboBox(self._niadc_tab)
         self._voltage_max_combobox.setGeometry(QtCore.QRect(176, 95, 54, 23))
@@ -645,7 +652,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._voltage_max_combobox.addItem('+2')
         self._voltage_max_combobox.addItem('+5')
         self._voltage_max_combobox.addItem('+10')
-        self._voltage_max_combobox.setCurrentIndex(3)
+        self._voltage_max_combobox.setCurrentIndex(2)
 
     
         voltage_min_label = QtWidgets.QLabel(self._niadc_tab)
@@ -792,8 +799,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # waveform type selection
         font.setBold(False)
         self._waveform_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._waveform_combobox.setGeometry(QtCore.QRect(40, 30, 100, 25))
+        self._waveform_combobox.setGeometry(QtCore.QRect(10, 30, 100, 25))
         self._waveform_combobox.setFont(font)
+        self._waveform_combobox.setStyleSheet("QComboBox"
+                                              "{"
+                                              "background-color: lightblue;"
+                                              "}") 
         self._waveform_combobox.setObjectName('waveformComboBox')
         self._waveform_combobox.addItem('Waveform')
         self._waveform_combobox.addItem('PSD')
@@ -802,15 +813,19 @@ class MainWindow(QtWidgets.QMainWindow):
         # unit
         font.setBold(True)
         unit_label = QtWidgets.QLabel(self._display_frame)
-        unit_label.setGeometry(QtCore.QRect(152, 30, 31, 25))
+        unit_label.setGeometry(QtCore.QRect(122, 30, 31, 25))
         unit_label.setFont(font)
         unit_label.setText('Unit:')
 
 
         font.setBold(False)
         self._unit_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._unit_combobox.setGeometry(QtCore.QRect(189, 30, 80, 25))
+        self._unit_combobox.setGeometry(QtCore.QRect(159, 30, 80, 25))
         self._unit_combobox.setFont(font)
+        self._unit_combobox.setStyleSheet("QComboBox"
+                                          "{"
+                                          "background-color: lightgreen;"
+                                          "}") 
         self._unit_combobox.setObjectName('unitComboBox')
         self._unit_combobox.addItem('ADC')
         self._unit_combobox.addItem('Volts')
@@ -826,14 +841,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # norm
         font.setBold(True)
         norm_label = QtWidgets.QLabel(self._display_frame)
-        norm_label.setGeometry(QtCore.QRect(284, 30, 60, 25))
+        norm_label.setGeometry(QtCore.QRect(254, 30, 60, 25))
         norm_label.setFont(font)
         norm_label.setText('Norm:')
 
 
         font.setBold(False)
         self._norm_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._norm_combobox.setGeometry(QtCore.QRect(330, 30, 141, 25))
+        self._norm_combobox.setGeometry(QtCore.QRect(300, 30, 171, 25))
+        self._norm_combobox.setStyleSheet("QComboBox"
+                                          "{"
+                                          "background-color: lightgreen;"
+                                          "}") 
         self._norm_combobox.setFont(font)
         self._norm_combobox.setObjectName('normComboBox')
         self._norm_combobox.addItem('None')
@@ -844,7 +863,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # auto_scale
         font.setBold(True)
         self._auto_scale_checkbox =  QtWidgets.QCheckBox(self._display_frame)
-        self._auto_scale_checkbox.setGeometry(QtCore.QRect(483, 30, 101, 25))
+        self._auto_scale_checkbox.setGeometry(QtCore.QRect(490, 30, 101, 25))
         self._auto_scale_checkbox.setFont(font)
         self._auto_scale_checkbox.setText('Auto Scale')
         self._auto_scale_checkbox.setChecked(True)
@@ -968,7 +987,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tools_button.setStyleSheet('background-color: rgb(162, 162, 241);')
         self._tools_button.setObjectName('toolsButton')
         self._tools_button.setText('Tools')
-        self._tools_button.setEnabled(False)
+        #self._tools_button.setEnabled(False)
 
         self._save_button = QtWidgets.QPushButton(self._tools_frame)
         self._save_button.setGeometry(QtCore.QRect(156, 90, 89, 40))
@@ -1029,7 +1048,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._running_avg_checkbox.toggled.connect(self._handle_running_avg)
         self._running_avg_spinbox.valueChanged.connect(self._handle_running_avg)
         self._save_button.clicked.connect(self._handle_save_data)
-        
+        self._tools_button.clicked.connect(self._show_tools)
         #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
 
 
@@ -1046,7 +1065,37 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
 
+    def _show_tools(self,checked):
+        if self._tools is None:
+            self._tools = ToolsWindow(readout=self._readout)
+            
+        self._tools.show()
+        self._tools.setWindowState(QtCore.Qt.WindowActive)
+        self._tools.setWindowState(QtCore.Qt.WindowNoState)
 
+
+
+        
+class ToolsWindow(QtWidgets.QWidget):
+    
+    def __init__(self, readout=None):
+        super().__init__()
+
+        #layout = QtWidgets.QVBoxLayout()
+        #self.label = QtWidgets.QLabel("Another Window")
+        #layout.addWidget(self.label)
+        #self.setLayout(layout)
+
+        self.resize(400, 300)
+        self.setStyleSheet('background-color: rgb(211, 252, 255);')
+        self.setWindowTitle('Tools')
+
+
+        # readout
+        self._readout = readout
+    
+        
+        
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     ui = MainWindow()

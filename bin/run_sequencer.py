@@ -64,6 +64,9 @@ if __name__ == "__main__":
         channels = args.tes_channels
     elif args.detector_channels:
         channels = args.detector_channels
+    else:
+        print('TES or Detector channels required!')
+        exit(1)
         
     
     channels = [chan.strip() for chan in channels.split(',')]
@@ -117,6 +120,6 @@ if __name__ == "__main__":
 
         
         sequencer.verbose = True
-        sequencer.dummy_mode = True
+        sequencer.dummy_mode = False
         sequencer.run()
 
