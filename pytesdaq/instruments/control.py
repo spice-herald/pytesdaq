@@ -18,12 +18,13 @@ class Control:
     Control TES related instruments
     """
     
-    def __init__(self, verbose=True, dummy_mode=True):
+    def __init__(self, verbose=True, dummy_mode=True, raise_errors=True):
         
         # for code development
         self._dummy_mode = dummy_mode
         self._verbose = verbose
-
+        self._raise_errors = raise_errors
+        
         # config
         self._config = settings.Config()
         
@@ -1015,25 +1016,28 @@ class Control:
                                 detector_channel=None,
                                 adc_id=None, adc_channel=None):
         """
-        Get feedback resistance (magnicon)
+        Get feedback resistance
+           - Magnicon: value can be modified and read back
+           - FEB: Needs to be in setup.ini file
         """
         
         feedback_resistance = nan
+
+
+        # Magnicon: feedback resistance can be modifed and read
+        if self._squid_controller_name == 'magnicon':
         
-        try:
-            feedback_resistance = self._get_sensor_val('feedback_resistance',
-                                                       tes_channel=tes_channel,
-                                                       detector_channel=detector_channel,
-                                                       adc_id=adc_id, adc_channel=adc_channel)
-        except:
-            print('ERROR getting feedback resistance')
-
-
-        # if needed get it from config file
-        if feedback_resistance == nan:
+            try:
+                feedback_resistance = self._get_sensor_val('feedback_resistance',
+                                                           tes_channel=tes_channel,
+                                                           detector_channel=detector_channel,
+                                                           adc_id=adc_id, adc_channel=adc_channel)
+            except:
+                print('ERROR getting feedback resistance')
+                
+        else:
             feedback_resistance = self._config.get_feedback_resistance()
-
-
+        
             
         return feedback_resistance
 
@@ -1133,6 +1137,7 @@ class Control:
 
 
 
+    
 
     def read_all(self, tes_channel_list=None, detector_channel_list= None,
                  adc_id=None,adc_channel_list=None):
@@ -1144,7 +1149,10 @@ class Control:
         """
 
 
-        # intialize output
+        # ====================
+        # Initialize output
+        # ====================
+        
         output_dict = dict()
         
         # TES parameter list
@@ -1152,7 +1160,6 @@ class Control:
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source']
                       
-
 
         # channel list 
         nb_channels = 0
@@ -1177,18 +1184,21 @@ class Control:
         for param in param_list:
             output_dict[param] = list()
             
-        #output_dict['signal_gen_amplitude'] = list()
-        #output_dict['signal_gen_frequency'] = list()
-        #output_dict['signal_gen_shape'] = list()
-        #output_dict['signal_gen_phase_shift'] = list()
-        #output_dict['signal_gen_source'] = list()
-        #output_dict['signal_gen_onoff'] = list()
+        output_dict['signal_gen_amplitude'] = list()
+        output_dict['signal_gen_frequency'] = list()
+        output_dict['signal_gen_shape'] = list()
+        output_dict['signal_gen_phase_shift'] = list()
+        output_dict['signal_gen_source'] = list()
+        output_dict['signal_gen_onoff'] = list()
         output_dict['feedback_resistance'] =  list()
         output_dict['squid_turn_ratio'] = list()
         output_dict['shunt_resistance'] = list()
+        output_dict['signal_gen_tes_resistance'] = list()
         output_dict['close_loop_norm'] = list()
         output_dict['open_loop_preamp_norm'] = list()
         output_dict['open_loop_full_norm'] = list()
+
+
         # loop channels
         for ichan in range(nb_channels):
 
@@ -1211,11 +1221,12 @@ class Control:
             # loop TES parameters
             for param in param_list:
                 val = nan
-                try:
-                    val = self._get_sensor_val(param, tes_channel=tes_chan, detector_channel=detector_chan, 
-                                               adc_id=adc_chan_id, adc_channel=adc_chan)
-                except:
-                    print('WARNING in control::read_all: unable to get value for "' +  param)
+                #try:
+                val = self._get_sensor_val(param, tes_channel=tes_chan,
+                                           detector_channel=detector_chan, 
+                                           adc_id=adc_chan_id, adc_channel=adc_chan)
+                #except:
+                #    print('WARNING in control::read_all: unable to get value for "' +  param)
                     
 
                 if val == nan or val is None:
@@ -1226,23 +1237,23 @@ class Control:
                 time.sleep(0.1)
         
             # Signal generator
-            
-            #sig_gen_dict = self.get_signal_gen_params(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
-            #                                          adc_id=adc_chan_id, adc_channel=adc_chan)
+            sig_gen_dict = self.get_signal_gen_params(signal_gen_num=1, tes_channel=tes_chan,
+                                                      detector_channel=detector_chan, 
+                                                      adc_id=adc_chan_id, adc_channel=adc_chan)
 
-            #onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan, detector_channel=detector_chan, 
-            #                                  adc_id=adc_chan_id, adc_channel=adc_chan)
+            onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan,
+                                              detector_channel=detector_chan, 
+                                              adc_id=adc_chan_id, adc_channel=adc_chan)
             
 
-            #output_dict['signal_gen_amplitude'].append(sig_gen_dict['amplitude'])
-            #output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
-            #output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
-            #output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
-            #output_dict['signal_gen_source'].append(sig_gen_dict['source'])
-            #output_dict['signal_gen_onoff'].append(onoff)
-        
+            output_dict['signal_gen_amplitude'].append(sig_gen_dict['amplitude'])
+            output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
+            output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
+            output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
+            output_dict['signal_gen_source'].append(sig_gen_dict['source'])
+            output_dict['signal_gen_onoff'].append(onoff)
 
-            
+                        
             # other parameter
             output_dict['feedback_resistance'].append(self.get_feedback_resistance(tes_channel=tes_chan, 
                                                                                    detector_channel=detector_chan, 
@@ -1262,8 +1273,8 @@ class Control:
 
             output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
             output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
-            
-
+            if self._squid_controller_name == 'feb':
+                output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
 
         return output_dict
         
@@ -1304,7 +1315,9 @@ class Control:
                     print('(subrack = ' + str(subrack) + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
                 
-                if not self._dummy_mode:
+                if self._dummy_mode:
+                    param_val= 1
+                else:
 
                     if param_name == 'tes_bias':
                         param_val = self._feb_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
@@ -1326,6 +1339,7 @@ class Control:
 
                     elif param_name == 'feedback_polarity':
                         is_inverted = self._feb_inst.get_phonon_feedback_polarity(subrack, slot, controller_channel)
+                        print(is_inverted)
                         param_val = 1
                         if is_inverted:
                             param_val = -1
@@ -1346,14 +1360,13 @@ class Control:
 
                     elif param_name == 'signal_gen_feedback_connection':
                         param_val = self._feb_inst.is_signal_generator_feedback_connected(subrack, slot,controller_channel)
+
                     elif param_name == 'signal_gen_tes_connection':
                         param_val = self._feb_inst.is_signal_generator_tes_connected(subrack, slot,controller_channel)
 
                     else:
                         pass
-                else:
-                    param_val= 1
-
+                
             elif self._squid_controller_name == 'magnicon':
 
                 if self._verbose:
@@ -1647,7 +1660,7 @@ class Control:
             if address:
                 if self._verbose:
                     print('INFO: Instantiating FEB using address: ' + address)
-                self._feb_inst = feb.FEB(address)
+                self._feb_inst = feb.FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
             else:
                 raise ValueError('Unable to find GPIB address. It will not work!')
 
@@ -1689,6 +1702,8 @@ class Control:
         # ----------
         if self._signal_generator_name == 'keysight':
             address = self._config.get_signal_generator_address('keysight')
-            self._signal_generator_inst = funcgenerators.KeysightFuncGenerator(address)
+            self._signal_generator_inst = funcgenerators.KeysightFuncGenerator(address,
+                                                                               verbose=self._verbose,
+                                                                               raise_errors=self._raise_errors)
             
             

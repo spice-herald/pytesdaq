@@ -22,7 +22,8 @@ if __name__ == "__main__":
     parser.add_argument('--disable-lock',dest="disable_lock",action="store_true",help='Disable daq process lock')
     parser.add_argument('--verbose',action="store_true",help='Screen output')
     parser.add_argument('--setup_file', type = str,help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
-   
+    parser.add_argument('--raw_path', type = str,help = 'Raw data path [default: ./]')
+    
 
     # arguments with default value in configuration file
     parser.add_argument('--facility', type = str, help = 'Facility number [default from configuration setup file] ')
@@ -50,6 +51,7 @@ if __name__ == "__main__":
     log_file = str()
     disable_lock = False
     verbose = False
+    raw_path = './'
     
     # default from "setup.ini" (or user input file)
     setup_file = ''
@@ -84,6 +86,9 @@ if __name__ == "__main__":
         disable_lock = True
     if args.verbose:
         verbose = True
+    if args.raw_path:
+        raw_path = args.raw_path
+        
         
     # ADC configuration
     if args.devices:
@@ -147,7 +152,7 @@ if __name__ == "__main__":
         mydaq.set_detector_config(det_config)
 
     # run
-    success = mydaq.run(run_time, run_type, run_comment)
+    success = mydaq.run(run_time, run_type, run_comment, data_path=raw_path)
   
     if (success):
         print('Data taking done successfully!')

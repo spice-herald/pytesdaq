@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import traceback
 from pytesdaq.utils import connection_utils
+from math import nan
 
 class Config:
     
@@ -231,23 +232,33 @@ class Config:
 
 
     def get_shunt_resistance(self):
-        r_shunt = None
+        """
+        Read shunt resistance from setup.ini file
+        """
+        
+        resistance = nan
         try:
-            r_shunt =  int(self._get_setting('setup','shunt_resistance'))
+            resistance =  float(self._get_setting('setup','shunt_resistance'))
         except:
-            print('WARNING: "shunt_resistance" parameter required!')
-          
+            raise ValueError('ERROR: "shunt_resistance" parameter required!')
+            
     
-        return r_shunt
+        return resistance
 
 
 
     def get_squid_turn_ratio(self):
-        squid_turn_ratio = None
+        """
+        Read SQUID Turn ratio from setup.ini file
+        """
+        
+        squid_turn_ratio = nan
+
         try:
             squid_turn_ratio =  float(self._get_setting('setup','squid_turn_ratio'))
         except:
-            print('WARNING: "squid_turn_ratio" parameter required!')
+            raise ValueError('ERROR: "shunt_resistance" parameter required!')
+         
          
     
         return squid_turn_ratio 
@@ -266,7 +277,7 @@ class Config:
             controller_name = self.get_squid_controller()
 
 
-        if self._has_setting(controller_name,'preamp_fix_gain'):
+        if self._has_setting(controller_name,'preamp_fix_gain') and controller_name is not None:
             preamp_fix_gain =  float(self._get_setting(controller_name,'preamp_fix_gain'))
             
             
@@ -285,7 +296,7 @@ class Config:
             controller_name = self.get_squid_controller()
 
 
-        if self._has_setting(controller_name,'feedback_fix_gain'):
+        if self._has_setting(controller_name,'feedback_fix_gain') and controller_name is not None:
             feedback_fix_gain =  float(self._get_setting(controller_name,'feedback_fix_gain'))
             
             
@@ -302,7 +313,7 @@ class Config:
             controller_name = self.get_squid_controller()
 
         
-        if self._has_setting('controller_name','output_fix_gain'):
+        if self._has_setting(controller_name,'output_fix_gain') and controller_name is not None:
             output_fix_gain =  float(self._get_setting(controller_name,'output_fix_gain'))
             
         return output_fix_gain
@@ -315,21 +326,28 @@ class Config:
         Magnicon: variable feedback resistance can be read directly from electronics
         """
 
-        feedback_resistance = None
+        resistance = nan
         if self._has_setting('setup','feedback_resistance'):
-            feedback_resistance =  float(self._get_setting('setup','feedback_resistance'))
-        return feedback_resistance
+            resistance =  float(self._get_setting('setup','feedback_resistance'))
+        return resistance
         
 
-    def get_signal_gen_tes_resistance(self):
-        signal_gen_tes_resistance = []
-        try:
-            signal_gen_tes_resistance =  float(self._get_setting('setup','signal_gen_tes_resistance'))
-        except:
-            print('WARNING: "signal_gen_tes_resistance" parameter not available!')
-           
-        return signal_gen_tes_resistance
+
+    def get_signal_gen_tes_resistance(self, controller_name=None):
+        """
+        Get SQUID readout output driver fix gain
+        """
+        resistance = nan
+
+        if controller_name is None:
+            controller_name = self.get_squid_controller()
+
         
+        if self._has_setting(controller_name,'signal_gen_tes_resistance') and controller_name is not None:
+            resistance  =  float(self._get_setting(controller_name,'signal_gen_tes_resistance'))
+            
+        return resistance
+
 
     
     def get_adc_list(self):
