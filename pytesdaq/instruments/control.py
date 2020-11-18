@@ -342,8 +342,8 @@ class Control:
                 gen2_onoff = on_off_flag.upper()
 
 
-            rb_onoff1, rb_onoff, rb_mon_onoff = set_generator_onoff(controller_channel, 
-                                                                    gen1_onoff, gen2_onoff, mon_onoff)
+            rb_onoff1, rb_onoff, rb_mon_onoff = self._magnicon_inst.set_generator_onoff(controller_channel, 
+                                                                                        gen1_onoff, gen2_onoff, mon_onoff)
 
 
         else:
@@ -409,10 +409,10 @@ class Control:
             if source != 'feedback':
                 source_magnicon = 'Ib'
 
-            readback_amp, readback_freq = self._magnicon_inst.set_generator_params(controller_channel, signal_gen_num, 
-                                                                                   frequency, source, shape, 
-                                                                                   phase_shift, freq_div, half_pp_offset, 
-                                                                                   amplitude)
+            readback_amp, readback_freq = self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
+                                                                                   float(frequency), source_magnicon, shape, 
+                                                                                   int(phase_shift), int(freq_div), half_pp_offset, 
+                                                                                   float(amplitude))
             
 
         # External function generator
