@@ -1105,8 +1105,51 @@ class ToolsWindow(QtWidgets.QWidget):
 
         # readout
         self._readout = readout
+
+        # construct frame
+        self._main_frame = None
+        self._init_frame()
     
+
+
+    def _handle_read_board(self):
+        self._readout.read_from_board()
         
+        print('Read from board')
+        
+
+
+        
+    def _init_frame(self):
+
+        # add main frame
+        self._main_frame = QtWidgets.QFrame(self)
+        self._main_frame.resize(400, 300)
+        #self._main_frame.setGeometry(QtCore.QRect(290, 76, 597, 597))
+        self._main_frame.setStyleSheet('background-color: rgb(211, 252, 255);')
+        self._main_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self._main_frame.setFrameShadow(QtWidgets.QFrame.Raised)
+        self._main_frame.setLineWidth(1)
+        self._main_frame.setObjectName('MainFrame')
+        
+
+        
+        # Add tools button
+        self._read_board_button = QtWidgets.QPushButton(self._main_frame)
+        self._read_board_button.setGeometry(QtCore.QRect(156, 15, 89, 50))
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self._read_board_button.setFont(font)
+        self._read_board_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._read_board_button.setObjectName('readBoard')
+        self._read_board_button.setText('Read \n from board')
+
+
+
+        # connect
+        self._read_board_button.clicked.connect(self._handle_read_board)
+
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
