@@ -227,30 +227,40 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # select tab
         if data_source== 'Redis':
+
             self._data_source  = 'redis'
 
-            self._redis_tab.setEnabled(True)
-            self._hdf5_tab.setEnabled(False)
-            self._niadc_tab.setEnabled(False)
-            
-            self._data_source_tabs.setCurrentWidget(self._redis_tab)
+            # visibility
+            self._data_source_tabs.setTabVisible(0,False)
+            self._data_source_tabs.setTabVisible(1,False)
+            self._data_source_tabs.setTabVisible(2,True)
 
+            # set current
+            self._data_source_tabs.setCurrentWidget(self._redis_tab)
+            
+            
         elif data_source== 'HDF5':
+            
             self._data_source  = 'hdf5'
             
-            self._redis_tab.setEnabled(False)
-            self._hdf5_tab.setEnabled(True)
-            self._niadc_tab.setEnabled(False)
+            # visibility
+            self._data_source_tabs.setTabVisible(0,False)
+            self._data_source_tabs.setTabVisible(1,True)
+            self._data_source_tabs.setTabVisible(2,False)
 
+            # set current
             self._data_source_tabs.setCurrentWidget(self._hdf5_tab)
 
         elif data_source== 'Device':
+            
             self._data_source  = 'niadc'
 
-            self._redis_tab.setEnabled(False)
-            self._hdf5_tab.setEnabled(False)
-            self._niadc_tab.setEnabled(True)
+            # visibility
+            self._data_source_tabs.setTabVisible(0,True)
+            self._data_source_tabs.setTabVisible(1,False)
+            self._data_source_tabs.setTabVisible(2,False)
 
+            # set current
             self._data_source_tabs.setCurrentWidget(self._niadc_tab)
 
         else:
@@ -708,10 +718,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._hdf5_select_button.setText('Select \n' 'Files/Dir')
 
 
-        # disable
-        self._hdf5_tab.setEnabled(False)
-        
-
+      
         # ---------
         # Redis tab
         # ---------
@@ -726,10 +733,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._redis_tab.setObjectName('redisTab')
         self._data_source_tabs.addTab(self._redis_tab, 'Redis')
         
-        # disable
-        self._redis_tab.setEnabled(False)
+       
+        # Set Visibility
+        
+        self._data_source_tabs.setTabVisible(0,True)
+        self._data_source_tabs.setTabVisible(1,False)
+        self._data_source_tabs.setTabVisible(2,False)
 
 
+        
         # -----------------
         # source selection combox box
         # -----------------
@@ -759,7 +771,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # display control
         # --------------
         self._display_control_button = QtWidgets.QPushButton(self._control_frame)
-        self._display_control_button.setGeometry(QtCore.QRect(142, 12, 91, 65))
+        self._display_control_button.setGeometry(QtCore.QRect(142, 15, 91, 65))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)

@@ -58,9 +58,10 @@ class Analyzer:
         # ---------------------
         # normalization
         # ---------------------
-        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm'] is not None:
+        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm']!='None':
             data_array = self.normalize(data_array,data_config,
-                                        self._analysis_config['unit'],self._analysis_config['norm'])
+                                        self._analysis_config['unit'],
+                                        self._analysis_config['norm'])
 
 
 
@@ -132,7 +133,6 @@ class Analyzer:
                 data_array_norm[ichan,:] *= 10**9
             elif self._analysis_config['unit']=='pAmps':
                 data_array_norm[ichan,:] *= 10**12
-                
             
         
         return data_array_norm

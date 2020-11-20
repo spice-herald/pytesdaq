@@ -564,8 +564,8 @@ class Readout:
         norm_val = 1
 
         # case open/closed loop -> read from board
-        if norm_type.find('OpenLoop')!=-1 or norm_type=='CloseLoop':
-            self.read_from_board(read_norm=True)
+        if norm_type.find('OpenLoop')!=-1 or norm_type.find('CloseLoop')!=-1:
+            self.read_from_board()
         else:
             
             if norm_type=='Gain=10':
