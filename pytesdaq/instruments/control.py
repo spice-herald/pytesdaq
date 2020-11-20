@@ -1184,7 +1184,9 @@ class Control:
         for param in param_list:
             output_dict[param] = list()
             
-        output_dict['signal_gen_amplitude'] = list()
+        #output_dict['signal_gen_amplitude'] = list()
+        output_dict['signal_gen_voltage'] = list()
+        output_dict['signal_gen_current'] = list()
         output_dict['signal_gen_frequency'] = list()
         output_dict['signal_gen_shape'] = list()
         output_dict['signal_gen_phase_shift'] = list()
@@ -1245,8 +1247,14 @@ class Control:
                                               detector_channel=detector_chan, 
                                               adc_id=adc_chan_id, adc_channel=adc_chan)
             
-
-            output_dict['signal_gen_amplitude'].append(sig_gen_dict['amplitude'])
+            if self._squid_controller_name == 'feb':
+                output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
+                output_dict['signal_gen_voltage'].append(sig_gen_dict['amplitude'])
+                current = (sig_gen_dict['amplitude']/output_dict['signal_gen_tes_resistance'])*1000
+                output_dict['signal_gen_current'].append(current)
+            else:
+                output_dict['signal_gen_current'].append(sig_gen_dict['amplitude'])
+                
             output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
             output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
             output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
@@ -1273,9 +1281,7 @@ class Control:
 
             output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
             output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
-            if self._squid_controller_name == 'feb':
-                output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
-
+          
         return output_dict
         
         
@@ -1387,7 +1393,15 @@ class Control:
 
                     elif param_name == 'feedback_gain':
                         param_val = self._magnicon_inst.get_GBP(controller_channel)
-               
+
+                    elif param_name == 'output_offset':
+                        # No offset setting magnicon
+                        param_val = 0
+                        
+                    elif param_name == 'output_gain':
+                        # No output gain magnicon
+                        param_val = 1
+                        
                     elif param_name == 'preamp_gain':
                         amp, bw = self._magnicon_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = amp
@@ -1407,7 +1421,16 @@ class Control:
                             param_val = 'close'
                         else:
                             param_val = val
-                     
+
+                    elif param_name == 'signal_source':
+                        val = self._magnicon_inst.get_amp_or_fll(controller_channel)
+                        if val=='AMP':
+                            param_val = 'preamp'
+                        elif val=='FLL':
+                            param_val = 'feedback'
+                        else:
+                            param_val = val
+
                     elif param_name == 'feedback_resistance':
                         param_val = self._magnicon_inst.get_feedback_resistor(controller_channel)
 
