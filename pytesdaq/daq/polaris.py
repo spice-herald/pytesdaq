@@ -396,7 +396,7 @@ class PolarisTask:
                 trigger_channel = '/Dev1/pfi0'
                 if 'trigger_channel' in config_dict:
                     trigger_channel = config_dict['trigger_channel']
-                cfg_list.append('\ttrigger_channel : ' + trigger_channel + ',\n')
+                cfg_list.append('\ttrig_channel : ' + trigger_channel + ',\n')
 
             # close section
             cfg_list.append('}\n')

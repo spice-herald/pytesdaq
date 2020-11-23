@@ -342,6 +342,9 @@ class Control:
                 gen2_onoff = on_off_flag.upper()
 
 
+            if gen1_onoff=='ON' or gen2_onoff=='ON':
+                mon_onoff = 'ON'
+
             rb_onoff1, rb_onoff, rb_mon_onoff = self._magnicon_inst.set_generator_onoff(controller_channel, 
                                                                                         gen1_onoff, gen2_onoff, mon_onoff)
 
@@ -406,7 +409,7 @@ class Control:
             
             # convert some parameters
             source_magnicon = 'I'
-            if source != 'feedback':
+            if source == 'feedback':
                 source_magnicon = 'Ib'
 
             readback_amp, readback_freq = self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
@@ -1566,8 +1569,8 @@ class Control:
                 elif param_name == 'feedback_mode':
                     mode = 'AMP'
                     if value=='close':
-                        value='FLL'
-                    readback_val = self._magnicon_inst.set_amp_or_fll(controller_channel, value)
+                        mode='FLL'
+                    readback_val = self._magnicon_inst.set_amp_or_fll(controller_channel, mode)
 
 
         else:

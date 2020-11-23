@@ -219,19 +219,19 @@ class IV_dIdV(Sequencer):
                     for channel in self._selected_channel_list:
                     
                         # signal generator
-                        self._instrument.set_signal_gen_params(tes_channel=channel,
-                                                               source='tes', 
+                        '''
+                        self._instrument.set_signal_gen_params(tes_channel=channel,source='tes', 
                                                                amplitude=didv_config['signal_gen_amplitude'], 
                                                                frequency=didv_config['signal_gen_frequency'],
                                                                shape='square')
-                        
+                        '''
                         self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
                         
 
                         
                         # other parameters
-                        if 'output_gain' in iv_config:
-                            self._instrument.set_output_gain(iv_config['output_gain'],tes_channel=channel)
+                        if 'output_gain' in didv_config:
+                            self._instrument.set_output_gain(didv_config['output_gain'],tes_channel=channel)
                             
                         # wait 5 seconds
                         time.sleep(5)
@@ -375,12 +375,13 @@ class IV_dIdV(Sequencer):
                 
                 
                 # signal generator
+                '''
                 self._instrument.set_signal_gen_params(tes_channel=channel,
                                                        source='tes', 
                                                        amplitude=config_dict['signal_gen_amplitude'], 
                                                        frequency=config_dict['signal_gen_frequency'],
                                                        shape='square')
-                
+                '''
                 self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
                 time.sleep(2)
 
@@ -530,24 +531,33 @@ class IV_dIdV(Sequencer):
                 else:
                     tes_bias_vect = [float(bias) for bias in self._sequencer_config['tes_bias_vect']]
                     tes_bias_vect = np.unique(np.asarray(tes_bias_vect))
-
+                    tes_bias_vect = tes_bias_vect[::-1]
+             
             else:
-                required_parameter = ['tes_bias_min','tes_bias_max','tes_bias_step_N',
-                                      'tes_bias_step_T','tes_bias_T']
+                required_parameter = ['tes_bias_min','tes_bias_max','tes_bias_step_n',
+                                      'tes_bias_step_t','tes_bias_t']
 
                 for key in required_parameter:
                     if key not in self._sequencer_config:
                         raise ValueError('IV/dIdV measurement require ' + str(key) +
                                          ' if "iv_didv_use_vect" = false! Please check configuration')
-                                
-                tes_bias_vect_n = np.arrange(self._sequencer_config['tes_bias_max'],
-                                             self._sequencer_config['tes_bias_t'],
-                                             -self._sequencer_config['tes_bias_step_n'])
-                tes_bias_vect_t = np.arrange(self._sequencer_config['tes_bias_t'],
-                                             self._sequencer_config['tes_bias_min'],
-                                             -self._sequencer_config['tes_bias_step_t'])
+                
+                tes_bias_vect_n = np.arange(int(self._sequencer_config['tes_bias_max']),
+                                            int(self._sequencer_config['tes_bias_t']),
+                                            -int(self._sequencer_config['tes_bias_step_n']))
+                tes_bias_vect_t = np.arange(int(self._sequencer_config['tes_bias_t']),
+                                            int(self._sequencer_config['tes_bias_sc']),
+                                            -int(self._sequencer_config['tes_bias_step_t']))
+                tes_bias_vect_sc = np.arange(int(self._sequencer_config['tes_bias_sc']),
+                                             int(self._sequencer_config['tes_bias_min']),
+                                             -int(self._sequencer_config['tes_bias_step_sc']))
+                
+                tes_bias_vect = np.unique(np.concatenate((tes_bias_vect_n,
+                                                          tes_bias_vect_t,
+                                                          tes_bias_vect_sc),axis=0))
 
-                tes_bias_vect = np.unique(np.concatenate((tes_bias_vect_n, tes_bias_vect_t),axis=0))
+                tes_bias_vect = tes_bias_vect[::-1]
+              
                 
             config_dict['tes_bias_vect'] =  tes_bias_vect 
 
