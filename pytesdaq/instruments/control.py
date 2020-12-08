@@ -18,15 +18,16 @@ class Control:
     Control TES related instruments
     """
     
-    def __init__(self, verbose=True, dummy_mode=True, raise_errors=True):
+    def __init__(self, setup_file=None, verbose=True, dummy_mode=True, raise_errors=True):
         
         # for code development
         self._dummy_mode = dummy_mode
         self._verbose = verbose
         self._raise_errors = raise_errors
+        self._debug = False
         
         # config
-        self._config = settings.Config()
+        self._config = settings.Config(setup_file=setup_file)
         
         # redis
         self._enable_redis = self._config.enable_redis()
@@ -77,7 +78,16 @@ class Control:
         else:
             self._read_from_redis=value
         
+    @property
+    def squid_controller_name(self):
+        return self._squid_controller_name
 
+    @property
+    def signal_generator_name(self):
+        return self._signal_generator_name
+
+
+    
 
             
 
@@ -134,7 +144,7 @@ class Control:
         Set SQUID lock point
         """
         try:
-            self._set_sensor_val('lock_point_voltage', bias,
+            self._set_sensor_val('lock_point_voltage', lock_point,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -154,7 +164,8 @@ class Control:
         
 
         """
-        Set Feedback gain (magnicon: gain-bw product)
+        Set Feedback gain (magnicon: gain-bw product) [Hz]
+        
         """
         try:
             self._set_sensor_val('feedback_gain', gain,
@@ -359,15 +370,17 @@ class Control:
     def set_signal_gen_params(self, tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None,
-                              signal_gen_num=1, 
-                              source=None, amplitude=None, frequency=None,
+                              signal_gen_num=1, source=None,
+                              voltage=None, current=None,
+                              frequency=None,
                               shape='square', phase_shift=0, freq_div=0, half_pp_offset='OFF'):
 
         """
         Set signal generator parameters
 
         source:  'tes' or 'feedback' (required)
-        amplitude: peak-to-peak amplitude, magnicon [uA], Keysight [mVpp]
+        voltage: peak-to-peak voltage amplitude  [mVpp]
+        current: peak-to-peak current amplitude  [uA]
         frequency: Float [Hz] (Default = 100 Hz)
         shape: 'triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise'
         """
@@ -376,10 +389,15 @@ class Control:
 
 
         # check parameters
-        if source is None or amplitude is None or frequency is None:
-            print('ERROR: Required parameters = "source" and "amplitude"')
+        if source is None or frequency is None or (voltage is None and current is None):
+            print('ERROR: Required parameters for signal generator = "source", "current" or "voltage", and "frequency"')
             return
 
+
+        if voltage is not None and current is not None:
+            print('ERROR: Set signal generator amplitude either with "current" or "voltage", not both!')
+            return
+        
         if source != 'tes' and source != 'feedback':
             print('ERROR: Source can be either "tes" or "feedback"')
             
@@ -395,7 +413,7 @@ class Control:
         
         if self._dummy_mode:
             print('INFO: Setting signal generator #' + str(signal_gen_num) + ', ' + 
-                   controller_id + ' channel ' + str(controller_channel))
+                  controller_id + ' channel ' + str(controller_channel))
             return
 
 
@@ -406,7 +424,8 @@ class Control:
 
         # magnicon
         if self._signal_generator_name == 'magnicon': 
-            
+
+                      
             # convert some parameters
             source_magnicon = 'I'
             if source == 'feedback':
@@ -415,11 +434,12 @@ class Control:
             readback_amp, readback_freq = self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
                                                                                    float(frequency), source_magnicon, shape, 
                                                                                    int(phase_shift), int(freq_div), half_pp_offset, 
-                                                                                   float(amplitude))
+                                                                                   float(current))
             
 
         # External function generator
         else:
+
 
             # shape
             if shape == 'sawtoothpos' or shape == 'sawtoothneg':
@@ -428,7 +448,11 @@ class Control:
             self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
             
             # amplitude
-            self._signal_generator_inst.set_amplitude(amplitude, unit='mVpp', source=signal_gen_num)
+            if voltage is None and current is not None:
+                resistance = float(self._config.get_signal_gen_tes_resistance())
+                voltage = resistance*current/1000
+
+            self._signal_generator_inst.set_amplitude(voltage, unit='mVpp', source=signal_gen_num)
 
             # frequency
             self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
@@ -574,7 +598,7 @@ class Control:
 
 
         """
-        Get lock point 
+        Get lock point [mV]
         """
         lock_point = nan
         try:
@@ -945,7 +969,8 @@ class Control:
             else:
                 output_dict['source'] = source
 
-            output_dict['amplitude'] = amp
+            output_dict['current'] = amp
+            output_dict['voltage'] = []
             output_dict['frequency'] = freq
             output_dict['shape'] = shape
             output_dict['phase_shift'] = shift
@@ -958,7 +983,9 @@ class Control:
         else:
 
             # signal generator parameter
-            output_dict['amplitude'] = self._signal_generator_inst.get_amplitude(source=signal_gen_num)
+            output_dict['voltage'] = self._signal_generator_inst.get_amplitude(source=signal_gen_num)
+            resistance = float(self._config.get_signal_gen_tes_resistance())
+            output_dict['current']  = (output_dict['voltage']/resistance)*1000
             output_dict['frequency'] = self._signal_generator_inst.get_frequency(source=signal_gen_num)
             output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
 
@@ -1019,7 +1046,7 @@ class Control:
                                 detector_channel=None,
                                 adc_id=None, adc_channel=None):
         """
-        Get feedback resistance
+        Get feedback resistance [Ohm]
            - Magnicon: value can be modified and read back
            - FEB: Needs to be in setup.ini file
         """
@@ -1037,6 +1064,9 @@ class Control:
                                                            adc_id=adc_id, adc_channel=adc_channel)
             except:
                 print('ERROR getting feedback resistance')
+
+            # convert from kOhms to Ohms
+            feedback_resistance = feedback_resistance *1000
                 
         else:
             feedback_resistance = self._config.get_feedback_resistance()
@@ -1145,13 +1175,17 @@ class Control:
     def read_all(self, tes_channel_list=None, detector_channel_list= None,
                  adc_id=None,adc_channel_list=None):
         """
-        Read from baord all parameters
+        Read from board all parameters
         Output in a dictionary: dict['param'] = array values (index based
           on input list)
         
         """
 
+        if self._verbose:
+            print('INFO: Reading detector settings from board...') 
 
+        
+            
         # ====================
         # Initialize output
         # ====================
@@ -1186,8 +1220,7 @@ class Control:
         # intialize output
         for param in param_list:
             output_dict[param] = list()
-            
-        #output_dict['signal_gen_amplitude'] = list()
+     
         output_dict['signal_gen_voltage'] = list()
         output_dict['signal_gen_current'] = list()
         output_dict['signal_gen_frequency'] = list()
@@ -1227,6 +1260,7 @@ class Control:
             for param in param_list:
                 val = nan
                 #try:
+
                 val = self._get_sensor_val(param, tes_channel=tes_chan,
                                            detector_channel=detector_chan, 
                                            adc_id=adc_chan_id, adc_channel=adc_chan)
@@ -1250,14 +1284,8 @@ class Control:
                                               detector_channel=detector_chan, 
                                               adc_id=adc_chan_id, adc_channel=adc_chan)
             
-            if self._squid_controller_name == 'feb':
-                output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
-                output_dict['signal_gen_voltage'].append(sig_gen_dict['amplitude'])
-                current = (sig_gen_dict['amplitude']/output_dict['signal_gen_tes_resistance'])*1000
-                output_dict['signal_gen_current'].append(current)
-            else:
-                output_dict['signal_gen_current'].append(sig_gen_dict['amplitude'])
-                
+            output_dict['signal_gen_voltage'].append(sig_gen_dict['voltage'])
+            output_dict['signal_gen_current'].append(sig_gen_dict['current'])
             output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
             output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
             output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
@@ -1319,11 +1347,11 @@ class Control:
                 subrack = int(feb_info[0])
                 slot = int(feb_info[1])
             
-                if self._verbose:
+                if self._debug:
                     print('INFO: Getting setting "' + param_name + '" from FEB')
                     print('(subrack = ' + str(subrack) + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
-                
+                        
                 if self._dummy_mode:
                     param_val= 1
                 else:
@@ -1348,7 +1376,6 @@ class Control:
 
                     elif param_name == 'feedback_polarity':
                         is_inverted = self._feb_inst.get_phonon_feedback_polarity(subrack, slot, controller_channel)
-                        print(is_inverted)
                         param_val = 1
                         if is_inverted:
                             param_val = -1
@@ -1493,52 +1520,53 @@ class Control:
             subrack = int(feb_info[0])
             slot = int(feb_info[1])
             
-            if self._verbose:
+            if self._verbose or self._debug:
                 print('INFO: Setting ' + param_name + ' to ' + str(value) + ' using FEB:')
+            if self._debug:
                 print('subrack = ' + str(subrack) + ', slot = ' + str(slot) + ', channel = ' + 
                       str(controller_channel))
                  
             if not self._dummy_mode:
                 if param_name == 'tes_bias':
-                    self._feb_inst.set_phonon_qet_bias(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_qet_bias(subrack, slot, controller_channel, value)
             
                 elif param_name == 'squid_bias':
-                    self._feb_inst.set_phonon_squid_bias(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_squid_bias(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'lock_point_voltage':
-                    self._feb_inst.set_phonon_lock_point(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_lock_point(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'preamp_gain':
-                    self._feb_inst.set_phonon_preamp_gain(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_preamp_gain(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_offset':
-                    self._feb_inst.set_phonon_offset(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_offset(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_gain':
-                    self._feb_inst.set_phonon_output_gain(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_output_gain(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'feedback_polarity':
                     do_invert = False
                     if val==-1:
                         do_invert = True
-                    self._feb_inst.set_phonon_feedback_polarity(subrack, slot,controller_channel,do_invert)
+                    self._feb_inst.set_phonon_feedback_polarity(subrack, slot, controller_channel, do_invert)
             
                 elif param_name == 'feedback_mode':
-                    self._feb_inst.set_phonon_feedback_loop(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'preamp_source':
-                    self._feb_inst.set_phonon_source_preamp(subrack, slot,controller_channel,value)
+                    self._feb_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'signal_gen_feedback_connected':
-                    self._feb_inst.connect_signal_generator_feedback(subrack, slot,controller_channel,value)
+                    self._feb_inst.connect_signal_generator_feedback(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'signal_gen_tes_connected':
-                    self._feb_inst.connect_signal_generator_tes(subrack, slot,controller_channel,value)
+                    self._feb_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
                            
 
         elif self._squid_controller_name == 'magnicon':
             
-            if self._verbose:
+            if self._verbose or self._debug:
                 print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
                       + str(controller_channel) + ' (Magnicon)!')
 
@@ -1548,10 +1576,10 @@ class Control:
                     readback_val = self._magnicon_inst.set_tes_current_bias(controller_channel, value, mode=None)
                 
                 elif param_name == 'squid_bias':
-                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'I',value)
+                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'I', value)
                 
                 elif param_name == 'lock_point_voltage':
-                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'V',value)
+                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'V', value)
                 
                 elif param_name == 'feedback_gain':
                     readback_val = self._magnicon_inst.set_GBP(controller_channel, value)
@@ -1561,7 +1589,7 @@ class Control:
                 
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel,value[0],value[1])
+                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')

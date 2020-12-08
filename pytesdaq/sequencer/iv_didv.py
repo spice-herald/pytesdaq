@@ -9,14 +9,16 @@ import time
 
 class IV_dIdV(Sequencer):
     
-    def __init__(self,iv =False,didv =False,rp=False,rn=False, 
+    def __init__(self, iv =False, didv =False, rp=False, rn=False, 
                  temperature_sweep=False, channel_list = list(),
-                 sequencer_file='',setup_file='',pickle_file=''):
+                 sequencer_file=None, setup_file=None, pickle_file=None,
+                 verbose=True):
 
          super().__init__(channel_list = channel_list,
                           sequencer_file=sequencer_file,
                           setup_file=setup_file,
-                          pickle_file=pickle_file)
+                          pickle_file=pickle_file,
+                          verbose=verbose)
          
          # measurements
          self._enable_iv = iv
@@ -44,8 +46,8 @@ class IV_dIdV(Sequencer):
         
         # Instantiate DAQ
         self._daq = daq.DAQ(driver_name = self._daq_driver,
-                            facility = self._facility,
-                            verbose = self._verbose)
+                            verbose = self._verbose,
+                            setup_file=self._setup_file)
         
         
         # Instantiate instrumment controller
@@ -108,6 +110,11 @@ class IV_dIdV(Sequencer):
             iv_config =  self._sweep_config['iv']
         if self._enable_didv:
             didv_config = self._sweep_config['didv']
+            # signal gen amplitude can be either voltage or current
+            if 'signal_gen_voltage' not in didv_config:
+                didv_config['signal_gen_voltage'] = None
+            if 'signal_gen_current' not in didv_config:
+                didv_config['signal_gen_current'] = None
             
         
         # Initialize detector
@@ -144,19 +151,23 @@ class IV_dIdV(Sequencer):
                         # FIXME: slope calculation
                         time.wait(30)
 
-                else:
-                    
+                else:         
                     # PID controlled temperature 
                     self._instrument.set_temperature(value)
                     
 
             # bias sweep
             tes_bias_vect = sweep_config['tes_bias_vect']
+            nb_steps = len(tes_bias_vect)
+            istep = 0
             for bias in tes_bias_vect:
 
                 # set bias all channels
+                istep+=1
+                print('INFO: Sequencer step #' + str(istep) + ' out of total ' + str(nb_steps) + ' steps!')
+                print('INFO: Setting TES bias all channels to : ' + str(bias) + 'uA!')
                 for channel in self._selected_channel_list:
-                    self._instrument.set_tes_bias(bias,tes_channel=channel)
+                    self._instrument.set_tes_bias(bias, tes_channel=channel)
                     
                 
                 # -----------
@@ -191,10 +202,12 @@ class IV_dIdV(Sequencer):
                     self._daq.set_detector_config(det_config)
                     
                     # take data
-                    run_comment = 'IV: ' + ' Bias = ' + str(bias) + 'uA'
+                    run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
                     if self._enable_temperature_sweep:
                         run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-                  
+
+
+                    print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
                     success = self._daq.run(run_time = int(iv_config['run_time']),run_type = 102,
                                             run_comment = run_comment, data_path = self._data_path,
                                             data_prefix = 'iv')
@@ -219,12 +232,13 @@ class IV_dIdV(Sequencer):
                     for channel in self._selected_channel_list:
                     
                         # signal generator
-                        '''
+                        
                         self._instrument.set_signal_gen_params(tes_channel=channel,source='tes', 
-                                                               amplitude=didv_config['signal_gen_amplitude'], 
+                                                               voltage=didv_config['signal_gen_voltage'],
+                                                               current=didv_config['signal_gen_current'],
                                                                frequency=didv_config['signal_gen_frequency'],
                                                                shape='square')
-                        '''
+                    
                         self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
                         
 
@@ -250,11 +264,12 @@ class IV_dIdV(Sequencer):
 
                     
                             # take data
-                            run_comment = 'dIdV chan ' + str(channel) + ': Bias = ' + str(bias) + 'uA'
+                            run_comment = 'dIdV chan ' + str(channel) + ': TES bias = ' + str(bias) + 'uA'
                             if self._enable_temperature_sweep:
                                 run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-
-
+                                
+                            print('INFO: Starting dIdV data taking for channel ' + str(channel)
+                                  + ' with TES bias = ' + str(bias) + 'uA!')
                             success = self._daq.run(run_time = int(didv_config['run_time']),run_type = 103,
                                                     run_comment = run_comment, data_path = self._data_path,
                                                     data_prefix = 'didv')
@@ -281,13 +296,15 @@ class IV_dIdV(Sequencer):
 
 
                         # start run
-                        run_comment = 'dIdV chan ' + str(channel) + ': Bias = ' + str(bias) + 'uA'
+                        run_comment = 'dIdV: TES bias = ' + str(bias) + 'uA'
                         if sweep_config['temperature_sweep']:
                             run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-                        
-                        success = self._daq.run(run_time = int(didv_config['run_time']),run_type = 103,
-                                                run_comment = run_comment, data_path = self._data_path,
-                                                data_prefix = 'didv')
+
+
+                        print('INFO: Starting dIdV data takibg with TES bias = ' + str(bias) + 'uA!')
+                        success = self._daq.run(run_time=int(didv_config['run_time']), run_type=103,
+                                                run_comment=run_comment, data_path=self._data_path,
+                                                data_prefix='didv')
 
                         if not success:
                             print('ERROR taking data! Stopping sequencer')
@@ -375,13 +392,13 @@ class IV_dIdV(Sequencer):
                 
                 
                 # signal generator
-                '''
                 self._instrument.set_signal_gen_params(tes_channel=channel,
                                                        source='tes', 
-                                                       amplitude=config_dict['signal_gen_amplitude'], 
-                                                       frequency=config_dict['signal_gen_frequency'],
+                                                       voltage=didv_config['signal_gen_voltage'],
+                                                       current=didv_config['signal_gen_current'],
+                                                       frequency=didv_config['signal_gen_frequency'],
                                                        shape='square')
-                '''
+            
                 self._instrument.set_signal_gen_onoff('on',tes_channel=channel)
                 time.sleep(2)
 
@@ -435,10 +452,7 @@ class IV_dIdV(Sequencer):
                     return False
                                 
 
-        
-
-
-
+   
 
 
     def _configure(self):
@@ -448,8 +462,12 @@ class IV_dIdV(Sequencer):
         """
 
         required_parameter_adc = ['sample_rate','voltage_min','voltage_max']
-        required_parameter_didv = ['signal_gen_amplitude', 'signal_gen_frequency',
-                                   'signal_gen_shape','loop_channels']
+        required_parameter_didv = ['signal_gen_frequency','signal_gen_shape','loop_channels']
+        if self._config.get_signal_generator()=='magnicon':
+            required_parameter_didv.append('signal_gen_current')
+        else:
+            required_parameter_didv.append('signal_gen_voltage')
+            
         required_parameter_didv.extend(required_parameter_adc)
         
         # initialize sweep configuration
@@ -580,4 +598,21 @@ class IV_dIdV(Sequencer):
             self._sweep_config['iv_didv_sweep'] = config_dict  
 
 
-   
+
+            
+            # create sequencer directory
+            basename = str()
+            if self._enable_iv:
+                basename = basename + '_iv'
+            if self._enable_didv:
+                basename = basename + '_didv'
+            if self._enable_rp:
+                basename = basename + '_rp'
+            if self._enable_rn:
+                basename = basename + '_rn'
+                self._enable_rp = rp
+
+            if basename[0] == '_':
+                basename = basename[1:]
+                
+            self._create_directory(basename)

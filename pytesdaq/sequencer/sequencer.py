@@ -1,5 +1,8 @@
 import numpy as np
 import time
+from datetime import datetime
+import os
+import shutil
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import connection_utils
@@ -10,32 +13,34 @@ class Sequencer:
      TBD
      """
 
-     def __init__(self,channel_list= list(),sequencer_file='',setup_file='',
-                  pickle_file=''):
+     def __init__(self, channel_list=list(), sequencer_file=None, setup_file=None,
+                  pickle_file=None, verbose=True):
           
 
 
           # initialize some parameters
           # can be overwritten by config and class property
-          self._verbose = True
-          self._is_online = False
+          self._verbose = verbose
+          self._online_analysis = False
           self._enable_redis = False
           self._daq_driver = 'polaris'
           self._dummy_mode = False
           self._facility = 1
-          self._data_path = '/data/raw'
+          self._data_path = './'
           
 
           # read configuration data
+          self._setup_file = setup_file
+          self._sequencer_file = sequencer_file
           self._config= []
           self._sequencer_config = dict()
           self._connection_table = dict()
-          self._read_config(sequencer_file,setup_file)
+          self._read_config()
           
-
+          
           # read pickle file
           #self._read_pickle
-
+          
           
           # check channels -> use "tes_channel" only
           channel_list = self._check_channels(channel_list)
@@ -73,17 +78,17 @@ class Sequencer:
 
 
            
-     def _read_config(self,sequencer_file,setup_file):
+     def _read_config(self):
           
           # configuration dictionary 
           try:
-               self._config = settings.Config(sequencer_file=sequencer_file,
-                                              setup_file=setup_file)
+               self._config = settings.Config(sequencer_file=self._sequencer_file,
+                                              setup_file=self._setup_file)
           except Exception as e:
                print('ERROR reading configuration files!')
                print(str(e))
                exit(1)
-               
+
 
           config_dict = self._config.get_sequencer_setup()
 
@@ -92,13 +97,11 @@ class Sequencer:
                if key == 'verbose':
                     self._verbose = config_dict[key]
                elif key == 'online':
-                    self._is_online = config_dict[key]
+                    self._online_analysis = config_dict[key]
                elif key == 'dummy_mode':
                     self._dummy_mode = config_dict[key]
                elif key == 'daq_driver':
                     self._daq_driver = config_dict[key]
-               elif key == 'data_path':
-                    self._data_path = str(config_dict[key])
                elif key == 'enable_redis':
                     self._enable_redis = config_dict[key]
                else:
@@ -110,6 +113,9 @@ class Sequencer:
                
           # facility
           self._facility = self._config.get_facility_num()
+
+          # data path
+          self._data_path = self._config.get_data_path()
        
 
 
@@ -204,3 +210,25 @@ class Sequencer:
                     adc_dict[adc_id]['trigger_channel'] = trigger_channel
          
           return adc_dict
+
+
+
+     def _create_directory(self, base_name=None):
+          """
+          Create sequencer directory
+          """
+                        
+          # date/time
+          now = datetime.now()
+          series = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+          series += '_' +  now.strftime('%H') + now.strftime('%M') 
+          if base_name is not None:
+               base_name = base_name + '_' + series
+          else:
+               base_name = series
+
+          self._data_path = self._data_path + '/' + base_name
+          
+          
+          if not os.path.isdir(self._data_path):
+               os.mkdir(self._data_path)

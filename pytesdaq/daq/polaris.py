@@ -20,7 +20,7 @@ class PolarisTask:
         self._log_file = str()
         self._verbose = True
         self._quiet = False
-        
+              
         # data taking config
         # ADC/Run: unable to guess, need to be set by user
         self._adc_config = dict()
@@ -84,7 +84,8 @@ class PolarisTask:
     @quiet.setter
     def quiet(self,value):
         self._quiet=value
-
+        
+  
     @property
     def overwrite_config_allowed(self):
         return self._overwrite_config_allowed
@@ -200,7 +201,7 @@ class PolarisTask:
     def clear(self):
         return
 
-    def run(self,run_time=60, run_comment=str(),write_config=True):
+    def run(self,run_time=60, run_comment=str(), write_config=True, debug=False):
         
         """
         Run Polaris
@@ -227,11 +228,17 @@ class PolarisTask:
             polaris_cmd = polaris_cmd + ' --verbose'
         if self._quiet:
             polaris_cmd = polaris_cmd + ' --quiet'
+        if debug:
+            polaris_cmd = polaris_cmd + ' --debug'
         if self._log_file:
              polaris_cmd = polaris_cmd + ' --log ' + self._log_file
 
-        print(polaris_cmd)
+             
        
+        print('INFO: Polaris command: ' + polaris_cmd)
+        print('INFO: Starting data taking using polaris!')
+        
+               
         # lock
         if self._lock_daq and self._lock_file:
             polaris_cmd = 'flock -n ' + self._lock_file + ' -c '+ '\''+ polaris_cmd +'\''
@@ -421,6 +428,9 @@ class PolarisTask:
                         
 
         # write file
+        print('INFO: Writing new polaris configuration file "' + self._config_file_name + '"!')
+                  
+        
         cfg_str = ''.join(cfg_list)
         cfg_file= open(self._config_file_name,'w+')
         cfg_file.write(cfg_str)

@@ -9,16 +9,15 @@ from pytesdaq.daq import nidaqtask
 class DAQ:
 
     
-    def __init__(self,driver_name = 'polaris', facility=1, verbose=True, setup_file=''):
+    def __init__(self, driver_name='polaris', verbose=True, setup_file=None):
         
         
         # initialize
         self._verbose = verbose
-        self._driver = None
         self._driver_name = driver_name
-        self._facility = facility
-
-
+        self._driver = None
+           
+      
         # run purpose dict 
         self._run_purpose_dict = {1:'Test', 2:'LowBg', 3:'Calibration',4:'Noise',
                                   100:'Rp',101:'Rn',102: 'IV Sweep', 103: 'dIdV Sweep'}
@@ -27,7 +26,6 @@ class DAQ:
         # Configuration
         self._config = settings.Config(setup_file=setup_file)
                   
-
 
         # instantiate driver 
         self._instantiate_driver()
@@ -76,7 +74,7 @@ class DAQ:
     def log_file(self,value):
         self._driver.log_file=value
 
-
+  
 
    
     def _instantiate_driver(self):
@@ -162,8 +160,7 @@ class DAQ:
 
 
     def run(self,run_time=60, run_type=1, run_comment='No comment', 
-            data_path = '/data/raw', data_prefix = 'raw',
-            write_config=True):
+            data_prefix='raw', data_path=None, write_config=True, debug=False):
         
         success = False
 
@@ -172,7 +169,15 @@ class DAQ:
         if run_type in self._run_purpose_dict:
             run_purpose = self._run_purpose_dict[run_type]
         
+        # facilty
+        facility_num = self._config.get_facility_num()
+        
+        # data path
+        if data_path is None:
+            data_path = self._config.get_data_path()
+                        
 
+        # run polaris
         if self._driver_name=='polaris':
 
             # polaris config
@@ -180,11 +185,9 @@ class DAQ:
             if polaris_config:
                 self._driver.set_polaris_config(polaris_config)
 
-        
-
             # run config
             run_config = dict()
-            run_config['facility']= self._facility
+            run_config['facility']= facility_num
             run_config['comment'] = run_comment
             run_config['run_purpose'] = run_purpose 
             run_config['run_type'] = run_type
@@ -197,7 +200,7 @@ class DAQ:
             
             # run
             success = self._driver.run(run_time=run_time, run_comment=run_comment,
-                             write_config=write_config)
+                                       write_config=write_config, debug=debug)
 
 
         elif self._driver_name=='pydaqmx':

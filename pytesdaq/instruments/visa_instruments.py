@@ -12,12 +12,13 @@ class VisaInstrument:
         self._verbose = verbose
         self._raise_errors = raise_errors
         self._inst = None
-
+        self._debug = True
+        
         # open resource
         rm = visa.ResourceManager('/usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0')        
         try:
             if self._verbose:
-                print('Opening VISA resource "{}"'.format(resource_address))
+                print('INFO: Opening VISA resource "{}"'.format(resource_address))
             self._inst=rm.open_resource(resource_address)
             if termination is not None:
                 self._inst.read_termination = termination
@@ -48,7 +49,7 @@ class VisaInstrument:
             print('INFO: Session closed!')
         
     def _write(self, message):
-        if self._verbose:
+        if self._debug:
             print('INFO: Write ' + message)
         
         self._inst.write(message)
@@ -59,6 +60,6 @@ class VisaInstrument:
     
     def _query(self, message):
         data = self._inst.query(message)
-        if self._verbose:
+        if self._debug:
             print('INFO: Query ' + message + ' = ' + str(data))
         return data

@@ -1,7 +1,7 @@
 import argparse
 from pytesdaq.sequencer.iv_didv import IV_dIdV
 import numpy as np
-
+import os
 
 if __name__ == "__main__":
 
@@ -72,21 +72,36 @@ if __name__ == "__main__":
     channels = [chan.strip() for chan in channels.split(',')]
    
 
-    # setup file
-    setup_file = str()
+    # setup file:
+    setup_file = None
     if args.setup_file:
         setup_file = args.setup_file
-    
+    else:
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        setup_file = this_dir + '/../pytesdaq/config/setup.ini'
 
-    sequencer_file = str()
+    if not os.path.isfile(setup_file):
+        print('ERROR: Setup file "' + setup_file + '" not found!')
+        exit()
+
+        
+    # sequencer file:
+    sequencer_file = None
     if args.sequencer_file:
         sequencer_file = args.sequencer_file
+    else:
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        sequencer_file = this_dir + '/../pytesdaq/config/sequencer.ini'
+
+    if not os.path.isfile(sequencer_file):
+        print('ERROR: Sequencer file "' + sequencer_file + '" not found!')
+        exit()
+
         
     pickle_file = str()
     if args.pickle_file:
         pickle_file = args.pickle_file
     
-
 
     # check arguments
     if not (enable_iv_didv or enable_tc):

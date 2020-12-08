@@ -6,25 +6,32 @@ import re
 import traceback
 from pytesdaq.utils import connection_utils
 from math import nan
+import os
+import sys
 
 class Config:
     
-    def __init__(self, setup_file=str(), sequencer_file=str()):
+    def __init__(self, setup_file=None, sequencer_file=None, verbose=False):
         
     
         # config files
         self._setup_file = setup_file
         self._sequencer_file = sequencer_file
 
-        if not setup_file:
+        if setup_file is None or not setup_file:
             self._setup_file = self._get_ini_path('setup.ini')
-        if not sequencer_file:
+        if sequencer_file is None or not sequencer_file:
             self._sequencer_file = self._get_ini_path('sequencer.ini')
             
-        
+
+        if not os.path.isfile(self._setup_file):
+            raise ValueError('Setup file "' + self._setup_file + '" not found!')
+        elif verbose:
+            print('INFO: Reading setup file ' + self._setup_file)
+
         self._cached_config = configparser.RawConfigParser()
         self._cached_config.read([self._setup_file, self._sequencer_file])
-
+                
         
 
     @property
@@ -218,6 +225,14 @@ class Config:
     
         return facility
 
+    def get_data_path(self):
+        data_path = './'
+        try:
+            data_path =  str(self._get_setting('setup','data_path'))
+        except:
+            pass
+        
+        return data_path
 
 
     def get_fridge_run(self):
