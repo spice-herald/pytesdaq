@@ -12,7 +12,7 @@ class VisaInstrument:
         self._verbose = verbose
         self._raise_errors = raise_errors
         self._inst = None
-        self._debug = True
+        self._debug = False
         
         # open resource
         rm = visa.ResourceManager('/usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0')        

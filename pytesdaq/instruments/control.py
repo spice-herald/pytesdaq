@@ -336,11 +336,14 @@ class Control:
         
         
         # get readout controller ID and Channel (FIXME: Is it necessary)
-        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                 tes_channel=tes_channel,
-                                                                                 detector_channel=detector_channel,
-                                                                                 adc_id=adc_id,
-                                                                                 adc_channel=adc_channel)
+        controller_id, controller_channel = (
+            connection_utils.get_controller_info(self._connection_table,
+                                                 tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id,
+                                                 adc_channel=adc_channel)
+            )
+
         
         if self._signal_generator_name == 'magnicon':
             
@@ -356,9 +359,10 @@ class Control:
             if gen1_onoff=='ON' or gen2_onoff=='ON':
                 mon_onoff = 'ON'
 
-            rb_onoff1, rb_onoff, rb_mon_onoff = self._magnicon_inst.set_generator_onoff(controller_channel, 
-                                                                                        gen1_onoff, gen2_onoff, mon_onoff)
-
+            rb_onoff1, rb_onoff, rb_mon_onoff = (
+                self._magnicon_inst.set_generator_onoff(controller_channel, 
+                                                        gen1_onoff, gen2_onoff, mon_onoff)
+            )
 
         else:
             self._signal_generator_inst.set_generator_onoff(on_off_flag.lower(),
@@ -390,7 +394,8 @@ class Control:
 
         # check parameters
         if source is None or frequency is None or (voltage is None and current is None):
-            print('ERROR: Required parameters for signal generator = "source", "current" or "voltage", and "frequency"')
+            print('ERROR: Required parameters for signal generator =' +
+                  ' "source", "current" or "voltage", and "frequency"')
             return
 
 
@@ -402,12 +407,13 @@ class Control:
             print('ERROR: Source can be either "tes" or "feedback"')
             
         # get readout controller ID and Channel
-        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                 tes_channel=tes_channel,
-                                                                                 detector_channel=detector_channel,
-                                                                                 adc_id=adc_id,
-                                                                                 adc_channel=adc_channel)
-        
+        controller_id, controller_channel = (
+            connection_utils.get_controller_info(self._connection_table,
+                                                 tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id,
+                                                 adc_channel=adc_channel)
+        )
         
 
         
@@ -431,10 +437,12 @@ class Control:
             if source == 'feedback':
                 source_magnicon = 'Ib'
 
-            readback_amp, readback_freq = self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
-                                                                                   float(frequency), source_magnicon, shape, 
-                                                                                   int(phase_shift), int(freq_div), half_pp_offset, 
-                                                                                   float(current))
+            readback_amp, readback_freq = (
+                self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
+                                                         float(frequency), source_magnicon, shape, 
+                                                         int(phase_shift), int(freq_div), half_pp_offset, 
+                                                         float(current))
+                )
             
 
         # External function generator
@@ -927,12 +935,13 @@ class Control:
                 
       
         # get readout controller ID and Channel
-        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                 tes_channel=tes_channel,
-                                                                                 detector_channel=detector_channel,
-                                                                                 adc_id=adc_id,
-                                                                                 adc_channel=adc_channel)
-        
+        controller_id, controller_channel = (
+            connection_utils.get_controller_info(self._connection_table,
+                                                 tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id,
+                                                 adc_channel=adc_channel)
+        )
         
         # initialize dictionay
         output_dict = dict()
@@ -958,9 +967,11 @@ class Control:
             # convert some parameters
             source_magnicon = 'I'
            
-            source,shape,freq,freq_div,shift,amp,offset = self._magnicon_inst.get_generator_params(controller_channel,
-                                                                                                   signal_gen_num)
-
+            source, shape, freq, freq_div, shift, amp, offset = (
+                self._magnicon_inst.get_generator_params(controller_channel,
+                                                         signal_gen_num)
+                )
+            
             # fill dictionary
             if source=='I':
                 output_dict['source'] = 'tes'
@@ -992,15 +1003,17 @@ class Control:
             # source
             if self._squid_controller_name == 'feb':
                 
-                is_connected_to_tes = self.is_signal_gen_connected_to_tes(tes_channel=tes_channel,
-                                                                          detector_channel=detector_channel,
-                                                                          adc_id=adc_id, adc_channel=adc_channel)
+                is_connected_to_tes = (
+                    self.is_signal_gen_connected_to_tes(tes_channel=tes_channel,
+                                                        detector_channel=detector_channel,
+                                                        adc_id=adc_id, adc_channel=adc_channel)
+                )
 
-
-                is_connected_to_feedback = self.is_signal_gen_connected_to_feedback(tes_channel=tes_channel,
-                                                                                    detector_channel=detector_channel,
-                                                                                    adc_id=adc_id, adc_channel=adc_channel)
-                
+                is_connected_to_feedback = (
+                    self.is_signal_gen_connected_to_feedback(tes_channel=tes_channel,
+                                                             detector_channel=detector_channel,
+                                                             adc_id=adc_id, adc_channel=adc_channel)
+                )
 
                 if is_connected_to_tes and is_connected_to_feedback:
                     print('WARNING: Signal generator connected to both TES AND Feedback!')
@@ -1294,20 +1307,29 @@ class Control:
 
                         
             # other parameter
-            output_dict['feedback_resistance'].append(self.get_feedback_resistance(tes_channel=tes_chan, 
-                                                                                   detector_channel=detector_chan, 
-                                                                                   adc_id=adc_chan_id, adc_channel=adc_chan))
-
-            output_dict['close_loop_norm'].append(self.get_volts_to_amps_close_loop_norm(tes_channel=tes_chan, 
-                                                                                         detector_channel=detector_chan, 
-                                                                                         adc_id=adc_chan_id, adc_channel=adc_chan))
-            output_dict['open_loop_preamp_norm'].append(self.get_open_loop_preamp_norm(tes_channel=tes_chan, 
-                                                                                       detector_channel=detector_chan, 
-                                                                                       adc_id=adc_chan_id, adc_channel=adc_chan))
+            output_dict['feedback_resistance'].append(
+                self.get_feedback_resistance(tes_channel=tes_chan, 
+                                             detector_channel=detector_chan, 
+                                             adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
             
-            output_dict['open_loop_full_norm'].append(self.get_open_loop_full_norm(tes_channel=tes_chan, 
-                                                                                   detector_channel=detector_chan, 
-                                                                                   adc_id=adc_chan_id, adc_channel=adc_chan))
+            output_dict['close_loop_norm'].append(
+                self.get_volts_to_amps_close_loop_norm(tes_channel=tes_chan, 
+                                                       detector_channel=detector_chan, 
+                                                       adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
+            
+            output_dict['open_loop_preamp_norm'].append(
+                self.get_open_loop_preamp_norm(tes_channel=tes_chan, 
+                                               detector_channel=detector_chan, 
+                                               adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
+            
+            output_dict['open_loop_full_norm'].append(
+                self.get_open_loop_full_norm(tes_channel=tes_chan, 
+                                             detector_channel=detector_chan, 
+                                             adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
             
 
             output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
@@ -1331,11 +1353,14 @@ class Control:
             return nan
             
         # get readout controller ID and Channel
-        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                 tes_channel=tes_channel,
-                                                                                 detector_channel=detector_channel,
-                                                                                 adc_id=adc_id,
-                                                                                 adc_channel=adc_channel)
+        controller_id, controller_channel = (
+            connection_utils.get_controller_info(self._connection_table,
+                                                 tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id,
+                                                 adc_channel=adc_channel)
+        )
+        
         param_val = nan
         if not self._read_from_redis:
 
@@ -1360,45 +1385,65 @@ class Control:
                         param_val = self._feb_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
 
                     elif param_name == 'squid_bias':
-                        param_val = self._feb_inst.get_phonon_squid_bias(subrack, slot, controller_channel)
+                        param_val = self._feb_inst.get_phonon_squid_bias(
+                            subrack, slot, controller_channel
+                        )
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._feb_inst.get_phonon_lock_point(subrack, slot, controller_channel)
+                        param_val = self._feb_inst.get_phonon_lock_point(
+                            subrack, slot, controller_channel
+                        )
 
                     elif param_name == 'preamp_gain':
-                        param_val = self._feb_inst.get_phonon_preamp_gain(subrack, slot, controller_channel)
+                        param_val = self._feb_inst.get_phonon_preamp_gain(
+                            subrack, slot, controller_channel
+                        )
 
                     elif param_name == 'output_offset':
-                        param_val = self._feb_inst.get_phonon_offset(subrack, slot, controller_channel)
+                        param_val = self._feb_inst.get_phonon_offset(
+                            subrack, slot, controller_channel
+                        )
 
                     elif param_name == 'output_gain':
-                        param_val = self._feb_inst.get_phonon_output_gain(subrack, slot, controller_channel)
+                        param_val = self._feb_inst.get_phonon_output_gain(
+                            subrack, slot, controller_channel
+                        )
 
                     elif param_name == 'feedback_polarity':
-                        is_inverted = self._feb_inst.get_phonon_feedback_polarity(subrack, slot, controller_channel)
+                        is_inverted = self._feb_inst.get_phonon_feedback_polarity(
+                            subrack, slot, controller_channel
+                        )
                         param_val = 1
                         if is_inverted:
                             param_val = -1
 
                     elif param_name == 'feedback_mode':
-                        is_open = self._feb_inst.is_phonon_feedback_open(subrack, slot,controller_channel)
+                        is_open = self._feb_inst.is_phonon_feedback_open(
+                            subrack, slot,controller_channel
+                        )
                         if is_open:
                             param_val = 'open'
                         else:
                             param_val = 'close'
                             
                     elif param_name == 'signal_source':
-                        is_preamp = self._feb_inst.is_phonon_source_preamp(subrack, slot,controller_channel)
+                        is_preamp = self._feb_inst.is_phonon_source_preamp(
+                            subrack, slot,controller_channel
+                        )
                         if is_preamp:
                             param_val = 'preamp'
                         else:
                             param_val = 'feedback'
 
                     elif param_name == 'signal_gen_feedback_connection':
-                        param_val = self._feb_inst.is_signal_generator_feedback_connected(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.is_signal_generator_feedback_connected(
+                            subrack, slot,controller_channel
+                        )
 
                     elif param_name == 'signal_gen_tes_connection':
-                        param_val = self._feb_inst.is_signal_generator_tes_connected(subrack, slot,controller_channel)
+                        param_val = self._feb_inst.is_signal_generator_tes_connected(
+                            subrack, slot,controller_channel
+                        )
 
                     else:
                         pass
@@ -1500,12 +1545,13 @@ class Control:
             
 
         # get readout controller ID and Channel
-        controller_id, controller_channel = connection_utils.get_controller_info(self._connection_table,
-                                                                                 tes_channel=tes_channel,
-                                                                                 detector_channel=detector_channel,
-                                                                                 adc_id=adc_id, 
-                                                                                 adc_channel=adc_channel)
-        
+        controller_id, controller_channel = (
+            connection_utils.get_controller_info(self._connection_table,
+                                                 tes_channel=tes_channel,
+                                                 detector_channel=detector_channel,
+                                                 adc_id=adc_id, 
+                                                 adc_channel=adc_channel)
+        )
               
         # ================
         # Set value
@@ -1549,7 +1595,9 @@ class Control:
                     do_invert = False
                     if val==-1:
                         do_invert = True
-                    self._feb_inst.set_phonon_feedback_polarity(subrack, slot, controller_channel, do_invert)
+                    self._feb_inst.set_phonon_feedback_polarity(
+                        subrack, slot, controller_channel, do_invert
+                    )
             
                 elif param_name == 'feedback_mode':
                     self._feb_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, value)
@@ -1558,7 +1606,9 @@ class Control:
                     self._feb_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'signal_gen_feedback_connected':
-                    self._feb_inst.connect_signal_generator_feedback(subrack, slot, controller_channel, value)
+                    self._feb_inst.connect_signal_generator_feedback(
+                        subrack, slot, controller_channel, value
+                    )
                 
                 elif param_name == 'signal_gen_tes_connected':
                     self._feb_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
@@ -1573,7 +1623,9 @@ class Control:
             if not self._dummy_mode:
                 
                 if param_name == 'tes_bias':
-                    readback_val = self._magnicon_inst.set_tes_current_bias(controller_channel, value, mode=None)
+                    readback_val = self._magnicon_inst.set_tes_current_bias(
+                        controller_channel, value, mode=None
+                    )
                 
                 elif param_name == 'squid_bias':
                     readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'I', value)
@@ -1589,7 +1641,9 @@ class Control:
                 
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(controller_channel, value[0], value[1])
+                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(
+                            controller_channel, value[0], value[1]
+                        )
                         readback_val = (amp,bw)
                     else:
                         print('WARNING: a tuple with (amplitude, bandwidth) required for magnicon preamp setting')
@@ -1756,8 +1810,9 @@ class Control:
         # ----------
         if self._signal_generator_name == 'keysight':
             address = self._config.get_signal_generator_address('keysight')
-            self._signal_generator_inst = funcgenerators.KeysightFuncGenerator(address,
-                                                                               verbose=self._verbose,
-                                                                               raise_errors=self._raise_errors)
-            
+            self._signal_generator_inst = (
+                funcgenerators.KeysightFuncGenerator(address,
+                                                     verbose=self._verbose,
+                                                     raise_errors=self._raise_errors)
+            )
             
