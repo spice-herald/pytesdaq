@@ -10,5 +10,18 @@ setup(name='pytesdaq',
       package_data = {
           '': ['*.ini'],
       },
-      packages = find_packages()
-      )
+      packages = find_packages(),
+      install_requires=[
+          'PyQt5',
+          'matplotlib',
+          'pandas',
+          'nidaqmx',
+          'pyvisa',
+          'paramiko',
+          'walrus',
+          'h5py',
+          'qetpy',
+          'scipy',
+          'seaborn',
+      ],
+)
