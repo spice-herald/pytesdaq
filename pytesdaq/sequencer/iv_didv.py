@@ -180,11 +180,11 @@ class IV_dIdV(Sequencer):
                     for channel in self._selected_channel_list:
                     
                         # disconnect signal generator
-                        self._instrument.set_signal_gen_onoff('off',tes_channel=channel)
+                        self._instrument.set_signal_gen_onoff('off', tes_channel=channel)
                         
                         # other parameters
                         if 'output_gain' in iv_config:
-                            self._instrument.set_output_gain(iv_config['output_gain'],tes_channel=channel)
+                            self._instrument.set_output_gain(float(iv_config['output_gain']), tes_channel=channel)
                             
                     # wait 5 seconds
                     time.sleep(5)
@@ -245,7 +245,7 @@ class IV_dIdV(Sequencer):
                         
                         # other parameters
                         if 'output_gain' in didv_config:
-                            self._instrument.set_output_gain(didv_config['output_gain'],tes_channel=channel)
+                            self._instrument.set_output_gain(float(didv_config['output_gain']), tes_channel=channel)
                             
                         # wait 5 seconds
                         time.sleep(5)
@@ -361,11 +361,11 @@ class IV_dIdV(Sequencer):
             for channel in self._selected_channel_list:
                 
                 # QET bias
-                self._instrument.set_tes_bias(config_dict['tes_bias'],tes_channel=channel)
+                self._instrument.set_tes_bias(config_dict['tes_bias'], tes_channel=channel)
                 
                 # Other detector settings
                 if 'output_gain' in config_dict:
-                    self._instrument.set_output_gain(config_dict['output_gain'],tes_channel=channel)
+                    self._instrument.set_output_gain(float(config_dict['output_gain']), tes_channel=channel)
                          
 
 

@@ -1185,7 +1185,7 @@ class Control:
 
     
 
-    def read_all(self, tes_channel_list=None, detector_channel_list= None,
+    def read_all(self, tes_channel_list=None, detector_channel_list=None,
                  adc_id=None,adc_channel_list=None):
         """
         Read from board all parameters
@@ -1605,12 +1605,12 @@ class Control:
                 elif param_name == 'preamp_source':
                     self._feb_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
                 
-                elif param_name == 'signal_gen_feedback_connected':
+                elif param_name == 'signal_gen_feedback_connection':
                     self._feb_inst.connect_signal_generator_feedback(
                         subrack, slot, controller_channel, value
                     )
                 
-                elif param_name == 'signal_gen_tes_connected':
+                elif param_name == 'signal_gen_tes_connection':
                     self._feb_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
                            
 
