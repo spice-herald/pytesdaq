@@ -1334,7 +1334,7 @@ class Control:
 
             output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
             output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
-          
+            output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
         return output_dict
         
         
