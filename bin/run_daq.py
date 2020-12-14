@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument('--daq_driver',help='DAQ driver ("polaris","pydaqmx", "tektronix","midas") [default "polaris"]')
     parser.add_argument('--log_file',help='Log file name [default: no log file]')
     parser.add_argument('--disable-lock',dest="disable_lock",action="store_true",help='Disable daq process lock')
-    parser.add_argument('--verbose',action="store_true",help='Screen output')
+    parser.add_argument('--verbose', action="store_true", help='Screen output')
     parser.add_argument('--setup_file', type = str,
                         help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
   

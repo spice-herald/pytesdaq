@@ -13,16 +13,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Instruments controller")
 
     # channels
-    parser.add_argument('-c','--chan','--tes_channels', dest='tes_channels', type = str, default=None, help = 'TES readout channel(s) name (commas sepearated)')
-    parser.add_argument('--detector_channels', dest='detector_channels', type = str, default=None, help = 'Detector channel(s) name (commas sepearated)')
-    parser.add_argument('-all', type = str, help = 'All channels')
+    parser.add_argument('--tes_channels', dest='tes_channels', type = str, default=None,
+                        help = 'TES readout channel(s) name (commas sepearated)')
+    parser.add_argument('--detector_channels', dest='detector_channels', type = str, default=None,
+                        help = 'Detector channel(s) name (commas sepearated)')
       
     # Detector settings
-    parser.add_argument('--tes_bias', nargs='?', type=float, const=nan, default=None, help = 'Read/write TES bias [uA]')
-    parser.add_argument('--squid_bias', nargs='?', type = float, const=nan, default=None, help = 'Read/write SQUID bias [uA]')
-    parser.add_argument('--lock_point', nargs='?', type = float, const=nan, default=None, help = 'Read/write Lock point voltage [mV]')
-    parser.add_argument('--preamp_gain', nargs='?', type = float, const=nan, default=None, help = 'Read/write Variable preamp gain')
-    parser.add_argument('--output_gain', nargs='?', type = float, const=nan, default=None, help = 'Read/write Variable output gain')
+    parser.add_argument('--tes_bias', nargs='?', type=float, const=nan, default=None,
+                        help = 'Read/write TES bias [uA]')
+    parser.add_argument('--squid_bias', nargs='?', type = float, const=nan, default=None,
+                        help = 'Read/write SQUID bias [uA]')
+    parser.add_argument('--lock_point', nargs='?', type = float, const=nan, default=None,
+                        help = 'Read/write Lock point voltage [mV]')
+    parser.add_argument('--preamp_gain', nargs='?', type = float, const=nan, default=None,
+                        help = 'Read/write Variable preamp gain')
+    parser.add_argument('--output_gain', nargs='?', type = float, const=nan, default=None,
+                        help = 'Read/write Variable output gain')
+    
+    parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+    
     #parser.add_argument('--signal_gen_connection', nargs='?', type = str, const=nan, default=None,
     #                    help = 'Read/write signal generator connection(s): "tes" or "feedback" or both (comma seprated)')
     # parser.add_argument('--feedback_mode', nargs='?', type = str, const=nan, default=None, help = 'Feedback mode: "close" or "open"')
@@ -72,14 +81,14 @@ if __name__ == "__main__":
 
 
     # channels
-    tes_channel_list = list()
-    detector_channel_list = list()
+    tes_channel_list = None
+    detector_channel_list = None
     nb_channels = 0
     if args.tes_channels is not None:
-        tes_channel_list = arg_utils.hyphen_range(args.tes_channels)
+        tes_channel_list = args.tes_channels.split(',')
         nb_channels = len(tes_channel_list)
     elif args.detector_channels is not None:
-        detector_channel_list = arg_utils.hyphen_range(args.detector_channels)
+        detector_channel_list = args.detector_channels.split(',')
         nb_channels = len(detector_channel_list)
 
 
@@ -105,10 +114,10 @@ if __name__ == "__main__":
         tes_channel = None
         detector_channel = None
         channel = str()
-        if tes_channel_list:
+        if tes_channel_list is not None:
             tes_channel =  str(tes_channel_list[ichan])
             channel = tes_channel 
-        elif detector_channel_list:
+        elif detector_channel_list is not None:
             detector_channel = str(detector_channel_list[ichan])
             channel = tes_channel 
 
@@ -202,8 +211,25 @@ if __name__ == "__main__":
                 
             print('Total output gain (fix*variable gains) for channel ' + channel + ' = ' + str(readback))
                     
-     
-    
+
+
+    # -----------
+    # Read all 
+    # -----------
+    '''
+    if args.read_all:
+        settings = myinstrument.set_output_gain(tes_channel=tes_channel,
+                                                detector_channel=detector_channel)
+                
+            # read from board
+            readback = myinstrument.get_output_total_gain(tes_channel=tes_channel,
+                                                          detector_channel=detector_channel)
+                
+            print('Total output gain (fix*variable gains) for channel ' + channel + ' = ' + str(readback))
+    '''              
+
+        
+            
     # --------------
     # Sig gen
     # --------------
