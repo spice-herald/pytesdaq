@@ -133,8 +133,6 @@ class MainWindow(QtWidgets.QMainWindow):
                adc_name = adc_name[1].lower()
                         
 
-
-
             if self._data_source  == 'niadc':
                 
                 # get sample rate:
@@ -188,7 +186,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
 
+            # reset runing avg
+            self._readout.update_analysis_config(reset_running_avg=True)
 
+
+            
             # status bar
             self.statusBar().showMessage('Running...')
           
@@ -215,7 +217,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._source_combobox.setEnabled(True)
 
 
-        
+           
+            
         
 
 
@@ -452,7 +455,7 @@ class MainWindow(QtWidgets.QMainWindow):
             value = int(self._running_avg_spinbox.value())
             self._readout.update_analysis_config(enable_running_avg = True, nb_events_avg=value)
         else:
-            self._running_avg_spinbox.setProperty('value', 1)
+            #self._running_avg_spinbox.setProperty('value', 1)
             self._running_avg_spinbox.setEnabled(False)
             self._readout.update_analysis_config(enable_running_avg = False)
 

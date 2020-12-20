@@ -22,14 +22,19 @@ class Analyzer:
         self._analysis_config['nb_events_avg'] = 1
         self._analysis_config['calc_didv'] = False
         self._analysis_config['enable_pileup_rejection'] = False
-      
+        self._analysis_config['signal_gen_current'] = None
+        self._analysis_config['signal_gen_frequency'] = None
         
 
 
         # initialize data buffer for running avg
         self._buffer = None
+        self._buffer_deconvolved_didv = None
         self._nb_events_buffer = 0
        
+        # dIdV object
+        self._didv_inst = None
+
         
     
     @property
@@ -54,11 +59,13 @@ class Analyzer:
         # Pileup rejection...
         # ---------------------
 
-        
+        # FIXME.... ;-)
+
+          
         # ---------------------
         # normalization
         # ---------------------
-        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm']!='None':
+        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm'] is not None:
             data_array = self.normalize(data_array,data_config,
                                         self._analysis_config['unit'],
                                         self._analysis_config['norm'])
@@ -69,12 +76,26 @@ class Analyzer:
         # PSD
         # ---------------------
         
-        if  self._analysis_config['calc_psd']:
+        if self._analysis_config['calc_psd']:
             data_array = self.calc_psd(data_array, data_config['sample_rate'])
         else:
             self._freq_array = None
     
 
+
+        
+        # ---------------------
+        # dIdV deconvolution 
+        # ---------------------
+        didv_array = None
+        if self._analysis_config['calc_didv'] and not self._analysis_config['calc_psd']:
+            didv_array = self.calc_didv(data_array,
+                                        data_config['sample_rate'])
+        else:
+            self._didv_inst = None
+            
+
+            
 
 
         # ---------------------
@@ -83,11 +104,12 @@ class Analyzer:
 
 
         if self._analysis_config['enable_running_avg']:
-            self._store_data(data_array,self._analysis_config['reset_running_avg'])
+            self._store_data(data_array, self._analysis_config['reset_running_avg'])
             data_array = self._calc_running_avg()
             
         else:
             self._buffer = None
+            self._buffer_deconvolved_didv = None
             self._nb_events_buffer = 0
           
                
@@ -95,7 +117,7 @@ class Analyzer:
         # ---------------------
         # PSD -> sqrt
         # ---------------------
-        if  self._analysis_config['calc_psd']:
+        if self._analysis_config['calc_psd']:
             data_array = np.sqrt(data_array)
         
       
@@ -153,9 +175,11 @@ class Analyzer:
         nb_channels = np.size(data_array,0)
         for ichan in range(0,nb_channels):
             trace_chan = data_array[ichan,:]
-            f_fold, psd_fold  = qp.calc_psd(trace_chan, fs=sample_rate, folded_over=True)
+            f_fold, psd_fold  = qp.calc_psd(trace_chan, fs=sample_rate,
+                                            folded_over=True)
             if ichan==0:
-                psd_array = np.zeros((nb_channels,len(psd_fold)), dtype=np.float64)
+                psd_array = np.zeros((nb_channels,len(psd_fold)),
+                                     dtype=np.float64)
                 psd_array[ichan,:] =  psd_fold
                 self._freq_array = f_fold
             else:

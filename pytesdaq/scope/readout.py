@@ -61,6 +61,8 @@ class Readout:
         self._analysis_config['nb_events_avg'] = 1
         self._analysis_config['calc_didv'] = False
         self._analysis_config['enable_pilup_rejection'] = False
+        self._analysis_config['signal_gen_current'] = None
+        self._analysis_config['signal_gen_frequency'] = None
         self._do_calc_norm = False
     
         
@@ -200,9 +202,12 @@ class Readout:
 
 
         
-    def update_analysis_config(self,norm = None, unit= None, calc_psd =None, calc_didv = None, 
-                               enable_pileup_rejection =None,
-                               enable_running_avg = None, nb_events_avg=None):
+    def update_analysis_config(self, norm=None, unit=None,
+                               calc_psd=None, calc_didv=None, 
+                               enable_pileup_rejection=None,
+                               enable_running_avg=None,
+                               reset_running_avg=None,
+                               nb_events_avg=None):
         
         """
         Update analysis configuration
@@ -226,6 +231,9 @@ class Readout:
         
         if enable_running_avg is not None:
             self._analysis_config['enable_running_avg'] = enable_running_avg
+
+        if reset_running_avg is not None:
+            self._analysis_config['reset_running_avg'] = reset_running_avg 
             
         if nb_events_avg is not None:
             self._analysis_config['nb_events_avg'] = nb_events_avg 
@@ -419,7 +427,8 @@ class Readout:
 
         # signal gen
         read_signal_gen = False
-
+        if self._analysis_config['calc_didv']:
+            read_signal_gen = True
 
         # Return if nothing to do
         if not read_norm and not read_signal_gen:
@@ -442,14 +451,22 @@ class Readout:
             for chan in self._data_config['selected_channel_list']:
             
                 if norm_type == 'OpenLoop PreAmp':
-                    norm_val = abs(self._instrument.get_open_loop_preamp_norm(adc_id=self._adc_name, 
-                                                                              adc_channel=chan))
+                    norm_val = abs(
+                        self._instrument.get_open_loop_preamp_norm(adc_id=self._adc_name, 
+                                                                   adc_channel=chan)
+                    )
+                    
                 elif norm_type == 'OpenLoop PreAmp+FB':
-                    norm_val = abs(self._instrument.get_open_loop_full_norm(adc_id=self._adc_name, 
-                                                                            adc_channel=chan))
+                    norm_val = abs(
+                        self._instrument.get_open_loop_full_norm(adc_id=self._adc_name, 
+                                                                 adc_channel=chan)
+                    )
+                    
                 elif norm_type == 'CloseLoop':
-                    norm_val = abs(self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
-                                                                                      adc_channel=chan))
+                    norm_val = abs(
+                        self._instrument.get_volts_to_amps_close_loop_norm(adc_id=self._adc_name, 
+                                                                           adc_channel=chan)
+                    )
 
                 print('INFO: Normalization for channel ' + str(chan) + ' = ' + str(norm_val))
                 
@@ -460,7 +477,19 @@ class Readout:
 
             
         # Signal Gen
-        #if read_signal_gen:
+        if read_signal_gen:
+            signal_gen_info = dict()
+            for chan in self._data_config['selected_channel_list']:
+                signal_gen_info = self._instrument.get_signal_gen_params(adc_id=self._adc_name,
+                                                                         adc_channel=chan)
+                # FIXME... Current it depends of channel.Is it needed.
+                # Let's just assume there is only one signal generator 
+                break
+            
+            self._analysis_config['signal_gen_current'] = signal_gen_info['current']
+            self._analysis_config['signal_gen_frequency'] = signal_gen_info['frequency']
+            
+
             
 
             
