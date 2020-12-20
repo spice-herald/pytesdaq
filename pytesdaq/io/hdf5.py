@@ -220,7 +220,7 @@ class H5Reader:
 
 
         # detector/channel
-        if detector_chans is not None and not isinstance(detector_chans,list):
+        if detector_chans is not None and not isinstance(detector_chans, list):
             detector_chans = [detector_chans]
 
 
@@ -249,20 +249,25 @@ class H5Reader:
                               
                 # available adc channels  
                 adc_chan_list = adc_metadata['adc_channel_indices']
-                if not isinstance(adc_chan_list,list):
-                    adc_chan_list = [adc_chan_list]
+                if not isinstance(adc_chan_list, list) and not isinstance(adc_chan_list, np.ndarray):
+                    adc_chan_list = np.array([adc_chan_list])
+                    
 
                 # connections
                 connections = self.get_connection_dict(adc_name=adc_name, metadata=metadata)
-
-                # loop
-                channel_counter = 0
-                for channel in connections['detector_chans']:
-                    if channel in detector_chans:
-                        chan_adc = int(connections['adc_chans'][channel_counter])
+                                
+                # loop channels
+                chan_counter = 0
+                for chan_name in connections['detector_chans']:
+                    if chan_name in detector_chans:
+                        chan_adc = int(connections['adc_chans'][chan_counter])
                         if chan_adc in adc_chan_list:
-                            array_indices_file.append(adc_chan_list.index(chan_adc))
-                    
+                            ind = np.where(adc_chan_list==chan_adc)[0]
+                            if len(ind)==1:
+                                array_indices_file.append(int(ind))
+                            else:
+                                raise ValueError('Problem with raw data..')
+                    chan_counter+=1
                             
                 nb_channels_file = len(array_indices_file)
                 if (nb_channels_file==0):
@@ -531,17 +536,18 @@ class H5Reader:
             return []
 
         # group metadata
-        detector_config_list = metadata['groups'][config_name]
-        if 'adc_name' in detector_config_list and adc_name!=detector_config_list['adc_name']:
+        detector_config_dict = metadata['groups'][config_name]
+        if 'adc_name' in detector_config_dict and adc_name!=detector_config_dict['adc_name']:
             print('ERROR: Unexpected detector configuration format!')
             return []
 
 
         # convert to list if only one channel
-        for config in detector_config_list:
-            if not isinstance(config, list):
-                detector_config_list[config] = [detector_config_list[config]]
-            
+        for config in detector_config_dict:
+            param = detector_config_dict[config]
+            if not isinstance(param, list) and not isinstance(param, np.ndarray):
+                detector_config_dict[config] = [detector_config_dict[config]]
+    
 
         # add detector/channel list from adc metadata, needs to match
         # detector settings array order
@@ -551,8 +557,7 @@ class H5Reader:
         connection_dict = self.get_connection_dict(adc_name=adc_name, metadata=metadata)
 
         if connection_dict:
-            
-            chan_list = detector_config_list['channel_list']
+            chan_list = detector_config_dict['channel_list']
             if not isinstance(chan_list, np.ndarray) and not isinstance(chan_list, list):
                 chan_list  = [chan_list]
             for chan in chan_list:
@@ -566,22 +571,24 @@ class H5Reader:
                         detector_chans.append(connection_dict['detector_chans'][ind])
                          
                                 
-        detector_config_list['tes_chans'] =  tes_chans
-        detector_config_list['detector_chans'] =  detector_chans
-        detector_config_list['controller_chans'] =  controller_chans   
+        detector_config_dict['tes_chans'] =  tes_chans
+        detector_config_dict['detector_chans'] =  detector_chans
+        detector_config_dict['controller_chans'] =  controller_chans   
 
 
         # convert to dictionary
         detector_config = dict()
-        if use_chan_dict and len(detector_config_list['detector_chans'])>0:
-            chan_list = detector_config_list['detector_chans']
+        nb_chan = len(detector_config_dict['detector_chans'])
+        if use_chan_dict:
+            chan_list = detector_config_dict['detector_chans']
             for chan in chan_list:
-                chan_index = detector_config_list['detector_chans'].index(chan)
+                chan_index = detector_config_dict['detector_chans'].index(chan)
                 detector_config[chan] = dict()
-                for config in detector_config_list:
-                    detector_config[chan][config] = detector_config_list[config][chan_index]
+                for config in detector_config_dict:
+                    if len(detector_config_dict[config])==nb_chan:
+                        detector_config[chan][config] = detector_config_dict[config][chan_index]
         else:
-            detector_config = detector_config_list
+            detector_config = detector_config_dict
             
             
         
