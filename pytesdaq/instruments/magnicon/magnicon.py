@@ -1077,7 +1077,7 @@ class Magnicon(object):
             _, s = s.split('peak-peak amplitude of ')
             pp_amplitude_coerced, s = s.split(' and frequency of ')
             gen_freq_coerced, _ = s.split(' Hz.')
-            return pp_amplitude_coerced, gen_freq_coerced
+            return float(pp_amplitude_coerced), float(gen_freq_coerced)
         else:
             print('Could not set generator_params')
             return -1000., -1000.
