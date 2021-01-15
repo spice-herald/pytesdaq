@@ -12,37 +12,50 @@ class Analyzer:
         self._freq_array = None
       
 
-        # default analysis configuration
-        self._analysis_config = dict()
-        self._analysis_config['unit'] = 'ADC'
-        self._analysis_config['norm'] = None
-        self._analysis_config['calc_psd'] = False
-        self._analysis_config['enable_running_avg'] = False
-        self._analysis_config['reset_running_avg'] = False
-        self._analysis_config['nb_events_avg'] = 1
-        self._analysis_config['calc_didv'] = False
-        self._analysis_config['enable_pileup_rejection'] = False
-        self._analysis_config['signal_gen_current'] = None
-        self._analysis_config['signal_gen_frequency'] = None
+        # intialize analysis configuration
+        self._initialize_config()
         
-
 
         # initialize data buffer for running avg
         self._buffer = None
-        self._buffer_deconvolved_didv = None
         self._nb_events_buffer = 0
-       
-        # dIdV object
-        self._didv_inst = None
-
+        
+        # didv fit results
+        self._didv_fit_results = None
         
     
     @property
     def freq_array(self):
         return self._freq_array
 
-    
-    def process(self,data_array, data_config, analysis_config):
+
+
+    def get_config(self, config_name):
+        """
+        Get analysis configuration name
+        """
+
+        if config_name in self._analysis_config:
+            return self._analysis_config[config_name]
+        else:
+            raise ValueError('Analysis configuration "' + config_name +
+                             '" not available!')
+        
+        
+    def set_config(self, config_name, config_val):
+        """
+        Set/Update analysis config
+        """
+
+        self._analysis_config[config_name] = config_val
+
+
+        if self._analysis_config['norm_type']=='NoNorm':
+            self._analysis_config['norm_list'] = None
+        
+        
+      
+    def process(self, data_array, adc_config, analysis_config=None):
         """
         process data based on analysis configuration
         """
@@ -50,10 +63,12 @@ class Analyzer:
         # ---------------------
         # analysis configuration
         # ---------------------
-        for key,val in analysis_config.items():
-            self._analysis_config[key] = val
-
-    
+        if analysis_config is not None:
+            for key,val in analysis_config.items():
+                self._analysis_config[key] = val
+            if self._analysis_config['norm_type']=='NoNorm':
+                self._analysis_config['norm_list'] = None
+                
 
         # ---------------------
         # Pileup rejection...
@@ -65,10 +80,10 @@ class Analyzer:
         # ---------------------
         # normalization
         # ---------------------
-        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm'] is not None:
-            data_array = self.normalize(data_array,data_config,
+        if self._analysis_config['unit']!='ADC' or self._analysis_config['norm_type']!='NoNorm':
+            data_array = self.normalize(data_array, adc_config,
                                         self._analysis_config['unit'],
-                                        self._analysis_config['norm'])
+                                        self._analysis_config['norm_list'])
 
 
 
@@ -77,91 +92,113 @@ class Analyzer:
         # ---------------------
         
         if self._analysis_config['calc_psd']:
-            data_array = self.calc_psd(data_array, data_config['sample_rate'])
+            data_array = self.calc_psd(data_array, adc_config['sample_rate'])
         else:
             self._freq_array = None
     
 
 
-        
-        # ---------------------
-        # dIdV deconvolution 
-        # ---------------------
-        didv_array = None
-        if self._analysis_config['calc_didv'] and not self._analysis_config['calc_psd']:
-            didv_array = self.calc_didv(data_array,
-                                        data_config['sample_rate'])
-        else:
-            self._didv_inst = None
-            
-
-            
-
 
         # ---------------------
         # Running average 
         # ---------------------
-
-
+        
         if self._analysis_config['enable_running_avg']:
-            self._store_data(data_array, self._analysis_config['reset_running_avg'])
+                        
+            # store in buffer
+            self._store_data(data_array, do_reset=self._analysis_config['reset_running_avg'])
+
+            # get running average
             data_array = self._calc_running_avg()
-            
+                        
         else:
             self._buffer = None
-            self._buffer_deconvolved_didv = None
             self._nb_events_buffer = 0
-          
-               
 
+
+
+        #if self._analysis_config['fit_didv'] and 'offset' not in didv_dict:
+        #    didv_dict['offset'] = self.calc_offset(data_array)
+                
+
+                
+        # ---------------------
+        # dIdV Fit
+        # ---------------------
+        didv_data_dict = None
+        if self._analysis_config['fit_didv'] and self._nb_events_buffer>5:
+            
+            # check if prior results available
+            #if self._didv_fit_results is not None:
+            #    didv_data_dict['prior_results'] = self._didv_fit_results
+
+            # fit
+            data_array, didv_data_dict = self.fit_didv(data_array, adc_config['sample_rate'],
+                                                       unit=self._analysis_config['unit'])
+            
+            # save results
+            self._didv_fit_results = didv_data_dict['results']
+        else:
+            self._didv_fit_results = None
+            
         # ---------------------
         # PSD -> sqrt
         # ---------------------
         if self._analysis_config['calc_psd']:
             data_array = np.sqrt(data_array)
         
-      
-
-        # return data
-        return data_array
-        
+            
+        return data_array, didv_data_dict
+    
 
 
 
-    def normalize(self,data_array,data_config, unit, norm):
+    def normalize(self,data_array, adc_config, unit, norm_list=None):
         """
         Normalize array
         """
 
+        # check if normalization needed
+        if unit=='ADC':
+            return data_array
+        
+        
         # intialize output
         data_array_norm = np.zeros_like(data_array, dtype=np.float64)
-       
+        
         # loop and normalize
         nb_channels = np.size(data_array,0)
         for ichan in range(0,nb_channels):
-            chan_index = data_config['selected_channel_index'][ichan]
-            cal_coeff = data_config['adc_conversion_factor'][chan_index][::-1]
+            chan_index = adc_config['selected_channel_index'][ichan]
+            cal_coeff = adc_config['adc_conversion_factor'][chan_index][::-1]
             poly = np.poly1d(cal_coeff)
             data_array_norm[ichan,:] = poly(data_array[ichan,:])
             
             # normalize
-            if self._analysis_config['norm'] is not None:
-                data_array_norm[ichan,:] /= self._analysis_config['norm_list'][ichan]
-
+            if norm_list is not None:
+                data_array_norm[ichan,:] /= norm_list[ichan]
+                
             # unit
-            if self._analysis_config['unit']=='mVolts':
+            if unit=='mVolts':
                 data_array_norm[ichan,:] *= 1000
-            elif self._analysis_config['unit']=='nVolts':
-                data_array_norm[ichan,:] *= 10**9
-            elif self._analysis_config['unit']=='pAmps':
-                data_array_norm[ichan,:] *= 10**12
+            elif unit=='nVolts':
+                data_array_norm[ichan,:] *= 1e9
+            elif unit=='uAmps':
+                data_array_norm[ichan,:] *= 1e6
+            elif unit=='pAmps':
+                data_array_norm[ichan,:] *= 1e12
             
         
         return data_array_norm
         
-        
 
-    def calc_psd(self,data_array, sample_rate):
+
+    
+
+
+
+    
+    def calc_psd(self, data_array, sample_rate):
         """
         calculate PSD
         """
@@ -185,24 +222,149 @@ class Analyzer:
             else:
                 psd_array[ichan,:] =  psd_fold
            
-        
         return psd_array
 
 
-    def _store_data(self,data_array,do_reset=False):
+                
+    def calc_offset(self, data_array):
+        """
+        Calculate offset
+        """
+                
+        offset = np.mean(data_array, axis=1)
+        return offset
+
+
+    
+            
+    def fit_didv(self, data_array, sample_rate, unit=None, prior_didv=None):
+        
+        """
+        Fit dIdV
+        """
+
+        # intialize
+        data_array_truncated = []
+        fit_array = []
+        result_list = list()
+        didv_data_dict = dict()
+        
+        # Test signal information
+        sg_freq = self._analysis_config['signal_gen_frequency']
+        sg_current = self._analysis_config['signal_gen_current']
+        rshunt = self._analysis_config['rshunt']
+        rp = self._analysis_config['rp']
+        dt = self._analysis_config['dt']
+        dutycycle=0.5
+
+
+        # check normalization
+        norm = 1
+        if unit is not None:
+            if unit=='uAmps':
+                norm = 1e6
+            elif unit=='pAmps':
+                norm = 1e12  
+                    
+
+        
+        # loop channels
+        nb_channels = np.size(data_array,0)
+        for ichan in range(0,nb_channels):
+
+            # channel traces
+            traces = self._buffer[ichan,:,:]/norm
+            traces = np.swapaxes(traces,0,1)
+
+            # instantiate DIDV
+            didv_inst = qp.DIDV(traces,
+                                sample_rate,
+                                sg_freq,
+                                sg_current,
+                                rshunt,
+                                r0=0.2, rp=rp,
+                                dutycycle=dutycycle,
+                                add180phase=False,
+                                dt0=dt)
+            
+            # process
+            print('Info: dIdV processing')
+            didv_inst.processtraces()
+
+
+            # save trace
+            nb_samples = didv_inst._tmean.shape[0]
+            if ichan==0:
+                nb_samples = didv_inst._tmean.shape[0]
+                data_array_truncated = np.zeros((nb_channels,nb_samples),
+                                                dtype=np.float64)
+                fit_array = np.zeros((nb_channels,nb_samples),
+                                     dtype=np.float64)
+                
+            data_array_truncated[ichan,:] = (didv_inst._tmean - didv_inst._offset)*norm
+          
+            
+            # fit
+            result = None
+            if self._analysis_config['didv_1pole']:
+                print('Info: Starting dIdV 1-pole Fit')
+                didv_inst.dofit(1)
+                result = didv_inst.fitresult(1)
+                print('Info: dIdV 1-pole Fit Done')
+
+            if self._analysis_config['didv_2pole']:
+                print('Info: Starting dIdV 2-pole Fit')
+                didv_inst.dofit(2)
+                result = didv_inst.fitresult(2)
+                print('Info: dIdV 2-pole Fit Done')
+
+            if self._analysis_config['didv_3pole']:
+                print('Info: Starting dIdV 3-pole Fit')
+                didv_inst.dofit(3)
+                result = didv_inst.fitresult(3)
+                print('Info: dIdV 3-pole Fit Done')
+
+            
+            # Fit result
+            dt = 1/sample_rate
+            time = np.arange(0,nb_samples)*dt
+            result_list.append(result)
+            
+            key = 'params'
+            if 'smallsignalparams' in result:
+                key = 'smallsignalparams'
+            
+            fit_array[ichan,:] = norm*qp.squarewaveresponse(
+                time,
+                sg_current,
+                sg_freq,
+                dutycycle,
+                **result[key],)
+            
+        didv_data_dict['fit_array'] = fit_array
+        didv_data_dict['results'] = result_list
+            
+        return data_array_truncated, didv_data_dict
+
+
+
+    
+    
+    def _store_data(self, data_array, do_reset=False):
         """
         Store data in buffer for running_avg
+        Buffer dimensions: (nb_channels, nb_samples, nb_events)
         """
 
         # add extra dimension
         data_array.shape +=(1,)
 
         # check dimension
-        dims_buf = []
+        dims_buffer = []
         if self._buffer is not None:
-            dims_buf = self._buffer.shape
+            dims_buffer = self._buffer.shape
             dims_array = data_array.shape
-            if dims_buf[0:2] != dims_array[0:2]:
+            if dims_buffer[0:2] != dims_array[0:2]:
                 do_reset = True
             
         # reset if needed
@@ -213,24 +375,56 @@ class Analyzer:
             
 
         # delete elements
-        if self._analysis_config['nb_events_avg']<=dims_buf[2]:
-            nb_to_delete = dims_buf[2]-self._analysis_config['nb_events_avg']+1
-            self._buffer = np.delete(self._buffer,list(range(nb_to_delete)),axis=2)
+        if self._analysis_config['nb_events_avg']<=dims_buffer[2]:
+            nb_to_delete = dims_buffer[2]-self._analysis_config['nb_events_avg']+1
+            self._buffer = np.delete(self._buffer, list(range(nb_to_delete)), axis=2)
             
         # append element
-        self._buffer = np.append(self._buffer,data_array,axis=2)
+        self._buffer = np.append(self._buffer, data_array, axis=2)
         self._nb_events_buffer = self._buffer.shape[2]
+
+    
+
+   
+
+
 
         
 
     def _calc_running_avg(self):
-     
-        data_array = None
+        """
+        Calculate running average
+        """
+        
+        data_array = []
+   
         if self._buffer is not None:
-            data_array = np.mean(self._buffer,axis=2)
-        
-        
-        return data_array
-        
-            
+            data_array = np.mean(self._buffer, axis=2)
 
+        return data_array
+    
+    
+
+    def _initialize_config(self):
+        """
+        Initialize analysis configuration
+        """
+        
+        self._analysis_config = dict()
+        self._analysis_config['unit'] = 'ADC'
+        self._analysis_config['norm_type'] = 'NoNorm'
+        self._analysis_config['norm_list'] = None
+        self._analysis_config['calc_psd'] = False
+        self._analysis_config['enable_running_avg'] = False
+        self._analysis_config['reset_running_avg'] = False
+        self._analysis_config['nb_events_avg'] = 1
+        self._analysis_config['enable_pileup_rejection'] = False
+        self._analysis_config['signal_gen_current'] = None
+        self._analysis_config['signal_gen_frequency'] = None
+        self._analysis_config['rshunt'] = 0.005
+        self._analysis_config['rp'] = 0.003
+        self._analysis_config['dt'] = 2e-6
+        self._analysis_config['fit_didv'] = False
+        self._analysis_config['didv_1pole'] = False
+        self._analysis_config['didv_2pole'] = False
+        self._analysis_config['didv_3pole'] = False

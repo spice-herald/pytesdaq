@@ -537,9 +537,9 @@ class H5Reader:
 
         # group metadata
         detector_config_dict = metadata['groups'][config_name]
-        if 'adc_name' in detector_config_dict and adc_name!=detector_config_dict['adc_name']:
-            print('ERROR: Unexpected detector configuration format!')
-            return []
+        #if 'adc_name' in detector_config_dict and adc_name!=detector_config_dict['adc_name']:
+        #    print('ERROR: Unexpected detector configuration format!')
+        #    return []
 
 
         # convert to list if only one channel
@@ -591,10 +591,7 @@ class H5Reader:
             detector_config = detector_config_dict
             
             
-        
-        
-        
-                
+                      
         return detector_config
 
 
