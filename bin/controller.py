@@ -53,11 +53,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    # check if channels selected
-    if  args.tes_channels is None and args.detector_channels is None and args.all is None:
-        print('Please select TES or detector channel(s)! Type --help for channel arguments.')
-        exit()
-        
 
     verbose = False
     if args.verbose:
@@ -67,7 +62,7 @@ if __name__ == "__main__":
     
     
     # ========================
-    # Connection check
+    # Instrument Configuration
     # ========================
 
     # file name
@@ -87,6 +82,25 @@ if __name__ == "__main__":
     config = settings.Config(setup_file=setup_file)
 
 
+    # ========================
+    # Channels
+    # ========================
+
+    is_signal_gen = False
+    if (args.signal_gen_on or args.signal_gen_off
+        or args.signal_gen_voltage is not None
+        or args.signal_gen_frequency is not None):
+        is_signal_gen = True
+
+
+    # check if channels selected
+    if  args.tes_channels is None and args.detector_channels is None and not is_signal_gen:
+        print('Please select TES or detector channel(s)! Type --help for channel arguments.')
+        exit()
+        
+
+
+        
     # channels
     tes_channel_list = None
     detector_channel_list = None
@@ -99,21 +113,25 @@ if __name__ == "__main__":
         nb_channels = len(detector_channel_list)
 
 
-    if nb_channels==0:
+    if not is_signal_gen and nb_channels==0:
         print('Please select TES or detector channel(s)! Type --help for channel arguments.')
         exit()
-    
+        
 
     
     # ========================
-    # Read/Write board
+    # Instantiate Instrument
     # ========================
 
-
-    # instantiate
     myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
 
 
+
+    # ========================
+    # SQUID/TES controller
+    # ========================
+
+    
     # loop channels
     for ichan in range(nb_channels):
 
