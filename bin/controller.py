@@ -250,7 +250,7 @@ if __name__ == "__main__":
         myinstrument.set_signal_gen_onoff('off')
 
     if args.signal_gen_voltage is not None:
-        myinstrument.set_signal_gen_params(voltage=args.signal_gen_voltage:)
+        myinstrument.set_signal_gen_params(voltage=args.signal_gen_voltage)
         
     if args.signal_gen_frequency is not None:
         myinstrument.set_signal_gen_params(frequency=args.signal_gen_frequency)
