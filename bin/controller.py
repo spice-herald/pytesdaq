@@ -4,6 +4,7 @@ import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import  arg_utils
 import os
 from math import nan
+from pprint import pprint
 
 if __name__ == "__main__":
 
@@ -30,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_gain', nargs='?', type = float, const=nan, default=None,
                         help = 'Read/write Variable output gain')
     
-    #parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+    parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
 
 
     # signal generator
@@ -241,17 +242,14 @@ if __name__ == "__main__":
     # -----------
     # Read all 
     # -----------
-    '''
-    if args.read_all:
-        settings = myinstrument.set_output_gain(tes_channel=tes_channel,
-                                                detector_channel=detector_channel)
-                
-            # read from board
-            readback = myinstrument.get_output_total_gain(tes_channel=tes_channel,
-                                                          detector_channel=detector_channel)
-                
-            print('Total output gain (fix*variable gains) for channel ' + channel + ' = ' + str(readback))
-    '''              
+
+    
+    if args.read_all and nb_channels>0:
+        settings = myinstrument.read_all(tes_channel_list=tes_channel_list,
+                                         detector_channel_list=detector_channel_list)
+        pprint(settings)
+        
+        
 
         
             
@@ -264,7 +262,7 @@ if __name__ == "__main__":
     if args.signal_gen_on:
         myinstrument.set_signal_gen_onoff('on')
         
-    if args.signal_gen_on:
+    if args.signal_gen_off:
         myinstrument.set_signal_gen_onoff('off')
 
     if args.signal_gen_voltage is not None:

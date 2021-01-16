@@ -1378,8 +1378,7 @@ class Control:
 
         param_val = nan
         if not self._read_from_redis:
-            print('Into Redis block')
-
+          
             if self._squid_controller_name == 'feb':
                 # CDMS FEB device
                 
