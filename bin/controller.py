@@ -30,11 +30,18 @@ if __name__ == "__main__":
     parser.add_argument('--output_gain', nargs='?', type = float, const=nan, default=None,
                         help = 'Read/write Variable output gain')
     
-    parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+    #parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+
+
+    # signal generator
+    parser.add_argument('--signal_gen_on', action="store_true", help = 'Turn on signal gen')
+    parser.add_argument('--signal_gen_off', action="store_true", help = 'Turn off signal gen')
+    parser.add_argument('--signal_gen_voltage', nargs='?', type=float, const=nan, default=None,
+                        help = 'Signal generator voltage amplitude [mV]')
+    parser.add_argument('--signal_gen_frequency', nargs='?', type=float, const=nan, default=None,
+                        help = 'Signal generator frequency [Hz]')
+
     
-    #parser.add_argument('--signal_gen_connection', nargs='?', type = str, const=nan, default=None,
-    #                    help = 'Read/write signal generator connection(s): "tes" or "feedback" or both (comma seprated)')
-    # parser.add_argument('--feedback_mode', nargs='?', type = str, const=nan, default=None, help = 'Feedback mode: "close" or "open"')
 
     # verbose
     parser.add_argument('--verbose',action="store_true",help='Screen output')
@@ -230,16 +237,22 @@ if __name__ == "__main__":
 
         
             
-    # --------------
-    # Sig gen
-    # --------------
-    #myinstrument.set_signal_gen_params(tes_channel=2, source='feedback', shape='triangle', frequency=110, amplitude=150)
-    #data = myinstrument.get_signal_gen_params(tes_channel=2)
-    #myinstrument.set_signal_gen_onoff('off',tes_channel=2)
+    # -----------------
+    # Signal generator
+    # -----------------
+    if args.signal_gen_on and args.signal_gen_off:
+        print('ERROR: Turn signal generator on or off, not both!')
+    
+    if args.signal_gen_on:
+        myinstrument.set_signal_gen_onoff('on')
+        
+    if args.signal_gen_on:
+        myinstrument.set_signal_gen_onoff('off')
 
-    #data = myinstrument.get_signal_gen_onoff(tes_channel=2)
-    #print(data)
-    #print(bias)
-
-
+    if args.signal_gen_voltage is not None:
+        myinstrument.set_signal_gen_params(voltage=args.signal_gen_voltage:)
+        
+    if args.signal_gen_frequency is not None:
+        myinstrument.set_signal_gen_params(frequency=args.signal_gen_frequency)
+        
     
