@@ -630,7 +630,7 @@ class Readout:
                 # Let's just assume there is only one signal generator 
                 break
             
-            self._analyzer.set_config('signal_gen_current', signal_gen_info['current']*1e-6)
+            self._analyzer.set_config('signal_gen_current', signal_gen_info['current'])
             self._analyzer.set_config('signal_gen_frequency', signal_gen_info['frequency'])
             
             
