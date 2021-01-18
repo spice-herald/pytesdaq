@@ -804,8 +804,8 @@ class Readout:
                 chan_index = self._detector_config['connection_map']['adc_chans'].index(chan)
                 detector_name = self._detector_config['connection_map']['detector_chans'][chan_index]
                 settings = self._detector_config['settings'][detector_name]
-                self._analyzer.set_config('signal_gen_current', settings['signal_gen_current']*1e-6)
-                self._analyzer.set_config('signal_gen_frequency', settings['signal_gen_frequency'])
+                self._analyzer.set_config('signal_gen_current', float(settings['signal_gen_current']))
+                self._analyzer.set_config('signal_gen_frequency', float(settings['signal_gen_frequency']))
                 break
 
     
