@@ -1195,8 +1195,8 @@ class ToolsWindow(QtWidgets.QWidget):
                 self._unit_combobox.setCurrentIndex(index)
         # running avg
         self._running_avg_checkbox.setChecked(True)
-        if int(self._running_avg_spinbox.value())<10:
-            self._running_avg_spinbox.setValue(10)
+        if int(self._running_avg_spinbox.value())<20:
+            self._running_avg_spinbox.setValue(20)
 
         
         # Update Fit button
@@ -1204,7 +1204,30 @@ class ToolsWindow(QtWidgets.QWidget):
         self._fit_button.setText('Fitting \n Be Patient!')
         self._fit_button.setEnabled(False)
 
-        # update analysis
+
+        # update pole
+        # 1pole fit
+        if self._didv_fit_1pole.isChecked():
+            self._readout.update_analysis_config(didv_1pole=True)
+        else:
+            self._readout.update_analysis_config(didv_1pole=False)
+
+        # 2pole fit 
+        if self._didv_fit_2pole.isChecked():
+            self._readout.update_analysis_config(didv_2pole=True)
+        else:
+            self._readout.update_analysis_config(didv_2pole=False)
+
+        # 3pole fit 
+        if self._didv_fit_3pole.isChecked():
+            self._readout.update_analysis_config(didv_3pole=True)
+        else:
+            self._readout.update_analysis_config(didv_3pole=False)
+
+
+
+        
+        # updat parameters
         rp = float(self._rp_spinbox.value())/1000
         self._readout.update_analysis_config(rp=rp)
 
@@ -1213,8 +1236,14 @@ class ToolsWindow(QtWidgets.QWidget):
 
         rshunt = float(self._rshunt_spinbox.value())/1000
         self._readout.update_analysis_config(rshunt=rshunt)
-        
-        
+
+
+        r0 = float(self._r0_spinbox.value()/1000)
+        self._readout.update_analysis_config(r0=r0)
+
+
+
+        # enable 
         self._readout.update_analysis_config(fit_didv=True)
 
         # clear field
@@ -1260,18 +1289,18 @@ class ToolsWindow(QtWidgets.QWidget):
                     self._unit_combobox.setCurrentIndex(index)
             # running avg
             self._running_avg_checkbox.setChecked(True)
-            if int(self._running_avg_spinbox.value())<10:
-                self._running_avg_spinbox.setValue(10)
+            if int(self._running_avg_spinbox.value())<20:
+                self._running_avg_spinbox.setValue(20)
 
         measurement = 'Rp'
-        if selection == 'Rp dIdV Fit' or selection == 'Rn dIdV Fit':
+        if selection == 'SC dIdV Fit' or selection == 'Normal dIdV Fit':
             self._didv_fit_2pole.setChecked(False)
             self._didv_fit_2pole.setEnabled(False)
             self._didv_fit_3pole.setChecked(False)
             self._didv_fit_3pole.setEnabled(False)
             self._didv_fit_1pole.setEnabled(True)
             self._didv_fit_1pole.setChecked(True)
-            if selection == 'Rp dIdV Fit':
+            if selection == 'SC dIdV Fit':
                 self._tools_tabs.setTabText(0,'Rp Fit')
                 self._rp_spinbox.setEnabled(False)
             else:
@@ -1279,8 +1308,9 @@ class ToolsWindow(QtWidgets.QWidget):
                 self._rp_spinbox.setEnabled(True)
                 measurement = 'Rn'
             self._tools_tabs.setTabVisible(0,True)
-                        
-        elif selection == 'R0 dIdV Fit':
+            self._r0_spinbox.setEnabled(False)
+            
+        elif selection == 'Transition dIdV Fit':
             self._didv_fit_1pole.setChecked(False)
             self._didv_fit_1pole.setEnabled(False)
             self._didv_fit_2pole.setEnabled(True)
@@ -1289,6 +1319,7 @@ class ToolsWindow(QtWidgets.QWidget):
             self._didv_fit_3pole.setChecked(True)
             self._tools_tabs.setTabText(0,'R0 Fit')
             self._rp_spinbox.setEnabled(True)
+            self._r0_spinbox.setEnabled(True)
             self._tools_tabs.setTabVisible(0,True)
             measurement = 'R0'
                        
@@ -1301,28 +1332,8 @@ class ToolsWindow(QtWidgets.QWidget):
 
         self._readout.update_analysis_config(didv_measurement=measurement)
 
-            
-    def _handle_fit_parameter(self):
-        """
-        Rshunt/Rp/dt
-        """
-          # get sender
-        spinbox = self.sender()
 
-        # get parameter name
-        name = str(spinbox.objectName())
-
-        # update analysis
-        if name == 'rshuntSpinBox':
-            self._readout.update_analysis_config(rshunt=self._rshunt_spinbox.value()/1000)
-
-        if name == 'rpSpinBox':
-            self._readout.update_analysis_config(rp=self._rp_spinbox.value()/1000)
-
-        if name == 'dtSpinBox':
-            self._readout.update_analysis_config(dt=self._dt_spinbox.value()*1e-6)
-
-            
+        
         
     def _init_frame(self):
 
@@ -1348,7 +1359,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._pileup_selection.setFont(font)
         self._pileup_selection.setObjectName('Pileup')
         self._pileup_selection.setText('Pileup Rejection')
-        self._pileup_selection.setEnabled(True)
+        self._pileup_selection.setEnabled(False)
 
 
         
@@ -1366,9 +1377,9 @@ class ToolsWindow(QtWidgets.QWidget):
         self._measurement_combobox.setFont(font)
         #self._measurement_combobox.setStyleSheet('background-color: rgb(226, 255, 219);')
         self._measurement_combobox.addItem('Select Measurement')  
-        self._measurement_combobox.addItem('Rp dIdV Fit')
-        self._measurement_combobox.addItem('Rn dIdV Fit')
-        self._measurement_combobox.addItem('R0 dIdV Fit')
+        self._measurement_combobox.addItem('SC dIdV Fit')
+        self._measurement_combobox.addItem('Normal dIdV Fit')
+        self._measurement_combobox.addItem('Transition dIdV Fit')
         #self._measurement_combobox.setEnabled(False)
         
         # add tab
@@ -1471,8 +1482,30 @@ class ToolsWindow(QtWidgets.QWidget):
         self._rp_spinbox.setStepType(step_type)
 
 
+
+        # R0
+        r0_label = QtWidgets.QLabel(self._didv_tab)
+        r0_label.setGeometry(QtCore.QRect(42, 96, 50, 15))
+        r0_label.setFont(font)
+        r0_label.setObjectName('r0Label')
+        r0_label.setText('R0:')
+
+        self._r0_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        self._r0_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
+        self._r0_spinbox.setMaximum(100000)
+        self._r0_spinbox.setProperty('value', 200)
+        self._r0_spinbox.setObjectName('r0SpinBox')
+        self._r0_spinbox.setDecimals(1)
+        self._r0_spinbox.setStepType(step_type)
+
+
+
+
+
+
+        
         unit_label = QtWidgets.QLabel(self._didv_tab)
-        unit_label.setGeometry(QtCore.QRect(150, 55, 60, 15))
+        unit_label.setGeometry(QtCore.QRect(150, 70, 60, 15))
         unit_label.setFont(font)
         unit_label.setObjectName('rshuntUniyLabel')
         unit_label.setText('[mOhms]')
@@ -1480,13 +1513,13 @@ class ToolsWindow(QtWidgets.QWidget):
 
         # dt
         dt_label = QtWidgets.QLabel(self._didv_tab)
-        dt_label.setGeometry(QtCore.QRect(39, 94, 50, 15))
+        dt_label.setGeometry(QtCore.QRect(39, 120, 50, 15))
         dt_label.setFont(font)
         dt_label.setObjectName('dtLabel')
         dt_label.setText('dt0:')
 
         self._dt_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
-        self._dt_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
+        self._dt_spinbox.setGeometry(QtCore.QRect(70, 117, 70, 20))
         self._dt_spinbox.setMaximum(100000)
         self._dt_spinbox.setProperty('value', 2)
         self._dt_spinbox.setObjectName('dtSpinBox')
@@ -1494,7 +1527,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._dt_spinbox.setStepType(step_type)
 
         dt_unit_label = QtWidgets.QLabel(self._didv_tab)
-        dt_unit_label.setGeometry(QtCore.QRect(150, 91, 60, 15))
+        dt_unit_label.setGeometry(QtCore.QRect(150, 118, 60, 15))
         dt_unit_label.setFont(font)
         dt_unit_label.setObjectName('dtUniyLabel')
         dt_unit_label.setText('[mus]')
@@ -1527,12 +1560,12 @@ class ToolsWindow(QtWidgets.QWidget):
 
         
         # connect
-        self._rshunt_spinbox.valueChanged.connect(self._handle_fit_parameter)
-        self._rp_spinbox.valueChanged.connect(self._handle_fit_parameter)
-        self._dt_spinbox.valueChanged.connect(self._handle_fit_parameter)
-        self._didv_fit_1pole.toggled.connect(self._handle_fit_selection)
-        self._didv_fit_2pole.toggled.connect(self._handle_fit_selection)
-        self._didv_fit_3pole.toggled.connect(self._handle_fit_selection)
+        #self._rshunt_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._rp_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._dt_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._didv_fit_1pole.toggled.connect(self._handle_fit_selection)
+        #self._didv_fit_2pole.toggled.connect(self._handle_fit_selection)
+        #self._didv_fit_3pole.toggled.connect(self._handle_fit_selection)
         self._fit_button.clicked.connect(self._handle_fit)
         
 if __name__ == '__main__':

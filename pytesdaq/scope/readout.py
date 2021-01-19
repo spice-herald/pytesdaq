@@ -238,7 +238,7 @@ class Readout:
                                fit_didv=None, didv_1pole=None,
                                didv_2pole=None, didv_3pole=None,
                                didv_measurement=None,
-                               rshunt=None, rp=None, dt=None):
+                               rshunt=None, rp=None, r0=None, dt=None):
         
         """
         Update analysis configuration
@@ -288,6 +288,9 @@ class Readout:
         if rp is not None:
             self._analyzer.set_config('rp', rp)
 
+        if r0 is not None:
+            self._analyzer.set_config('r0', r0)
+            
         if dt is not None:
             self._analyzer.set_config('dt', dt)
             
@@ -535,21 +538,26 @@ class Readout:
                 result_list = list()
 
                 for ichan in range(nb_chan):
+                    didv = self._didv_data_dict['results'][ichan]['didv0']
                     result = self._didv_data_dict['results'][ichan]['smallsignalparams']
 
-                    result_list.append(['Rsh [mOhms]', f"{result['rsh']*1000:.2f}"])
-                    
+
+                    rshunt = result['rsh']
+                    result_list.append(['Input Rsh [mOhms]', f"{rshunt*1000:.2f}"])
+
                     if resistance_type=='Rp':
                         rp = result['rp']
+                        result_list.append(['Rp [mOhms]', f"{rp*1000:.2f}"])
+                    else:
+                        result_list.append(['Input Rp [mOhms]', f"{rp*1000:.2f}"])
                         
-                    result_list.append(['Rp [mOhms]', f"{rp*1000:.2f}"])
-
+                    if 'r0' in result:
+                        result_list.append(['Input R0 [mOhms]', f"{result['r0']*1000:.2f}"])
+                     
                     if resistance_type=='Rn':
                         rn = result['rp']-rp
                         result_list.append(['Rn [mOhms]', f"{rn*1000:.2f}"])
                                       
-                    #if 'r0' in result:
-                    #    result_list.append(['R0 [mOhms]', f"{result['r0']*1000:.2f}"])
                      
                     if 'tau0' in result:
                         result_list.append(['tau0 [mus]', f"{result['tau0']*1e6:.3f}"])
@@ -561,13 +569,17 @@ class Readout:
                     result_list.append(['dt [mus]', f"{result['dt']*1e6:.3f}"])
                   
                     if 'l' in result:
-                        result_list.append(['l', f"{result['l']:.3f}"])
+                        result_list.append(['loop gain (l)', f"{result['l']:.3f}"])
                       
                     if 'beta' in result:
                         result_list.append(['beta', f"{result['beta']:.3f}"])
-                 
+
+                    if resistance_type=='R0':
+                        r0_infinite = (abs(1/didv) + rp + rshunt)*1000
+                        result_list.append(['R0 (Infinite l) [mOhms]', f"{r0_infinite:.2f}"])
+                        
                     
-                result_pd = pd.DataFrame(result_list, columns = [' Parameter ',' Value '])
+                result_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
                 self._fit_result_field.setHtml(result_pd.to_html(index=False))
                 
                 

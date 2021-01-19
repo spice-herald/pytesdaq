@@ -255,6 +255,7 @@ class Analyzer:
         rshunt = self._analysis_config['rshunt']
         rp = self._analysis_config['rp']
         dt = self._analysis_config['dt']
+        r0 = self._analysis_config['r0'] 
         dutycycle=0.5
 
 
@@ -282,7 +283,7 @@ class Analyzer:
                                 sg_freq,
                                 sg_current,
                                 rshunt,
-                                r0=0.2, rp=rp,
+                                r0=r0, rp=rp,
                                 dutycycle=dutycycle,
                                 add180phase=False,
                                 dt0=dt)
@@ -324,7 +325,7 @@ class Analyzer:
                 result = didv_inst.fitresult(3)
                 print('Info: dIdV 3-pole Fit Done')
 
-            
+
             # Fit result
             dt = 1/sample_rate
             time = np.arange(0,nb_samples)*dt
@@ -423,6 +424,7 @@ class Analyzer:
         self._analysis_config['signal_gen_frequency'] = None
         self._analysis_config['rshunt'] = 0.005
         self._analysis_config['rp'] = 0.003
+        self._analysis_config['r0'] = 0.2
         self._analysis_config['dt'] = 2e-6
         self._analysis_config['fit_didv'] = False
         self._analysis_config['didv_1pole'] = False
