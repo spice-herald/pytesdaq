@@ -537,36 +537,37 @@ class Readout:
                 for ichan in range(nb_chan):
                     result = self._didv_data_dict['results'][ichan]['smallsignalparams']
 
-                    result_list.append(['Rsh [mOhms]', '{:2f}'.format(result['rsh']*1000)])
+                    result_list.append(['Rsh [mOhms]', f"{result['rsh']*1000:.2f}"])
                     
                     if resistance_type=='Rp':
                         rp = result['rp']
-                    result_list.append(['Rp [mOhms]', '{:2f}'.format(rp*1000)])
+                        
+                    result_list.append(['Rp [mOhms]', f"{rp*1000:.2f}"])
 
                     if resistance_type=='Rn':
                         rn = result['rp']-rp
-                        result_list.append(['Rn [mOhms]', '{:2f}'.format(rn*1000)])
-                    
+                        result_list.append(['Rn [mOhms]', f"{rn*1000:.2f}"])
+                                      
                     if 'r0' in result:
-                        result_list.append(['R0 [mOhms]', '{:2f}'.format(result['r0']*1000)])
-
+                        result_list.append(['R0 [mOhms]', f"{result['r0']*1000:.2f}"])
+                     
                     if 'tau0' in result:
-                        result_list.append(['tau0 [mus]', '{:2f}'.format(result['tau0']*1e6)])
+                        result_list.append(['tau0 [mus]', f"{result['tau0']*1e6:.3f}"])
 
                     if 'tau3' in result:
-                        result_list.append(['tau3 [mus]', '{:2f}'.format(result['tau3']*1e6)])
-
-                                          
-                    result_list.append(['L [nH]', '{:2f}'.format(result['L']*1e9)])
-                    result_list.append(['dt [mus]', '{:2f}'.format(result['dt']*1e6)])
-
+                        result_list.append(['tau3 [mus]', f"{result['tau3']*1e6:.3f}"])
+                                                              
+                    result_list.append(['L [nH]', f"{result['L']*1e9:.3f}"])
+                    result_list.append(['dt [mus]', f"{result['dt']*1e6:.3f}"])
+                  
                     if 'l' in result:
-                        result_list.append(['l', str(result['l'])])
-
+                        result_list.append(['l', f"{result['l']:.3f}"])
+                      
                     if 'beta' in result:
-                        result_list.append(['beta', str(result['beta'])])
+                        result_list.append(['beta', f"{result['beta']:.3f}"])
+                 
                     
-                result_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
+                result_pd = pd.DataFrame(result_list, columns = [' Parameter ',' Value '])
                 self._fit_result_field.setHtml(result_pd.to_html(index=False))
                 
                 
