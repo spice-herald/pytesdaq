@@ -1205,31 +1205,39 @@ class ToolsWindow(QtWidgets.QWidget):
         self._fit_button.setEnabled(False)
 
         # update analysis
+        rp = float(self._rp_spinbox.value())/1000
+        self._readout.update_analysis_config(rp=rp)
+
+        dt = float(self._dt_spinbox.value())*1e-6
+        self._readout.update_analysis_config(dt=dt)
+
+        rshunt = float(self._rshunt_spinbox.value())/1000
+        self._readout.update_analysis_config(rshunt=rshunt)
+        
+        
         self._readout.update_analysis_config(fit_didv=True)
+
+        # clear field
+        self._text_field.clear()
         
         
     def _handle_fit_selection(self):
 
-        do_fit = False
-                  
-        # 1pole fit 
+        # 1pole fit
         if self._didv_fit_1pole.isChecked():
             self._readout.update_analysis_config(didv_1pole=True)
-            do_fit = True
         else:
             self._readout.update_analysis_config(didv_1pole=False)
 
         # 2pole fit 
         if self._didv_fit_2pole.isChecked():
             self._readout.update_analysis_config(didv_2pole=True)
-            do_fit = True
         else:
             self._readout.update_analysis_config(didv_2pole=False)
 
         # 3pole fit 
         if self._didv_fit_3pole.isChecked():
             self._readout.update_analysis_config(didv_3pole=True)
-            do_fit = True
         else:
             self._readout.update_analysis_config(didv_3pole=False)
       
@@ -1255,7 +1263,7 @@ class ToolsWindow(QtWidgets.QWidget):
             if int(self._running_avg_spinbox.value())<10:
                 self._running_avg_spinbox.setValue(10)
 
-        
+        measurement = 'Rp'
         if selection == 'Rp dIdV Fit' or selection == 'Rn dIdV Fit':
             self._didv_fit_2pole.setChecked(False)
             self._didv_fit_2pole.setEnabled(False)
@@ -1269,6 +1277,7 @@ class ToolsWindow(QtWidgets.QWidget):
             else:
                 self._tools_tabs.setTabText(0,'Rn Fit')
                 self._rp_spinbox.setEnabled(True)
+                measurement = 'Rn'
             self._tools_tabs.setTabVisible(0,True)
                         
         elif selection == 'R0 dIdV Fit':
@@ -1281,13 +1290,18 @@ class ToolsWindow(QtWidgets.QWidget):
             self._tools_tabs.setTabText(0,'R0 Fit')
             self._rp_spinbox.setEnabled(True)
             self._tools_tabs.setTabVisible(0,True)
+            measurement = 'R0'
                        
         else:
             self._didv_fit_1pole.setChecked(False)
             self._didv_fit_2pole.setChecked(False)
             self._didv_fit_3pole.setChecked(False)
             self._tools_tabs.setTabVisible(0,False)
-        
+
+
+        self._readout.update_analysis_config(didv_measurement=measurement)
+
+            
     def _handle_fit_parameter(self):
         """
         Rshunt/Rp/dt

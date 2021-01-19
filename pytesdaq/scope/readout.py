@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 from PyQt5.QtCore import QCoreApplication
 from matplotlib import pyplot as plt
+import pandas as pd
 import pytesdaq.daq as daq
 import pytesdaq.instruments.control as instrument
 import pytesdaq.config.settings as settings
@@ -10,6 +11,8 @@ import pytesdaq.io.redis as redis
 import pytesdaq.io.hdf5 as hdf5
 from pytesdaq.analyzer import analyzer
 from pytesdaq.utils import  arg_utils
+
+
 
 class Readout:
     
@@ -234,6 +237,7 @@ class Readout:
                                nb_events_avg=None,
                                fit_didv=None, didv_1pole=None,
                                didv_2pole=None, didv_3pole=None,
+                               didv_measurement=None,
                                rshunt=None, rp=None, dt=None):
         
         """
@@ -265,7 +269,7 @@ class Readout:
         if fit_didv is not None:
             self._do_get_sg = True
             self._analyzer.set_config('fit_didv', fit_didv)
-                       
+
         if didv_1pole is not None:
             self._analyzer.set_config('didv_1pole', didv_1pole)
 
@@ -274,6 +278,9 @@ class Readout:
             
         if didv_3pole is not None:
             self._analyzer.set_config('didv_3pole', didv_3pole)
+                        
+        if didv_measurement is not None:
+            self._analyzer.set_config('didv_measurement', didv_measurement)
             
         if rshunt is not None:
             self._analyzer.set_config('rshunt', rshunt)
@@ -453,6 +460,7 @@ class Readout:
  
 
             # check if fit done
+            resistance_type = self._analyzer.get_config('didv_measurement')
             if self._didv_data_dict is not None:
                              
                 # update GUI
@@ -465,15 +473,16 @@ class Readout:
                     self._ui_widget['control'].setText('Resume \n Display')
                     self._do_pause_run = True
 
-                    # update rp
-                    key = 'params'
-                    result = self._didv_data_dict['results'][0]
-                    if 'smallsignalparams' in result:
-                        key = 'smallsignalparams'
+                    # update rp if needed
+                    if resistance_type=='Rp':
+                        key = 'params'
+                        result = self._didv_data_dict['results'][0]
+                        if 'smallsignalparams' in result:
+                            key = 'smallsignalparams'
             
-                    rp = result[key]['rp']
-                    self._ui_widget['rp'].setValue(rp*1000)
-                    
+                        rp = result[key]['rp']
+                        self._ui_widget['rp'].setValue(rp*1000)
+                      
                     
                 # Disable fit
                 self.update_analysis_config(fit_didv=False)
@@ -514,8 +523,51 @@ class Readout:
 
                 # display
                 self._fit_result_field.clear()
-                text = str(self._didv_data_dict['results'][0])
-                self._fit_result_field.setText(text)
+
+                # get Rp
+                rp = None
+                if resistance_type!='Rp':
+                    rp = float(self._analyzer.get_config('rp'))
+
+                                
+                # loop channel
+                nb_chan = len(self._didv_data_dict['results'])
+                result_list = list()
+
+                for ichan in range(nb_chan):
+                    result = self._didv_data_dict['results'][ichan]['smallsignalparams']
+
+                    result_list.append(['Rsh [mOhms]', '{:2f}'.format(result['rsh']*1000)])
+                    
+                    if resistance_type=='Rp':
+                        rp = result['rp']
+                    result_list.append(['Rp [mOhms]', '{:2f}'.format(rp*1000)])
+
+                    if resistance_type=='Rn':
+                        rn = result['rp']-rp
+                        result_list.append(['Rn [mOhms]', '{:2f}'.format(rn*1000)])
+                    
+                    if 'r0' in result:
+                        result_list.append(['R0 [mOhms]', '{:2f}'.format(result['r0']*1000)])
+
+                    if 'tau0' in result:
+                        result_list.append(['tau0 [mus]', '{:2f}'.format(result['tau0']*1e6)])
+
+                    if 'tau3' in result:
+                        result_list.append(['tau3 [mus]', '{:2f}'.format(result['tau3']*1e6)])
+
+                                          
+                    result_list.append(['L [nH]', '{:2f}'.format(result['L']*1e9)])
+                    result_list.append(['dt [mus]', '{:2f}'.format(result['dt']*1e6)])
+
+                    if 'l' in result:
+                        result_list.append(['l', str(result['l'])])
+
+                    if 'beta' in result:
+                        result_list.append(['beta', str(result['beta'])])
+                    
+                result_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
+                self._fit_result_field.setHtml(result_pd.to_html(index=False))
                 
                 
                 

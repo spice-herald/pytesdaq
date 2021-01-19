@@ -428,3 +428,4 @@ class Analyzer:
         self._analysis_config['didv_1pole'] = False
         self._analysis_config['didv_2pole'] = False
         self._analysis_config['didv_3pole'] = False
+        self._analysis_config['didv_measurement'] = False
