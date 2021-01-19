@@ -548,8 +548,8 @@ class Readout:
                         rn = result['rp']-rp
                         result_list.append(['Rn [mOhms]', f"{rn*1000:.2f}"])
                                       
-                    if 'r0' in result:
-                        result_list.append(['R0 [mOhms]', f"{result['r0']*1000:.2f}"])
+                    #if 'r0' in result:
+                    #    result_list.append(['R0 [mOhms]', f"{result['r0']*1000:.2f}"])
                      
                     if 'tau0' in result:
                         result_list.append(['tau0 [mus]', f"{result['tau0']*1e6:.3f}"])
