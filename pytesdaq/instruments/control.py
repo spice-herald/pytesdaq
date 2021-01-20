@@ -1299,6 +1299,18 @@ class Control:
 
                 if val == nan or val is None:
                     val = -999999
+
+
+                # change units of some parameter:
+
+                # uA -> A
+                if param=='tes_bias' or param=='squid_bias':
+                    val = val/1000000.0
+
+                # mV -> V
+                if param=='lock_point_voltage':
+                    val = val/1000.0
+                
                 output_dict[param].append(val)  
             
                 # wait
