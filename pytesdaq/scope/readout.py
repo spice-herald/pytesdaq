@@ -301,8 +301,7 @@ class Readout:
 
         # reset running avg
         if (norm_type is not None or unit is not None or 
-            calc_psd is not None or fit_didv is not None or 
-            enable_pileup_rejection is not None):
+            calc_psd is not None or enable_pileup_rejection is not None):
             self._analyzer.set_config('reset_running_avg', True)
 
         
@@ -584,13 +583,6 @@ class Readout:
                 
                 
                 
-          
-            # ------------------
-            # Clear
-            # ------------------
-            self._analyzer.set_config('reset_running_avg', False)
-
-
 
 
         # =========================

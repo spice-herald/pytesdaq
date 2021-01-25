@@ -118,7 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
 
         run_state = self._get_run_state()
-              
+               
         if run_state==3:
 
             # Stop run
@@ -1185,18 +1185,13 @@ class ToolsWindow(QtWidgets.QWidget):
         
 
     def _handle_fit(self):
-
-
-        # check unit
-        unit = str(self._unit_combobox.currentText())
-        if unit.find('Amps')==-1:
-            index = self._unit_combobox.findText('uAmps', QtCore.Qt.MatchFixedString)
-            if index >= 0:
-                self._unit_combobox.setCurrentIndex(index)
-        # running avg
-        self._running_avg_checkbox.setChecked(True)
-        if int(self._running_avg_spinbox.value())<20:
-            self._running_avg_spinbox.setValue(20)
+        """
+        Do dIdV fit
+        """
+        
+        
+        # setup (should be done already)
+        self._setup_didv_fit()
 
         
         # Update Fit button
@@ -1279,21 +1274,9 @@ class ToolsWindow(QtWidgets.QWidget):
           
         selection = self._measurement_combobox.currentText()
 
-        # set running avg  and unit
-        if selection.find('Select')==-1:
-            # unit
-            unit = str(self._unit_combobox.currentText())
-            if unit.find('Amps')==-1:
-                index = self._unit_combobox.findText('uAmps', QtCore.Qt.MatchFixedString)
-                if index >= 0:
-                    self._unit_combobox.setCurrentIndex(index)
-            # running avg
-            self._running_avg_checkbox.setChecked(True)
-            if int(self._running_avg_spinbox.value())<20:
-                self._running_avg_spinbox.setValue(20)
-
         measurement = 'Rp'
         if selection == 'SC dIdV Fit' or selection == 'Normal dIdV Fit':
+            self._setup_didv_fit()
             self._didv_fit_2pole.setChecked(False)
             self._didv_fit_2pole.setEnabled(False)
             self._didv_fit_3pole.setChecked(False)
@@ -1311,6 +1294,7 @@ class ToolsWindow(QtWidgets.QWidget):
             self._r0_spinbox.setEnabled(False)
             
         elif selection == 'Transition dIdV Fit':
+            self._setup_didv_fit()
             self._didv_fit_1pole.setChecked(False)
             self._didv_fit_1pole.setEnabled(False)
             self._didv_fit_2pole.setEnabled(True)
@@ -1332,6 +1316,29 @@ class ToolsWindow(QtWidgets.QWidget):
 
         self._readout.update_analysis_config(didv_measurement=measurement)
 
+
+    def _setup_didv_fit(self):
+        """
+        Set units and running avg for dIdV"
+        """
+
+
+        # unit
+        unit = str(self._unit_combobox.currentText())
+        if unit.find('Amps')==-1:
+            index = self._unit_combobox.findText('uAmps', QtCore.Qt.MatchFixedString)
+            if index >= 0:
+                self._unit_combobox.setCurrentIndex(index)
+            # reset running avg
+            self._readout.update_analysis_config(reset_running_avg=True)
+                
+        # running avg
+        if not self._running_avg_checkbox.isChecked():
+            self._running_avg_checkbox.setChecked(True)
+                
+        if int(self._running_avg_spinbox.value())<25:
+            self._running_avg_spinbox.setValue(25)
+        
 
         
         

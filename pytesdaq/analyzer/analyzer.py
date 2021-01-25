@@ -48,7 +48,7 @@ class Analyzer:
         """
 
         self._analysis_config[config_name] = config_val
-
+            
 
         if self._analysis_config['norm_type']=='NoNorm':
             self._analysis_config['norm_list'] = None
@@ -102,11 +102,10 @@ class Analyzer:
         # ---------------------
         # Running average 
         # ---------------------
-        
         if self._analysis_config['enable_running_avg']:
                         
             # store in buffer
-            self._store_data(data_array, do_reset=self._analysis_config['reset_running_avg'])
+            self._store_data(data_array)
 
             # get running average
             data_array = self._calc_running_avg()
@@ -126,7 +125,7 @@ class Analyzer:
         # dIdV Fit
         # ---------------------
         didv_data_dict = None
-        if self._analysis_config['fit_didv'] and self._nb_events_buffer>5:
+        if self._analysis_config['fit_didv'] and self._nb_events_buffer>=25:
             
             # check if prior results available
             #if self._didv_fit_results is not None:
@@ -351,7 +350,7 @@ class Analyzer:
 
     
     
-    def _store_data(self, data_array, do_reset=False):
+    def _store_data(self, data_array):
         """
         Store data in buffer for running_avg
         Buffer dimensions: (nb_channels, nb_samples, nb_events)
@@ -369,18 +368,19 @@ class Analyzer:
                 do_reset = True
             
         # reset if needed
-        if do_reset or self._buffer is None:
+        if self._analysis_config['reset_running_avg'] or self._buffer is None:
             self._buffer = data_array
             self._nb_events_buffer = 1
+            self._analysis_config['reset_running_avg'] = False
             return
-            
 
+        
         # delete elements
         if self._analysis_config['nb_events_avg']<=dims_buffer[2]:
             nb_to_delete = dims_buffer[2]-self._analysis_config['nb_events_avg']+1
             self._buffer = np.delete(self._buffer, list(range(nb_to_delete)), axis=2)
             
-        # append element
+        # append elements
         self._buffer = np.append(self._buffer, data_array, axis=2)
         self._nb_events_buffer = self._buffer.shape[2]
 
