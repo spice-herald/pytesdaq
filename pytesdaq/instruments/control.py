@@ -996,7 +996,7 @@ class Control:
             else:
                 output_dict['source'] = source
 
-            output_dict['current'] = amp
+            output_dict['current'] = amp/1000000.0
             output_dict['voltage'] = []
             output_dict['frequency'] = freq
             output_dict['shape'] = shape
