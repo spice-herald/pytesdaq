@@ -4,7 +4,7 @@
     <meta name="description" content="">
     <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
     <meta name="generator" content="Jekyll v4.0.1">
-    <title>Series Info </title>
+    <title>Series Info – TES</title>
 
   
     <style>
@@ -20,6 +20,10 @@
       body {
       padding-top: 90px;
     }
+    .table-border {
+        padding: 10px;  
+        border-collapse: collapse;      
+      }
 
       @media (min-width: 768px) {
         .bd-placeholder-img-lg {
@@ -38,36 +42,15 @@
 
 <main role="main" class="container">
 
-    <h1>Fridge runs</h1>
+    <h2>Series Info for ${this_series['series_num']}</h2>
 
   <div>
-     <table id="series_table" class="table table-hover table-md table-responsive table-bordered table-striped" style="font-size: 0.8rem;">
-            <thead>
-              <tr>
-                <th>Series name</th>
-                <th>Run&nbsp;type</th>
-                <th>Timestamp</th>
-                <th>#&nbsp;events</th>
-                <th>Comments</th>
-              </tr>
-            </thead class="thead-dark">
+     <table id="series_table" class="table table-hover table-sm table-responsive table-bordered table-striped" style="font-size: 0.8rem;">
             <tbody>
-              % if len(series) == 0:
-                <tr class="table-danger">
-                  <td colspan="10">
-                    No matching series found
-                  </td>
-                </tr>
-              % endif
-              % for s in series:
-                <tr id="series_${s['series_num']}">
-                  <td><a  href="/series/${s['series_num']}">${s['series_num']}</a></td>
-                  <td>${s['run_type']}</td>
-                  <td>${s['timestamp']}</td>
-                  <td>${s['nb_events']}</td>
-                  <td>
-                    ${s['comment']}
-                  </td>
+              % for s in this_series:
+                <tr id="${s}">
+                  <td>${s}</td>
+                  <td>${this_series[s]}</td>
                 </tr>
               % endfor
             </tbody>

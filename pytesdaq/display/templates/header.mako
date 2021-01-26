@@ -29,7 +29,7 @@
   </head>
   <body>
     <nav class="navbar navbar-expand-lg bg-primary navbar-dark fixed-top">
-  <a class="navbar-brand" href="./">UCB TES</a>
+  <a class="navbar-brand" href="./">TES Data</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="true" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
@@ -37,21 +37,10 @@
   <div class="collapse navbar-collapse" id="navbarsExampleDefault">
     <ul class="navbar-nav mr-auto">
       <li class="nav-item active">
-        <a class="nav-link" href="./">Home <span class="sr-only">(current)</span></a>
+        <a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" href="./series_test">Series Info</a>
-      </li>
-      <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle" href="#" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Raw Data</a>
-        <div class="dropdown-menu" aria-labelledby="dropdown01">
-          <a class="dropdown-item" href="#">Accelerometer</a>
-          <a class="dropdown-item" href="#">Thermometer</a>
-          <a class="dropdown-item" href="#">Noise</a>
-        </div>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" href="#">Analysis</a>
+        <a class="nav-link" href="/series_test">Series Info</a>
       </li>
        <li class="nav-item">
         <a class="nav-link" href="#">About Us</a>
