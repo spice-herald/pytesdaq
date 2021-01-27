@@ -9,14 +9,15 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as Navigati
 from matplotlib.figure import Figure
 from pytesdaq.scope import readout
 from glob import glob
-import os,time
+import os
+import time
+from datetime import datetime
 
 class MainWindow(QtWidgets.QMainWindow):
     
     def __init__(self):
         super().__init__()
-        
-       
+               
 
         # initialize attribute
         self._data_source = 'niadc'
@@ -35,13 +36,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         # channel color map
-        self._channels_color_map = {0:(0, 85, 255),
-                                    1:(255, 0, 0),
-                                    2:(0, 170, 127),
-                                    3:(170, 0, 255),
-                                    4:(170, 116, 28),
-                                    5:(15, 235, 255),
-                                    6:(255, 207, 32),
+        self._channels_color_map = {0:(255, 207, 32),
+                                    1:(0, 85, 255),
+                                    2:(170, 0, 255),
+                                    3:(0, 170, 127),
+                                    4:(255, 0, 0),
+                                    5:(170, 116, 28),
+                                    6:(15, 235, 255),
                                     7:(121, 121, 121)}
         
 
@@ -59,22 +60,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # tools
         self._tools = None
-
-
         
         # show
         self.show()
-        
 
-        # run control
-        self._is_running = False
-        self._stop_request = False
-   
         
         # initialize readout
         self._readout = readout.Readout()
         self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
-                                  self._channels_color_map)
+                                  self._channels_color_map,
+                                  self._display_control_button)
         
 
 
@@ -85,34 +80,50 @@ class MainWindow(QtWidgets.QMainWindow):
         This function is called when exiting window
         superse base class
         """
-
-               
-        if self._is_running:
-            self._readout.stop_run()
-            
-            # wait (needed?)
-            for ii in range(10):
-                time.sleep(0.01)
+        
+        self._readout.stop_run()
+        
+        # wait (needed?)
+        for ii in range(10):
+            time.sleep(0.01)
                 
         
         self._tools = None
         print('Exiting Pulse Display UI')
         
 
+    def _get_run_state(self):
+        """
+        Get Run State
+        1 = stopped
+        2 = paused
+        3 = runnining
+        """
+        run_state = 0
+        display_text = self._display_control_button.text()
+        if display_text == 'Display \n Waveform':
+            run_state = 1
+        elif display_text == 'Resume \n Display':
+            run_state = 2
+        else:
+            run_state = 3
 
+    
+        return run_state 
+            
 
     def _handle_display(self):
         """
         Handle display. Called when clicking on display waveform 
         """
 
-
-        if self._is_running:
+        run_state = self._get_run_state()
+               
+        if run_state==3:
 
             # Stop run
             self._readout.stop_run()
-            self._is_running=False
-
+                       
             # change button display
             self._set_display_button(False)
 
@@ -123,9 +134,14 @@ class MainWindow(QtWidgets.QMainWindow):
             # status bar
             self.statusBar().showMessage('Display Stopped')
           
-            
-        else:
 
+        elif run_state==2:
+            
+            self._set_display_button(True)
+            self._readout.resume_run()
+            
+        elif run_state==1:
+            
             adc_name = 'adc1'
             device = self._device_combobox.currentText()
             if device[0:2] == 'NI':
@@ -157,7 +173,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 # get all channels
                 channel_list = list(range(8))
-                status = self._readout.configure('niadc',adc_name=adc_name,channel_list=channel_list,
+                status = self._readout.configure('niadc', adc_name=adc_name, channel_list=channel_list,
                                                  sample_rate=sample_rate, trace_length=trace_length,
                                                  voltage_min=voltage_min, voltage_max=voltage_max,
                                                  trigger_type=trigger_type)
@@ -167,14 +183,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.statusBar().showMessage(status)
                     return
 
-            elif self._data_source  == 'hdf5':
+            elif self._data_source == 'hdf5':
                 
                 # check selection done
                 if not self._file_list:
                     self.statusBar().showMessage('WARNING: No files selected!')  
                     return
 
-                status = self._readout.configure('hdf5', file_list = self._file_list)
+                status = self._readout.configure('hdf5', file_list=self._file_list)
 
                 # error
                 if isinstance(status,str):
@@ -186,7 +202,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
 
-            # reset runing avg
+            # reset running avg
             self._readout.update_analysis_config(reset_running_avg=True)
 
 
@@ -202,17 +218,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # run 
             self._set_display_button(True)
-            self._is_running=True
             self._readout.run(do_plot=True)
 
-
+  
             # status bar
             self.statusBar().showMessage('Run stopped...')
           
 
             # change status
             self._set_display_button(False)
-            self._is_running=False
             self._data_source_tabs.setEnabled(True)
             self._source_combobox.setEnabled(True)
 
@@ -240,6 +254,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # set current
             self._data_source_tabs.setCurrentWidget(self._redis_tab)
+
+
+            # disable read from board
+            self._read_board_button.setEnabled(False)
             
             
         elif data_source== 'HDF5':
@@ -254,6 +272,12 @@ class MainWindow(QtWidgets.QMainWindow):
             # set current
             self._data_source_tabs.setCurrentWidget(self._hdf5_tab)
 
+            # disable read from board
+            self._read_board_button.setEnabled(False)
+            
+
+
+            
         elif data_source== 'Device':
             
             self._data_source  = 'niadc'
@@ -266,6 +290,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # set current
             self._data_source_tabs.setCurrentWidget(self._niadc_tab)
 
+
+            # enable read from board
+            self._read_board_button.setEnabled(True)
+            
+            
+
+            
         else:
             print('WARNING: Unknown selection')
 
@@ -311,15 +342,24 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _handle_save_data(self):
 
+        # default name
+        now = datetime.now()
+        default_name = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+        default_name += '_' +  now.strftime('%H') + now.strftime('%M') + now.strftime('%S')
+        
+
+
+        
         # select directory
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        filename, _ = QtWidgets.QFileDialog.getSaveFileName(self,'Choose file name to save to',self._default_data_dir,
-                                                        'Numpy File (*.npy)', options=options)
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(self,'Choose file name to save to',
+                                                            self._default_data_dir+default_name,
+                                                            'Fig (*.png) + Numpy File (*.npy)',
+                                                            options=options)
         
-
         self._readout.save_data(filename)
-        
+        self._fig.savefig(filename + '.png')
 
 
             
@@ -358,9 +398,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # make sure it is unique...
             self._channel_list = list(set(self._channel_list))
 
-        if self._readout:
-            self._readout.select_channels(self._channel_list)
+
             
+        # update readout
+        self._readout.select_channels(self._channel_list)
+
+        
+        
 
     def _handle_waveform_type(self):
         """
@@ -394,7 +438,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._norm_combobox.clear()
         if unit=='ADC':
             self._norm_combobox.addItem('None')
-            norm = 'None'
+            norm = 'NoNorm'
         elif (unit=='Volts' or unit=='mVolts' or unit=='nVolts'):
             self._norm_combobox.addItem('None')
             self._norm_combobox.addItem('OpenLoop PreAmp')
@@ -405,8 +449,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._norm_combobox.setCurrentIndex(2)
             else:
                 self._norm_combobox.setCurrentIndex(0)
-                norm = 'None'
-        elif (unit=='Amps' or unit=='pAmps' or unit=='Watts' or unit=='pWatts'):
+                norm = 'NoNorm'
+        elif (unit=='Amps' or unit=='uAmps' or unit=='pAmps' or unit=='Watts' or unit=='pWatts'):
             self._norm_combobox.addItem('CloseLoop')
             self._norm_combobox.setCurrentIndex(0)
             norm = 'CloseLoop'
@@ -419,10 +463,12 @@ class MainWindow(QtWidgets.QMainWindow):
             
 
         # update analysis
-        self._readout.update_analysis_config(unit=unit, norm=norm)
+        self._readout.update_analysis_config(unit=unit, norm_type=norm)
         
 
-
+    def _handle_read_board(self):
+        self._readout.read_from_board(read_norm=True, read_sg=True)
+        print('INFO: Reading from board')
 
 
     def _handle_waveform_norm(self):
@@ -435,7 +481,7 @@ class MainWindow(QtWidgets.QMainWindow):
         norm = str(self._norm_combobox.currentText())
 
         # update analysis
-        self._readout.update_analysis_config(norm=norm)
+        self._readout.update_analysis_config(norm_type=norm)
 
 
 
@@ -453,7 +499,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._running_avg_checkbox.isChecked():
             self._running_avg_spinbox.setEnabled(True)
             value = int(self._running_avg_spinbox.value())
-            self._readout.update_analysis_config(enable_running_avg = True, nb_events_avg=value)
+            self._readout.update_analysis_config(enable_running_avg=True, nb_events_avg=value)
         else:
             #self._running_avg_spinbox.setProperty('value', 1)
             self._running_avg_spinbox.setEnabled(False)
@@ -607,7 +653,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._trace_length_spinbox = QtWidgets.QSpinBox(self._niadc_tab)
         self._trace_length_spinbox.setGeometry(QtCore.QRect(5, 32, 95, 21))
         self._trace_length_spinbox.setMaximum(100000)
-        self._trace_length_spinbox.setProperty('value', 10)
+        self._trace_length_spinbox.setProperty('value', 10.0)
         self._trace_length_spinbox.setObjectName('traceLengthSpinBox')
         
         # Sample Rate
@@ -781,7 +827,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._display_control_button.setFont(font)
         self._display_control_button.setStyleSheet('background-color: rgb(255, 0, 0);')
         self._display_control_button.setObjectName('displayControlButton')
-        self._display_control_button.setText('Display \n' 'Waveform')
+        self._display_control_button.setText('Display \n Waveform')
     
         
 
@@ -847,6 +893,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._unit_combobox.addItem('mVolts')
         self._unit_combobox.addItem('nVolts')
         self._unit_combobox.addItem('Amps')
+        self._unit_combobox.addItem('uAmps')
         self._unit_combobox.addItem('pAmps')
         self._unit_combobox.addItem('Watts')
         self._unit_combobox.addItem('pWatts')
@@ -908,8 +955,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         
         # connect
-        self._waveform_combobox.activated.connect(self._handle_waveform_type)
-        self._unit_combobox.activated.connect(self._handle_waveform_unit)
+        self._waveform_combobox.currentIndexChanged.connect(self._handle_waveform_type)
+        self._unit_combobox.currentIndexChanged.connect(self._handle_waveform_unit)
         self._norm_combobox.activated.connect(self._handle_waveform_norm)
         self._auto_scale_checkbox.toggled.connect(self._handle_auto_scale)
 
@@ -994,21 +1041,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Add tools button
         self._tools_button = QtWidgets.QPushButton(self._tools_frame)
-        self._tools_button.setGeometry(QtCore.QRect(156, 25, 89, 50))
+        self._tools_button.setGeometry(QtCore.QRect(156, 11, 89, 35))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
+        font.setPointSize(8)
         self._tools_button.setFont(font)
         self._tools_button.setStyleSheet('background-color: rgb(162, 162, 241);')
         self._tools_button.setObjectName('toolsButton')
-        self._tools_button.setText('Tools')
-        #self._tools_button.setEnabled(False)
+        self._tools_button.setText('Analysis \n Tools')
+       
 
         self._save_button = QtWidgets.QPushButton(self._tools_frame)
-        self._save_button.setGeometry(QtCore.QRect(156, 90, 89, 40))
-        font = QtGui.QFont()
-        font.setBold(True)
-        font.setWeight(75)
+        self._save_button.setGeometry(QtCore.QRect(156, 106, 89, 35))
         self._save_button.setFont(font)
         self._save_button.setStyleSheet('background-color: rgb(162, 162, 241);')
         self._save_button.setObjectName('saveButton')
@@ -1016,7 +1061,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._save_button.setEnabled(True)
 
 
-
+        self._read_board_button = QtWidgets.QPushButton(self._tools_frame)
+        self._read_board_button.setGeometry(QtCore.QRect(156, 58, 89, 35))
+        self._read_board_button.setFont(font)
+        self._read_board_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._read_board_button.setObjectName('readBoard')
+        self._read_board_button.setText('Read \n from board')
+        #self._read_board_button.setEnabled(False)
         
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
@@ -1064,25 +1115,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self._running_avg_spinbox.valueChanged.connect(self._handle_running_avg)
         self._save_button.clicked.connect(self._handle_save_data)
         self._tools_button.clicked.connect(self._show_tools)
+        self._read_board_button.clicked.connect(self._handle_read_board)
         #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
 
 
 
-    def _set_display_button(self,do_run):
+    def _set_display_button(self, do_run):
         
         if do_run:
             self._display_control_button.setStyleSheet('background-color: rgb(0, 255, 0);')
-            self._display_control_button.setText('Stop \n' 'Display')
+            self._display_control_button.setText('Stop \n Display')
         else:
             self._display_control_button.setStyleSheet('background-color: rgb(255, 0, 0);')
-            self._display_control_button.setText('Display \n' 'Waveform')
+            self._display_control_button.setText('Display \n Waveform')
         
         
 
 
     def _show_tools(self,checked):
         if self._tools is None:
-            self._tools = ToolsWindow(readout=self._readout)
+            self._tools = ToolsWindow(readout=self._readout,
+                                      unit_combobox=self._unit_combobox,
+                                      running_avg_checkbox=self._running_avg_checkbox,
+                                      running_avg_spinbox=self._running_avg_spinbox)
+            
+            
             
         self._tools.show()
         self._tools.setWindowState(QtCore.Qt.WindowActive)
@@ -1093,7 +1150,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
 class ToolsWindow(QtWidgets.QWidget):
     
-    def __init__(self, readout=None):
+    def __init__(self, readout=None, unit_combobox=None,
+                 running_avg_checkbox=None, running_avg_spinbox=None):
         super().__init__()
 
         #layout = QtWidgets.QVBoxLayout()
@@ -1101,7 +1159,7 @@ class ToolsWindow(QtWidgets.QWidget):
         #layout.addWidget(self.label)
         #self.setLayout(layout)
 
-        self.resize(400, 300)
+        self.resize(440, 410)
         self.setStyleSheet('background-color: rgb(211, 252, 255);')
         self.setWindowTitle('Tools')
 
@@ -1109,50 +1167,415 @@ class ToolsWindow(QtWidgets.QWidget):
         # readout
         self._readout = readout
 
+        #ui
+        self._unit_combobox = unit_combobox
+        self._running_avg_checkbox = running_avg_checkbox
+        self._running_avg_spinbox = running_avg_spinbox
+
         # construct frame
         self._main_frame = None
         self._init_frame()
-    
 
+        # register
+        self._readout.register_tools_ui(self._fit_button, self._text_field,
+                                        self._rshunt_spinbox, self._rp_spinbox,
+                                        self._dt_spinbox)
 
-    def _handle_read_board(self):
-        self._readout.read_from_board()
         
-        print('Read from board')
         
 
+    def _handle_fit(self):
+        """
+        Do dIdV fit
+        """
+        
+        
+        # setup (should be done already)
+        self._setup_didv_fit()
 
+        
+        # Update Fit button
+        self._fit_button.setStyleSheet('background-color: rgb(250, 255, 0);')
+        self._fit_button.setText('Fitting \n Be Patient!')
+        self._fit_button.setEnabled(False)
+
+
+        # update pole
+        # 1pole fit
+        if self._didv_fit_1pole.isChecked():
+            self._readout.update_analysis_config(didv_1pole=True)
+        else:
+            self._readout.update_analysis_config(didv_1pole=False)
+
+        # 2pole fit 
+        if self._didv_fit_2pole.isChecked():
+            self._readout.update_analysis_config(didv_2pole=True)
+        else:
+            self._readout.update_analysis_config(didv_2pole=False)
+
+        # 3pole fit 
+        if self._didv_fit_3pole.isChecked():
+            self._readout.update_analysis_config(didv_3pole=True)
+        else:
+            self._readout.update_analysis_config(didv_3pole=False)
+
+
+
+        
+        # updat parameters
+        rp = float(self._rp_spinbox.value())/1000
+        self._readout.update_analysis_config(rp=rp)
+
+        dt = float(self._dt_spinbox.value())*1e-6
+        self._readout.update_analysis_config(dt=dt)
+
+        rshunt = float(self._rshunt_spinbox.value())/1000
+        self._readout.update_analysis_config(rshunt=rshunt)
+
+
+        r0 = float(self._r0_spinbox.value()/1000)
+        self._readout.update_analysis_config(r0=r0)
+
+        # clear field
+        self._text_field.clear()
+
+        # enable 
+        self._readout.update_analysis_config(fit_didv=True)
+        
+        
+        
+    def _handle_fit_selection(self):
+
+        # 1pole fit
+        if self._didv_fit_1pole.isChecked():
+            self._readout.update_analysis_config(didv_1pole=True)
+        else:
+            self._readout.update_analysis_config(didv_1pole=False)
+
+        # 2pole fit 
+        if self._didv_fit_2pole.isChecked():
+            self._readout.update_analysis_config(didv_2pole=True)
+        else:
+            self._readout.update_analysis_config(didv_2pole=False)
+
+        # 3pole fit 
+        if self._didv_fit_3pole.isChecked():
+            self._readout.update_analysis_config(didv_3pole=True)
+        else:
+            self._readout.update_analysis_config(didv_3pole=False)
+      
+
+    def _handle_measurement(self):
+        """
+        Handle measurement selection
+        """
+
+          
+        selection = self._measurement_combobox.currentText()
+
+        measurement = 'Rp'
+        if selection == 'SC dIdV Fit' or selection == 'Normal dIdV Fit':
+            self._setup_didv_fit()
+            self._didv_fit_2pole.setChecked(False)
+            self._didv_fit_2pole.setEnabled(False)
+            self._didv_fit_3pole.setChecked(False)
+            self._didv_fit_3pole.setEnabled(False)
+            self._didv_fit_1pole.setEnabled(True)
+            self._didv_fit_1pole.setChecked(True)
+            if selection == 'SC dIdV Fit':
+                self._tools_tabs.setTabText(0,'Rp Fit')
+                self._rp_spinbox.setEnabled(False)
+            else:
+                self._tools_tabs.setTabText(0,'Rn Fit')
+                self._rp_spinbox.setEnabled(True)
+                measurement = 'Rn'
+            self._tools_tabs.setTabVisible(0,True)
+            self._r0_spinbox.setEnabled(False)
+            
+        elif selection == 'Transition dIdV Fit':
+            self._setup_didv_fit()
+            self._didv_fit_1pole.setChecked(False)
+            self._didv_fit_1pole.setEnabled(False)
+            self._didv_fit_2pole.setEnabled(True)
+            self._didv_fit_2pole.setChecked(True)
+            self._didv_fit_3pole.setEnabled(True)
+            self._didv_fit_3pole.setChecked(True)
+            self._tools_tabs.setTabText(0,'R0 Fit')
+            self._rp_spinbox.setEnabled(True)
+            self._r0_spinbox.setEnabled(True)
+            self._tools_tabs.setTabVisible(0,True)
+            measurement = 'R0'
+                       
+        else:
+            self._didv_fit_1pole.setChecked(False)
+            self._didv_fit_2pole.setChecked(False)
+            self._didv_fit_3pole.setChecked(False)
+            self._tools_tabs.setTabVisible(0,False)
+
+        # clear field
+        self._text_field.clear()
+
+        # update readout
+        self._readout.update_analysis_config(didv_measurement=measurement)
+
+
+    def _setup_didv_fit(self):
+        """
+        Set units and running avg for dIdV"
+        """
+
+
+        # unit
+        unit = str(self._unit_combobox.currentText())
+        if unit.find('Amps')==-1:
+            index = self._unit_combobox.findText('uAmps', QtCore.Qt.MatchFixedString)
+            if index >= 0:
+                self._unit_combobox.setCurrentIndex(index)
+            # reset running avg
+            self._readout.update_analysis_config(reset_running_avg=True)
+                
+        # running avg
+        if not self._running_avg_checkbox.isChecked():
+            self._running_avg_checkbox.setChecked(True)
+                
+        if int(self._running_avg_spinbox.value())<25:
+            self._running_avg_spinbox.setValue(25)
+        
+
+        
         
     def _init_frame(self):
 
         # add main frame
         self._main_frame = QtWidgets.QFrame(self)
-        self._main_frame.resize(400, 300)
+        self._main_frame.resize(440, 410)
         #self._main_frame.setGeometry(QtCore.QRect(290, 76, 597, 597))
         self._main_frame.setStyleSheet('background-color: rgb(211, 252, 255);')
         self._main_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self._main_frame.setFrameShadow(QtWidgets.QFrame.Raised)
         self._main_frame.setLineWidth(1)
         self._main_frame.setObjectName('MainFrame')
-        
 
-        
-        # Add tools button
-        self._read_board_button = QtWidgets.QPushButton(self._main_frame)
-        self._read_board_button.setGeometry(QtCore.QRect(156, 15, 89, 50))
+
+
+        # add pileup
+         # 1 pole enable fit
+        self._pileup_selection = QtWidgets.QCheckBox(self._main_frame)
+        self._pileup_selection.setGeometry(QtCore.QRect(220, 25, 139, 21))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
-        self._read_board_button.setFont(font)
-        self._read_board_button.setStyleSheet('background-color: rgb(162, 162, 241);')
-        self._read_board_button.setObjectName('readBoard')
-        self._read_board_button.setText('Read \n from board')
+        self._pileup_selection.setFont(font)
+        self._pileup_selection.setObjectName('Pileup')
+        self._pileup_selection.setText('Pileup Rejection')
+        self._pileup_selection.setEnabled(False)
 
 
+        
+        # Add fit selection
+        self._measurement_combobox = QtWidgets.QComboBox(self._main_frame)
+        self._measurement_combobox.setGeometry(QtCore.QRect(25, 22, 170, 29))
+        self._measurement_combobox.setObjectName('measurementComboBox')
+        self._measurement_combobox.setStyleSheet("QComboBox"
+                                          "{"
+                                          "background-color: lightgreen;"
+                                          "}") 
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(50)
+        self._measurement_combobox.setFont(font)
+        #self._measurement_combobox.setStyleSheet('background-color: rgb(226, 255, 219);')
+        self._measurement_combobox.addItem('Select Measurement')  
+        self._measurement_combobox.addItem('SC dIdV Fit')
+        self._measurement_combobox.addItem('Normal dIdV Fit')
+        self._measurement_combobox.addItem('Transition dIdV Fit')
+        #self._measurement_combobox.setEnabled(False)
+        
+        # add tab
+        self._tools_tabs = QtWidgets.QTabWidget(self._main_frame)
+        self._tools_tabs.setEnabled(True)
+        self._tools_tabs.setGeometry(QtCore.QRect(12, 75, 410, 325))
+        font.setBold(True)
+        font.setWeight(75)
+        self._tools_tabs.setFont(font)
+        self._tools_tabs.setAutoFillBackground(False)
+        self._tools_tabs.setStyleSheet('')
+        
+        self._init_didv_tab()
+        self._tools_tabs.setTabVisible(0, False)
 
+        
         # connect
-        self._read_board_button.clicked.connect(self._handle_read_board)
+        self._measurement_combobox.activated.connect(self._handle_measurement)
+        
+    def _init_didv_tab(self):
+        
 
+        """
+        dIdV Tab
+        """
+        self._didv_tab = QtWidgets.QWidget()
+        self._didv_tab.setEnabled(True)
+        self._didv_tab.setStyleSheet('background-color: rgb(231, 252, 255);')
+        self._didv_tab.setObjectName('deviceTab')
+        self._tools_tabs.addTab(self._didv_tab, 'dIdV Fit')
+
+        # font
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+                
+        # poles  
+        pole_label = QtWidgets.QLabel(self._didv_tab)
+        pole_label.setGeometry(QtCore.QRect(14, 15, 40, 15))
+        pole_label.setFont(font)
+        pole_label.setObjectName('poleLabel')
+        pole_label.setText('Poles:')
+
+
+               
+        # 1 pole enable fit
+        self._didv_fit_1pole = QtWidgets.QCheckBox(self._didv_tab)
+        self._didv_fit_1pole.setGeometry(QtCore.QRect(65,13, 30, 21))
+        self._didv_fit_1pole.setFont(font)
+        self._didv_fit_1pole.setObjectName('1pole_fit')
+        self._didv_fit_1pole.setText('1')
+
+        # 2 pole enable fit
+        self._didv_fit_2pole = QtWidgets.QCheckBox(self._didv_tab)
+        self._didv_fit_2pole.setGeometry(QtCore.QRect(100, 13, 30, 21))
+        self._didv_fit_2pole.setFont(font)
+        self._didv_fit_2pole.setObjectName('2pole_fit')
+        self._didv_fit_2pole.setText('2')
+
+
+        # 3 pole enable fit
+        self._didv_fit_3pole = QtWidgets.QCheckBox(self._didv_tab)
+        self._didv_fit_3pole.setGeometry(QtCore.QRect(135, 13, 30, 21))
+        self._didv_fit_3pole.setFont(font)
+        self._didv_fit_3pole.setObjectName('3pole_fit')
+        self._didv_fit_3pole.setText('3')
+
+
+        
+        # Rshunt
+        rshunt_label = QtWidgets.QLabel(self._didv_tab)
+        rshunt_label.setGeometry(QtCore.QRect(14, 45, 60, 15))
+        rshunt_label.setFont(font)
+        rshunt_label.setObjectName('rshuntLabel')
+        rshunt_label.setText('Rshunt:')
+
+        self._rshunt_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        self._rshunt_spinbox.setGeometry(QtCore.QRect(70, 42, 70, 20))
+        self._rshunt_spinbox.setMaximum(100000)
+        self._rshunt_spinbox.setProperty('value', 5.0)
+        self._rshunt_spinbox.setObjectName('rshuntSpinBox')
+        self._rshunt_spinbox.setDecimals(1)
+
+        step_type = QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
+        self._rshunt_spinbox.setStepType(step_type)
+        
+        # Rp
+        rp_label = QtWidgets.QLabel(self._didv_tab)
+        rp_label.setGeometry(QtCore.QRect(42, 70, 50, 15))
+        rp_label.setFont(font)
+        rp_label.setObjectName('rpLabel')
+        rp_label.setText('Rp:')
+
+        self._rp_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        self._rp_spinbox.setGeometry(QtCore.QRect(70, 67, 70, 20))
+        self._rp_spinbox.setMaximum(100000)
+        self._rp_spinbox.setProperty('value', 2.5)
+        self._rp_spinbox.setObjectName('rpSpinBox')
+        self._rp_spinbox.setDecimals(1)
+        self._rp_spinbox.setStepType(step_type)
+
+
+
+        # R0
+        r0_label = QtWidgets.QLabel(self._didv_tab)
+        r0_label.setGeometry(QtCore.QRect(42, 96, 50, 15))
+        r0_label.setFont(font)
+        r0_label.setObjectName('r0Label')
+        r0_label.setText('R0:')
+
+        self._r0_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        self._r0_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
+        self._r0_spinbox.setMaximum(100000)
+        self._r0_spinbox.setProperty('value', 200)
+        self._r0_spinbox.setObjectName('r0SpinBox')
+        self._r0_spinbox.setDecimals(1)
+        self._r0_spinbox.setStepType(step_type)
+
+
+
+
+
+
+        
+        unit_label = QtWidgets.QLabel(self._didv_tab)
+        unit_label.setGeometry(QtCore.QRect(150, 70, 60, 15))
+        unit_label.setFont(font)
+        unit_label.setObjectName('rshuntUniyLabel')
+        unit_label.setText('[mOhms]')
+
+
+        # dt
+        dt_label = QtWidgets.QLabel(self._didv_tab)
+        dt_label.setGeometry(QtCore.QRect(39, 120, 50, 15))
+        dt_label.setFont(font)
+        dt_label.setObjectName('dtLabel')
+        dt_label.setText('dt0:')
+
+        self._dt_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        self._dt_spinbox.setGeometry(QtCore.QRect(70, 117, 70, 20))
+        self._dt_spinbox.setMaximum(100000)
+        self._dt_spinbox.setProperty('value', 2)
+        self._dt_spinbox.setObjectName('dtSpinBox')
+        self._dt_spinbox.setDecimals(1)
+        self._dt_spinbox.setStepType(step_type)
+
+        dt_unit_label = QtWidgets.QLabel(self._didv_tab)
+        dt_unit_label.setGeometry(QtCore.QRect(150, 118, 60, 15))
+        dt_unit_label.setFont(font)
+        dt_unit_label.setObjectName('dtUniyLabel')
+        dt_unit_label.setText('[mus]')
+        
+
+        
+
+
+        self._fit_button = QtWidgets.QPushButton(self._didv_tab)
+        self._fit_button.setGeometry(QtCore.QRect(245, 25, 89, 55))
+        self._fit_button.setFont(font)
+        self._fit_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._fit_button.setObjectName('fitButton')
+        self._fit_button.setText('FIT')
+        self._fit_button.setEnabled(True)
+
+
+        self._text_field = QtWidgets.QTextEdit(self._didv_tab)
+        self._text_field.setGeometry(QtCore.QRect(70, 150, 315, 138))
+        self._text_field.setReadOnly(True)
+
+        self._save_result_button = QtWidgets.QPushButton(self._didv_tab)
+        self._save_result_button.setGeometry(QtCore.QRect(10, 185, 50, 40))
+        font.setPointSize(7)
+        self._save_result_button.setFont(font)
+        self._save_result_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._save_result_button.setObjectName('saveButton')
+        self._save_result_button.setText('Save \n Results')
+        self._save_result_button.setEnabled(True)
+
+        
+        # connect
+        #self._rshunt_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._rp_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._dt_spinbox.valueChanged.connect(self._handle_fit_parameter)
+        #self._didv_fit_1pole.toggled.connect(self._handle_fit_selection)
+        #self._didv_fit_2pole.toggled.connect(self._handle_fit_selection)
+        #self._didv_fit_3pole.toggled.connect(self._handle_fit_selection)
+        self._fit_button.clicked.connect(self._handle_fit)
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)

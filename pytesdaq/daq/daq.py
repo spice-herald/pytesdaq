@@ -211,7 +211,7 @@ class DAQ:
         return success
 
 
-    def read_single_event(self,data_array,do_clear_task=False):
+    def read_single_event(self,data_array, do_clear_task=False):
 
         # only for "pydaqmx"
         if not self._driver_name=='pydaqmx':

@@ -4,15 +4,25 @@ daq_driver = polaris
 dummy_mode = False
 
 # TES bias IV/dIdV
-# use vect OR  min/max/step 
 
-use_tes_bias_vect = true
-tes_bias_vect = 500, 400, 100,0  
+# sleep time [seconds]
+tes_bias_change_sleep_time = 60
+
+# TES bias sweep: use vect OR  min/max/step 
+use_tes_bias_vect = false
+
+# bias vect
+tes_bias_vect = 0
+
+# min/max/steps [all in muAmps]
+tes_bias_max = 300
 tes_bias_min = 0
-tes_bias_max = 500
-tes_bias_step_N = 10
-tes_bias_step_T = 2
-tes_bias_T = 100
+tes_bias_T =  100
+tes_bias_SC =  10
+tes_bias_step_N = 40
+tes_bias_step_T = 4
+tes_bias_step_SC = 2
+
 
 # TES rp/rn
 tes_bias_rp = 0
@@ -41,13 +51,13 @@ max_temperature_slope = 0.2
 sample_rate = 1250000
 
 # run time in seconds
-run_time = 10
+run_time = 60
 
 # trace length:
 
 # trace length in "ms" or "adc"
 # trace_length_adc = 8192 
-trace_length_ms = 10
+trace_length_ms = 100
 
 # voltage range
 voltage_min = -10
@@ -66,7 +76,7 @@ output_gain = 10
 loop_channels = true 
 
 # run time in seconds
-run_time = 10
+run_time = 60
 
 # ADC setup
 
@@ -82,10 +92,10 @@ voltage_max = 10
 
 # signal generator
 # amplitude in mVpp
-signal_gen_voltage = 20
+signal_gen_voltage = 10
 
 # frequency in Hz
-signal_gen_frequency =  100 
+signal_gen_frequency =  40
 
 # shape: 1= square, 2=sine, 3=triangle, 4 = arbitrary waveform
 signal_gen_shape = 1
@@ -117,4 +127,4 @@ signal_gen_shape = 1
 
 
 # TES/SQUID parameters (comment if no change)
-output_gain = 10
+output_gain = 20
