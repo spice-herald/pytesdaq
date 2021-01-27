@@ -43,6 +43,7 @@ class Readout:
 
         # channels
         self._selected_channel_list = list()
+        self._selected_channel_name_list = list()
         
         # Display
         self._first_draw = True
@@ -161,15 +162,29 @@ class Readout:
             self._daq  = daq.DAQ(driver_name = 'pydaqmx',verbose = False)
             self._daq.lock_daq = True
             
-            # configuration
+            # adc name list
             adc_list = self._config.get_adc_list()
             if adc_name not in adc_list:
                 self._daq.clear()
                 error_msg = 'ERROR: ADC name "' + adc_name + '" unrecognized!'
                 return error_msg
-                
-                
+
+            # ADC setup
             self._adc_config = self._config.get_adc_setup(adc_name)
+
+            # convert connection dataframe to dict 
+            connections = self._adc_config['connection_table'].to_dict(orient='list')
+            self._adc_config['connection_map'] = dict()
+            self._adc_config['connection_map']['adc_chans'] = [int(x) for x in connections['adc_channel']]
+            self._adc_config['connection_map']['detector_chans'] = connections['detector_channel']
+            self._adc_config['connection_map']['tes_chans'] = connections['tes_channel']
+            self._adc_config['connection_map']['controller_chans'] = list()
+            for ichan in range(len(connections['controller_channel'])):
+                self._adc_config['connection_map']['controller_chans'].append(
+                    connections['controller_id'][ichan]+'_'+ connections['controller_channel'][ichan]
+                )
+                
+            
             self._adc_config['channel_list'] = channel_list
             if sample_rate:
                 self._adc_config['sample_rate'] = int(sample_rate)
@@ -187,7 +202,7 @@ class Readout:
             adc_config[adc_name] =  self._adc_config
             self._daq.set_adc_config_from_dict(adc_config)
 
-                     
+
         # Redis
         elif self._data_source == 'redis':
 
@@ -390,15 +405,17 @@ class Readout:
                                                  + str(self._adc_config['event_num']))
                                                  
 
-                # metadata 
+                # connection map
+                self._adc_config['connection_map'] = self._hdf5.get_connection_dict()
+                                 
+                # detector config
                 if (self._detector_config is None
                     or self._current_file_name is None
                     or self._current_file_name!=self._adc_config['file_name']):
                     
                     self._current_file_name = self._adc_config['file_name']
                     self._detector_config['settings'] = self._hdf5.get_detector_config()
-                    self._detector_config['connection_map'] = self._hdf5.get_connection_dict()
-
+                    self._detector_config['connection_map'] = self._adc_config['connection_map']
                     self._do_get_norm = True
                     self._do_get_sg = True
                     self._do_get_fit_param = True
@@ -421,6 +438,7 @@ class Readout:
             channel_num_list = list()
             channel_index_list = list()
             counter = 0
+          
             for chan in self._adc_config['channel_list']:
                 if chan in self._selected_channel_list:
                     channel_num_list.append(chan)
@@ -434,7 +452,7 @@ class Readout:
             self._adc_config['selected_channel_list'] = channel_num_list
             self._adc_config['selected_channel_index'] = channel_index_list
 
-
+         
             # get normalization
             if self._do_get_norm or self._analyzer.get_config('norm_list') is None:
                 self._fill_norm()
@@ -507,7 +525,42 @@ class Readout:
             # ------------------
             # Display
             # ------------------
-        
+
+
+            # channel names
+            self._selected_channel_name_list = list()
+            if do_plot or self._didv_data_dict is not None:
+
+                tes_channels = None
+                if 'tes_chans' in self._adc_config['connection_map']:
+                    tes_channels =  self._adc_config['connection_map']['tes_chans']
+           
+                detector_channels = None
+                if 'detector_chans' in self._adc_config['connection_map']:
+                    detector_channels =  self._adc_config['connection_map']['detector_chans']
+         
+                for chan in self._adc_config['selected_channel_list']:
+                    index = self._adc_config['connection_map']['adc_chans'].index(int(chan))
+                    name = str()
+                    if tes_channels is not None:
+                        name = tes_channels[index]
+
+                    if detector_channels is not None:
+                        name_det = detector_channels[index]
+                    if tes_channels is not None:
+                        name = name + ': ' + name_det
+                    else:
+                        name =  name_det
+
+                    if not name:
+                        name = 'AI' + str(chan)
+
+                    self._selected_channel_name_list.append(name)
+
+
+
+                    
+            # Histogram
             if do_plot:
                 fit_array = None
                 fit_dt = None
@@ -520,7 +573,7 @@ class Readout:
                                 self._analyzer.freq_array)
 
 
-            # displat fit results
+            # Fit results
             if self._didv_data_dict is not None and self._is_qt_ui:
 
                 # display
@@ -600,9 +653,9 @@ class Readout:
         """
         Save data array
         """
-        if self._selected_data_array is not None:
-            np.save(filename,self._selected_data_array)
-            np.save(filename+'_freq',self._analyzer.freq_array)
+        if filename and self._selected_data_array is not None:
+            np.save(filename, self._selected_data_array)
+            np.save(filename+'_freq', self._analyzer.freq_array)
             print('File ' + filename + '.npy saved!')
 
 
@@ -792,9 +845,9 @@ class Readout:
             self._axes.autoscale_view()
             
 
-        self._axes.grid(which='major',axis='both',alpha=0.5)
-        self._axes.grid(which='minor',axis='both',alpha=0.2,ls='dashed')
-        #self._axes.legend('ass',loc='upper right')
+        self._axes.grid(which='major',axis='both',alpha=0.6)
+        self._axes.grid(which='minor',axis='both',alpha=0.3, ls='dashed')
+        self._axes.legend(self._selected_channel_name_list, loc='upper right')
         self._canvas.draw()
         self._canvas.flush_events()
             
