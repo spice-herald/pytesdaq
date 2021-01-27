@@ -1236,13 +1236,12 @@ class ToolsWindow(QtWidgets.QWidget):
         r0 = float(self._r0_spinbox.value()/1000)
         self._readout.update_analysis_config(r0=r0)
 
-
+        # clear field
+        self._text_field.clear()
 
         # enable 
         self._readout.update_analysis_config(fit_didv=True)
-
-        # clear field
-        self._text_field.clear()
+        
         
         
     def _handle_fit_selection(self):
@@ -1313,7 +1312,10 @@ class ToolsWindow(QtWidgets.QWidget):
             self._didv_fit_3pole.setChecked(False)
             self._tools_tabs.setTabVisible(0,False)
 
+        # clear field
+        self._text_field.clear()
 
+        # update readout
         self._readout.update_analysis_config(didv_measurement=measurement)
 
 
@@ -1372,7 +1374,7 @@ class ToolsWindow(QtWidgets.QWidget):
         
         # Add fit selection
         self._measurement_combobox = QtWidgets.QComboBox(self._main_frame)
-        self._measurement_combobox.setGeometry(QtCore.QRect(30, 22, 150, 29))
+        self._measurement_combobox.setGeometry(QtCore.QRect(25, 22, 170, 29))
         self._measurement_combobox.setObjectName('measurementComboBox')
         self._measurement_combobox.setStyleSheet("QComboBox"
                                           "{"
@@ -1554,7 +1556,7 @@ class ToolsWindow(QtWidgets.QWidget):
 
         self._text_field = QtWidgets.QTextEdit(self._didv_tab)
         self._text_field.setGeometry(QtCore.QRect(70, 150, 315, 138))
-
+        self._text_field.setReadOnly(True)
 
         self._save_result_button = QtWidgets.QPushButton(self._didv_tab)
         self._save_result_button.setGeometry(QtCore.QRect(10, 185, 50, 40))

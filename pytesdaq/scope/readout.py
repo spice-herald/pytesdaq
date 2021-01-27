@@ -587,13 +587,17 @@ class Readout:
                                 
                 # loop channel
                 nb_chan = len(self._didv_data_dict['results'])
-                result_list = list()
-
+                               
                 for ichan in range(nb_chan):
+
+                    result_list = list()
+                    falltimes_list = list()
+                    
+                    chan_name = self._selected_channel_name_list[ichan]
                     didv = self._didv_data_dict['results'][ichan]['didv0']
                     result = self._didv_data_dict['results'][ichan]['smallsignalparams']
-
-
+                    falltimes = self._didv_data_dict['results'][ichan]['falltimes']
+                                        
                     rshunt = result['rsh']
                     result_list.append(['Input Rsh [mOhms]', f"{rshunt*1000:.2f}"])
 
@@ -612,10 +616,10 @@ class Readout:
                                       
                      
                     if 'tau0' in result:
-                        result_list.append(['tau0 [mus]', f"{result['tau0']*1e6:.3f}"])
+                        result_list.append(['tau0 [us]', f"{result['tau0']*1e6:.3f}"])
 
-                    if 'tau3' in result:
-                        result_list.append(['tau3 [mus]', f"{result['tau3']*1e6:.3f}"])
+                    #if 'tau3' in result:
+                    #    result_list.append(['tau3 [us]', f"{result['tau3']*1e6:.3f}"])
                                                               
                     result_list.append(['L [nH]', f"{result['L']*1e9:.3f}"])
                     result_list.append(['dt [mus]', f"{result['dt']*1e6:.3f}"])
@@ -629,12 +633,27 @@ class Readout:
                     if resistance_type=='R0':
                         r0_infinite = (abs(1/didv) + rp + rshunt)*1000
                         result_list.append(['R0 (Infinite l) [mOhms]', f"{r0_infinite:.2f}"])
+
+
+                    falltime_name = ['Tau (L/R) [us]','Tau_eff [us]', 'Tau3 [us]']
+                    for ift in range(len(falltimes)):
+                        falltime = falltimes[ift]*1e6
+                        falltimes_list.append([falltime_name[ift], f"{falltime:.3f}"])
                         
-                    
-                result_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
-                self._fit_result_field.setHtml(result_pd.to_html(index=False))
-                
-                
+                    # convert to dataframe
+                    smallsignal_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
+                    falltime_pd = pd.DataFrame(falltimes_list, columns = ['Parameter','Value'])
+
+                    # insert to UI
+                    chan_html = "<font color='red' size='4'><u>" + chan_name + "</u><br></font>"
+                    self._fit_result_field.insertHtml(chan_html)
+                    self._fit_result_field.insertHtml(
+                        "<br><font color='blue' size='3'>Small Signal Parameters</font>")
+                    self._fit_result_field.insertHtml(smallsignal_pd.to_html(index=False))
+                    self._fit_result_field.insertHtml(
+                        "<br><br><font color='blue' size='3'>Pole Fall Times</font>")
+                    self._fit_result_field.insertHtml(falltime_pd.to_html(index=False))
+                    self._fit_result_field.insertHtml("<br><br><br>")
                 
 
 
