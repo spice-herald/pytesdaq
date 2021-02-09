@@ -1,7 +1,8 @@
- # Website for pytesdaq data storage
+Website for pytesdaq data storage
+===================================
  
-
-## Getting Started – Installation of tools and packages for Pyramid
+Getting Started – Installation of tools and packages for Pyramid
+-----------------------------------------------------------------
 
 Let the pytesdaq git directory root be ~/.
 
@@ -28,7 +29,8 @@ Let the pytesdaq git directory root be ~/.
     env/bin/pserve development.ini
 
 
-## Database Access
+Database Access
+-----------------
 
 Database controls are in ~/pytesdaq/display/db.py. The current database settings are:
 
