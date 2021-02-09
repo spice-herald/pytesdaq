@@ -38,6 +38,6 @@ class MainViews:
 
         series_num = self.request.matchdict['series_num'] #fix if we get 'id'
         
-        ind_series = next(item for item in MainViews.serieslist if item["series_num"] == str(series_num))
+        ind_series = next(item for item in MainViews.serieslist if item["series_num"] == int(series_num))
         finalseries = ind_series
         return {'name': str(series_num), 'this_series': finalseries}

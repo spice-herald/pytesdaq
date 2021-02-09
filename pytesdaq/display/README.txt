@@ -3,11 +3,11 @@ website for pytesdaq
 
 Getting Started
 ---------------
-Let the git directory root be ~/.
+Let the pytesdaq git directory root be ~/.
 
 - Go to display directory
 
-    cd ~/pytesdaq/pytesdaq/display/
+    cd ~/pytesdaq/display/
 
 - Create a Python virtual environment.
 
@@ -19,16 +19,24 @@ Let the git directory root be ~/.
 
 - Install the project in editable mode with its testing requirements.
     
-    cd ~/pytesdaq/
+    cd ~/
 
     pytesdaq/display/env/bin/pip install -e ".[testing]"
 
 - Run your project's tests
     
-    cd ~/pytesdaq/pytesdaq/display/
+    cd ~/pytesdaq/display/
 
     env/bin/pytest
 
 - Run your project. – This will run the project on localhost.
 
     env/bin/pserve development.ini
+
+
+Database Access
+-------------------------------------------
+Database controls are in ~/pytesdaq/display/db.py. The current database settings are:
+
+host="localhost", port=3306, user="root", password="password123", for mysql on Remi Seddigh's machine.
+
