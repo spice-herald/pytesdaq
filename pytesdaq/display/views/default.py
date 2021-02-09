@@ -3,6 +3,11 @@ from pyramid.view import (
     view_defaults
     )
 
+from .. import db
+
+server = db.MySQLCore()
+
+
 @view_defaults(renderer='../templates/home.mako')
 class MainViews:
     def __init__(self, request):
@@ -12,15 +17,12 @@ class MainViews:
     def home(self):
         return {'name': 'Home View'}
 
-    series = dict() #self.request.matchdict["series"]
-    serieslist = []
-    for i in range(20):
-        series_num = 120203401161777 + 10* i
-        new_series = {'series_num': series_num, 'run_type': 2*i - 1, 'timestamp': 1531053235 + 2*i, 
-            'comment': 'Data Challenge 1. 4 channels at 1.25 MHz for 5 hour. All channels at GS. A function generator feeds a sine wave to channel 0. Channel 1 and trigger on PFI0 are identical. Channel 2 is left open. CHannel 3 has a termination resistor of 50 ohm. Data taken with Cfg_Default as termination option in driver. ', 
-            'nb_events': 531 + 7*i}
-        series[str(series_num)] = new_series
-        serieslist.append(new_series)
+    server.connect_test()
+
+    serieslist = server.query('test_data')
+
+    server.disconnect()
+
 
     @view_config(route_name='series_test', renderer='../templates/series_test.mako')
     def series_test(self):
@@ -34,7 +36,8 @@ class MainViews:
     @view_config(route_name='series_info', renderer='../templates/series_info.mako')
     def series_info(self):
 
-        series_num = self.request.matchdict['series_num']
+        series_num = self.request.matchdict['series_num'] #fix if we get 'id'
         
-        finalseries = MainViews.series[str(series_num)]
+        ind_series = next(item for item in MainViews.serieslist if item["series_num"] == str(series_num))
+        finalseries = ind_series
         return {'name': str(series_num), 'this_series': finalseries}

@@ -3,10 +3,11 @@ website for pytesdaq
 
 Getting Started
 ---------------
+Let the git directory root be ~/.
 
-- Go to main directory
+- Go to display directory
 
-    cd pytesdaq
+    cd ~/pytesdaq/pytesdaq/display/
 
 - Create a Python virtual environment.
 
@@ -18,16 +19,16 @@ Getting Started
 
 - Install the project in editable mode with its testing requirements.
     
-    cd ..
+    cd ~/pytesdaq/
 
-    env/bin/pip install -e ".[testing]"
+    pytesdaq/display/env/bin/pip install -e ".[testing]"
 
 - Run your project's tests
     
-    cd pytesdaq
+    cd ~/pytesdaq/pytesdaq/display/
 
     env/bin/pytest
 
 - Run your project. – This will run the project on localhost.
 
-    env/bin/pserve pytesdaq/display/development.ini
+    env/bin/pserve development.ini

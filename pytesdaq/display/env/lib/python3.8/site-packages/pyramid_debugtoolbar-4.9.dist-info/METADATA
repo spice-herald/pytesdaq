@@ -1,0 +1,1008 @@
+Metadata-Version: 2.1
+Name: pyramid-debugtoolbar
+Version: 4.9
+Summary: A package which provides an interactive HTML debugger for Pyramid application development
+Home-page: https://docs.pylonsproject.org/projects/pyramid-debugtoolbar/en/latest/
+Author: Chris McDonough, Michael Merickel, Casey Duncan, Blaise Laflamme
+Author-email: pylons-discuss@googlegroups.com
+License: BSD
+Keywords: wsgi,pylons,pyramid,transaction
+Platform: UNKNOWN
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Framework :: Pyramid
+Classifier: Topic :: Internet :: WWW/HTTP :: WSGI
+Classifier: License :: Repoze Public License
+Requires-Python: !=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7
+Description-Content-Type: text/x-rst
+Requires-Dist: pyramid (>=1.4)
+Requires-Dist: pyramid-mako (>=0.3.1)
+Requires-Dist: repoze.lru
+Requires-Dist: Pygments
+Requires-Dist: ipaddress ; python_version < "3.3"
+Provides-Extra: docs
+Requires-Dist: Sphinx (>=1.7.5) ; extra == 'docs'
+Requires-Dist: pylons-sphinx-themes (>=0.3) ; extra == 'docs'
+Provides-Extra: testing
+Requires-Dist: WebTest ; extra == 'testing'
+Requires-Dist: nose ; extra == 'testing'
+Requires-Dist: coverage ; extra == 'testing'
+Requires-Dist: sqlalchemy ; extra == 'testing'
+Requires-Dist: webob ; extra == 'testing'
+
+pyramid_debugtoolbar
+====================
+
+``pyramid_debugtoolbar`` provides a debug toolbar useful while you're
+developing your Pyramid application.
+
+Note that ``pyramid_debugtoolbar`` is a blatant rip-off of Michael van
+Tellingen's ``flask-debugtoolbar`` (which itself was derived from Rob Hudson's
+``django-debugtoolbar``). It also includes a lightly sanded down version of the
+Werkzeug debugger code by Armin Ronacher and team.
+
+
+Documentation
+-------------
+
+The documentation of the current stable release of ``pyramid_debugtoolbar`` is
+available at
+https://docs.pylonsproject.org/projects/pyramid-debugtoolbar/en/latest/.
+
+
+Demonstration
+-------------
+
+For a demonstration:
+
+- Clone the ``pyramid_debugtoolbar`` trunk.
+
+  .. code-block:: bash
+
+      $ git clone https://github.com/Pylons/pyramid_debugtoolbar.git
+
+- Create a virtual environment in the workspace.
+
+  .. code-block:: bash
+
+      $ cd pyramid_debugtoolbar
+      $ python3 -m venv env
+
+- Install the ``pyramid_debugtoolbar`` trunk into the virtualenv.
+
+  .. code-block:: bash
+
+      $ env/bin/pip install -e .
+
+- Install the ``pyramid_debugtoolbar/demo`` package into the virtualenv.
+
+  .. code-block:: bash
+
+      $ env/bin/pip install -e demo
+
+- Run the ``pyramid_debugtoolbar`` package's ``demo/demo.py`` file using the
+  virtual environment's Python.
+
+  .. code-block:: bash
+
+      $ env/bin/python demo/demo.py
+
+Visit http://localhost:8080 in a web browser to see a page full of test
+options.
+
+
+Testing
+-------
+
+If you have ``tox`` installed, run all tests with:
+
+.. code-block:: bash
+
+    $ tox
+
+To run only a specific Python environment:
+
+.. code-block:: bash
+
+    $ tox -e py35
+
+If you don't have ``tox`` installed, you can install the testing requirements,
+then run the tests.
+
+.. code-block:: bash
+
+    $ python3 -m venv env
+    $ env/bin/pip install -e ".[testing]"
+    $ env/bin/nosetests
+
+
+Building documentation
+----------------------
+
+If you have ``tox`` installed, build the docs with:
+
+.. code-block:: bash
+
+    $ tox -e docs
+
+If you don't have ``tox`` installed, you can install the requirements to build
+the docs, then build them.
+
+.. code-block:: bash
+
+    $ env/bin/pip install -e ".[docs]"
+    $ cd docs
+    $ make clean html SPHINXBUILD=../env/bin/sphinx-build
+
+4.9 (2020-11-24)
+----------------
+
+- Support Python 3.9.
+
+- Added a new Session Panel to track ingress and egress changes to a registered
+  ISession interface across a request lifecycle.  By default, the panel only
+  operates on accessed sessions via a wrapped loader. Users can activate the
+  Session Panel, via the Toolbar Settings or a per-request cookie, to track the
+  ingress and egress data on all requests.
+
+  * Removed "Session" section from Request Vars Panel
+  * Updated Documentation and Screenshots
+
+- Ensured the Headers panel only operates when a Response object exists, to
+  create better stack traces if other panels encounter errors.
+
+- ``utils.dictrepr`` will now fallback to a string comparison of the keys if a
+  TypeError is encountered, which can occur under Python3.
+
+  * A test was added to check to ensure sorting errors occur under Python3.
+    If the test fails in the future, this workaround may no longer be needed.
+
+- Updated toolbar javascript to better handle multiple user-activated panels.
+
+  * ``split`` and ``join`` functions now use the same delimiter.
+  * If the browser supports it, use a "set" to de-duplicate active panels.
+
+- Inline comments on toolbar.js and toolbar.py to alert future developers on
+  the string delimiters and cookie names.
+
+
+4.8 (2020-10-23)
+----------------
+
+- Added tracking of transactional SQLAlchemy events to provide more insight
+  into database session behavior during a request's lifecycle.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/368
+
+4.7 (2020-10-22)
+----------------
+
+- Added black, isort, and github actions to the pipeline. Dropped travis-ci.
+
+- Added some extra output to the "Request Vars" panel related to previewing
+  the body contents.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/367
+
+4.6.1 (2020-02-10)
+------------------
+
+- Fix parser errors when injecting the toolbar into XHTML formatted pages.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/360
+
+4.6 (2020-01-20)
+----------------
+
+- Show the full URL in the tooltip on the requests panel.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/358
+
+4.5.2 (2020-01-06)
+------------------
+
+- Stop accessing ``request.unauthenticated_userid`` in preparation for
+  Pyramid 2.0 where it is deprecated.
+
+- Catch a ``ValueError`` when JSON-serializing SQLA objects for display.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/357
+
+4.5.1 (2019-11-08)
+------------------
+
+- Add Python 3.8 support.
+
+- Fix internal deprecation warnings on Python 3.7.
+
+4.5 (2018-09-09)
+----------------
+
+- Drop Python 3.3 support to align with Pyramid and its EOL.
+
+- Add support for testing on Python 3.7.
+
+- Add a list of engines to the SQLAlchemy panel if queries come from
+  multiple engines.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/334
+
+- When the toolbar intercepts an exception via
+  ``debugtoolbar.intercept_exc = True`` and returns the interactive
+  debugger, it will add ``request.exception`` and ``request.exc_info`` to
+  the request to indicate what exception triggered the response. This helps
+  upstream tweens such as ``pyramid_retry`` to possibly retry the requests.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/343
+
+- Stop parsing the ``request.remote_addr`` value when it contains chain of
+  comma-separated ip-addresses. Reject these values and emit a warning
+  to sanitize the value upstream.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/342
+
+
+4.4 (2018-02-19)
+----------------
+
+- Reduce the log output for squashed exceptions and put them at the INFO
+  level so they can be filtered out if desired.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/328 and
+  https://github.com/Pylons/pyramid_debugtoolbar/pull/329
+
+4.3.1 (2018-01-28)
+------------------
+
+- Javascript syntax fixes for browsers that don't support trailing commas.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/326
+
+4.3 (2017-07-14)
+----------------
+
+- The logging panel indicator is now color-coded to indicate the severity of
+  the log messages as well as the number of messages at said level. There may
+  be more messages, but the most severe show up in the annotation.
+
+  This feature also added a new ``nav_subtitle_style`` hook to the
+  ``DebugPanel`` API for adding a custom CSS class to the subtitle tag.
+
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/322
+
+4.2.1 (2017-06-30)
+------------------
+
+- Fix a bug with the logging of squashed exceptions on Python < 3.5.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/320
+
+4.2 (2017-06-21)
+----------------
+
+This release contains a rewrite of the underlying exception / traceback
+tracking machinery and fixes regressions caused by the 4.1 release that
+broke the interactive debugger.
+See https://github.com/Pylons/pyramid_debugtoolbar/pull/318
+
+- Tracebacks are now tied to the per-request toolbar object one-to-one.
+  A request may have only one traceback. Previously they actually stuck
+  around for the entire lifetime of the app instead of being collected by
+  the max_request_history setting.
+
+- The routes for exceptions are standardized to look similar to the SQLA AJAX
+  routes. For example, ``/{request_id}/exception`` instead of
+  ``/exception?token=...&tb=...`` and
+  ``/{request_id}/exception/execute/{frame_id}?cmd=...`` instead of
+  ``/exception?token=...&tb=...&frm=...&cmd=...``.
+
+- Fixed the url generation for the traceback panel link at the bottom of the
+  traceback... it was actually empty previously - it got lost somewhere along
+  the way.
+
+- /favicon.ico is no longer specially handled.. it's just part of
+  ``exclude_prefixes`` like anything else that you want to exclude.
+
+- ``request.pdtb_history`` is available for toolbar requests (mostly AJAX
+  requests or panel rendering).
+
+- Removed the unused history predicate.
+
+- URL generation was broken in the ``debugger.js`` but that's fixed now so the
+  execute/source buttons work in tracebacks.
+
+- Drop the license from ``LICENSE.txt`` for the removed ipaddr module in 4.1.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/315
+
+4.1 (2017-05-30)
+----------------
+
+- Debug squashed exceptions! If you register an exception view for an exception
+  it will render a response. The toolbar will see the squashed exception and
+  enable the ``Traceback`` tab in the toolbar and emit a message on the
+  console with the URL. You can then debug the exception while returning the
+  original response to the user.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/308
+
+- Remove the vendored ipaddr package and use the stdlib ipaddress module on
+  Python 3.3+. On Python < 3.3 the ipaddress module is a dependency from PyPI.
+  This dependency uses environment markers and thus requires pip 8.1.2+.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/304
+
+- Display a warning if the toolbar is used to display a request that no longer
+  exists. This may be because the app was restarted or the request fell off
+  the end of the ``max_request_history``.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/305
+
+- Enable testing on Python 3.6.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/306
+
+- Drop the link-local suffix off of local interfaces in order to accept
+  requests on them. See https://github.com/Pylons/pyramid_debugtoolbar/pull/307
+
+- Headers panel defers its processing to a finished callback. This is best
+  effort of displaying actual headers, since they could be modified by
+  a response callback or another finished callback.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/310
+
+- Query log inside SQLAlchemy panel does not cause horizontal scrolling
+  anymore, which should improve UX.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/311
+
+4.0.1 (2017-05-09)
+------------------
+
+- Fix sticky panel functionality that was broken by other cleanup in the 4.0
+  release. See https://github.com/Pylons/pyramid_debugtoolbar/pull/297
+
+4.0 (2017-05-03)
+----------------
+
+- The config settings ``debugtoolbar.panels``, ``debugtoolbar.extra_panels``,
+  ``debugtoolbar.global_panels`` and ``debugtoolbar.extra_global_panels``
+  now all accept panel names as defined in
+  ``pyramid_debugtoolbar.panels.DebugPanel.name``. Thus you may use names
+  such as ``performance``, ``headers``, etc. These settings still support the
+  dotted Python path but it is suggested that panels now support being
+  included via ``debugtoolbar.includes`` and ``config.add_debugtoolbar_panel``
+  instead such that they are automatically added to the toolbar.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/288
+
+- Add a new ``config.add_debugtoolbar_panel`` directive that can be invoked
+  from ``includeme`` functions included via the ``debugtoolbar.includes``
+  setting. These panels are automatically added to the default panel list
+  and should become the way to define toolbar panels in the future.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/283
+
+- Add a new ``config.inject_parent_action`` directive that can be invoked
+  from ``includeme`` functions included via the ``debugtoolbar.includes``
+  setting. These actions are invoked on the parent config just before it is
+  created such that actions can inspect / wrap existing config.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/288
+
+- Added "sticky" panel functionality to allow a selected panel to persist
+  across pageviews using cookies.  If a cookied panel does not have content
+  available for display, the first non-disabled panel will be displayed. If a
+  cookied panel is not enabled on the toolbar, the first non-disabled panel will
+  be displayed AND will become the new default panel.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/272
+
+- Added `CustomLoggerFactory` to javascript, used in the development of PR 272.
+  This javascript factory allows panel developers and maintainers to use verbose
+  console logging during development, partitioned by feature, and silence it for
+  deployment while still leaving the logging lines activated.
+
+- The toolbar registers a ``BeforeRender`` subscriber in your application to
+  monitor the rendering of templates. Previously it was possible that the
+  toolbar would miss rendering information because of the order in which the
+  subscribers were registered. The toolbar now waits until the application
+  is created and then appends a new subscriber that encapsulates the
+  your application's ``BeforeRender`` subscribers.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/284
+
+- Remove duplicate ``id="${panel.dom_id}"`` tags in history tab html. Only
+  the top-level ``<li>`` tag has the id now.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/285
+
+- Emit a warning and disable the toolbar if the app is being served by
+  a forking / multiprocess wsgi server that sets
+  ``environ['wsgi.multiprocess']`` to ``True``. This should help avoid
+  confusing issues in certain deployments like gunicorn and uwsgi multiprocess
+  modes. See https://github.com/Pylons/pyramid_debugtoolbar/pull/286
+
+- The toolbar tween is always placed explicitly OVER the pyramid_tm tween.
+
+- Refactored all debugtoolbar panels to be included using
+  ``config.add_debugtoolbar_panel`` and per-panel ``includeme`` functions.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/288
+
+- Exposed a ``request.toolbar_panels`` dictionary which can be used from within
+  ``DebugPanel.render_content`` and ``DebugPanel.render_vars`` in order to
+  introspect and use the data generated by other panels when rendering the
+  panel. See https://github.com/Pylons/pyramid_debugtoolbar/pull/291
+
+- Support streaming new requests on Microsoft Edge and Internet Explorer 8+ by
+  using a Server-Sent-Events polyfill.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/293
+
+3.0.5 (2016-11-1)
+-----------------
+
+- Change static toolbar asset to accommodate color blindness.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/273
+
+3.0.4 (2016-07-26)
+------------------
+
+- 3.0.3 was a brownbag release missing static assets.
+
+3.0.3 (2016-07-26)
+------------------
+
+- Fix another regression where the toolbar was modifying requests to the
+  toolbar itself such that the ``script_name`` and ``path_info`` were
+  different after handling the request than before.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/269
+
+3.0.2 (2016-07-02)
+------------------
+
+- Fix a regression with inspecting requests with a session that is loaded
+  before the toolbar executes.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/268
+
+3.0.1 (2016-05-20)
+------------------
+
+- Avoid touching ``request.unauthenticated_userid``,
+  ``request.authenticated_userid`` and ``request.effective_principals`` unless
+  they are accessed by the user in the normal request lifecycle. This avoids
+  some issues where unauthenticated requests could trigger side effects on
+  your authentication policy or access the properties outside of the
+  expected lifecycle of the properties.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/263
+
+3.0 (2016-04-23)
+----------------
+
+- The toolbar is now a completely standalone application running inside the
+  tween. There are several minor incompatibilities and improvements related
+  to this extra isolation:
+
+  1. ``pyramid_mako`` and the ``.dbtmako`` renderer are no longer included
+     in the parent application (your app).
+  2. Panels must be extra careful now that they only render templates inside
+     of the ``render_vars`` and ``render_content`` functions. These are the
+     only functions in which the ``request`` object is for rendering the
+     toolbar panel.
+  3. The toolbar will not be affected by any global security policies your
+     application may put in place other than via
+     ``config.set_debugtoolbar_request_authorization``.
+     **never run the toolbar in production**
+
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/253
+
+- Updated Bootstrap to v3.3.6, refactored static assets and dropped require.js.
+  Each page now depends on what it needs without extra dependencies included
+  in the debugger pages.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/259
+
+- Enabled interactive tablesorting on table columns.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/256
+
+- setuptools-git is now required to install the codebase in non-editable mode.
+
+2.5 (2016-04-20)
+----------------
+
+- Drop Python 2.6 and Python 3.2 support.
+
+- Add Python 3.5 support.
+
+- Remove inline javascript from injected pages to work better with any
+  Content Security Policy that may be in place.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/250
+
+- Added the packages' `.location` to the "Versions" panel so developers can tell
+  which version of each package is actually being used.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/240
+
+- Upon exception do a better job guessing the charset of the sourcefile when
+  reading it in to display tracebacks.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/244
+
+- Removed jQuery code in the toolbar referring to a DOM node called 'myTab',
+  which doesn't seem to exist anymore.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/247
+
+- Updated the "Request Vars" panel:
+  1. Show additional values that were previously missing
+  2. Sections upgraded to link to Pyramid Documentation when possible
+  3. Mako reformatted into "defs" for simpler reorganization in the future
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/241
+
+- Fix to prevent the toolbar from loading the session until it is actually
+  accessed by the user. This avoids unnecessary parsing of the session object
+  as well as waiting to parse it until later in the request which may meet
+  more expectations of the session factory.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/249
+
+2.4.2 (2015-10-28)
+------------------
+
+- Fix a long-standing bug in which log messages were not rendered until
+  the end of the response. By this time the arguments passed to the logger
+  may no longer be valid (such as SQLAlchemy managed objects) and you would
+  see a ``DetachedInstanceError``.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/188
+
+2.4.1 (2015-08-12)
+------------------
+
+- Remove the extra query hash constructed when indexing into SQL queries via
+  url as it was unused after releasing 2.4.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/232
+
+2.4 (2015-06-04)
+----------------
+
+This release changes some details of the panel API, so if you are writing
+any custom panels for the toolbar please review the changes.
+
+- Document the cookie used to activate panels on a per-request basis. It is
+  possible to specify the cookie per-request to turn on certain panels. This
+  is used by default in the browser, but may also be used on a per-request
+  basis by curl or other http APIs.
+
+- Add new ``debugtoolbar.active_panels`` setting which can specify certain
+  panels to be always active.
+
+- Modify ``DebugPanel.name`` to be a valid python identifier, used for
+  settings and lookup.
+
+- The toolbar no longer will clobber the ``request.id`` property. It now
+  namespaces its usage as ``request.pdtb_id``, freeing up ``request.id``
+  for applications.
+
+- Add a lock icon next to the request method in the sidebar if the request
+  was accessed over https.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/213
+
+- Update to bootstrap 3.1.1.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/213
+
+- Fix display of POST variables where the same key is used multiple times.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/210
+
+- Fix auth callback so it protects the toolbar views. Auth system is tested
+  now. See https://github.com/Pylons/pyramid_debugtoolbar/pull/226
+
+- Convert SQLAlchemy views to obtain the query and params internally; this
+  allows executing queries with parameters that are not serializable.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/227
+
+- Adds Pyramid version tests and bumps required Pyramid version to 1.4.
+  The pyramid_mako dependency requires 1.3, but debugtoolbar also uses
+  ``invoke_subrequest`` which was added in 1.4. The ``invoke_subrequest`` call
+  was added
+  in pyramid_debugtoolbar 2.0; if you need Pyramid 1.3 compatibility, try
+  an older version.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/183
+  and https://github.com/Pylons/pyramid_debugtoolbar/pull/225
+
+2.3 (2015-01-05)
+----------------
+
+- Support a ``debugtoolbar.includes`` setting which will allow addons to
+  extend the toolbar's internal Pyramid application with custom logic.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/207
+
+- Fixed an issue when the toolbar is not mounted at the root of the domain.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/201
+
+- Fixed an issue where the `button_css` was not pulled from the settings.
+  Added support for configurable `max_request_history` and
+  `max_visible_requests`.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/206
+
+2.2.2 (2014-11-09)
+------------------
+
+- Brownbagged 2.2.1, forgot to include the templates!
+
+2.2.1 (2014-11-09)
+------------------
+
+- Several internal links were not relative causing them to fail when the
+  app is mounted at a path prefix. See
+  https://github.com/Pylons/pyramid_debugtoolbar/pull/185 and
+  https://github.com/Pylons/pyramid_debugtoolbar/pull/196
+
+- Pin pygments<2 on 3.2 as the new release has dropped support.
+
+2.2 (2014-08-12)
+----------------
+
+- Avoid polluting user code with unnecessary toolbar css just to show the
+  button. See https://github.com/Pylons/pyramid_debugtoolbar/pull/174
+
+- Inject the toolbar button into ``application/xhtml+xml`` requests.
+  See https://github.com/Pylons/pyramid_debugtoolbar/pull/176
+
+- Make the toolbar accessible before another request has been served by the
+  application. See https://github.com/Pylons/pyramid_debugtoolbar/pull/171
+
+
+2.1 (2014-05-22)
+----------------
+
+- Add new "debugtoolbar." configuration settings that allow enabling or
+  disabling various Pyramid knobs in a users .ini file. This for instance
+  allows easy enabling/disabling of template reloading for the debugtoolbar.
+
+- Allow the toolbar to display always, even when the parent application
+  is using a default permission.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/147
+
+- Stabilize and document the ``pyramid_debugtoolbar.panels.DebugPanel``
+  API to allow developers to create their own panels.
+
+- Add new ``debugtoolbar.extra_panels`` and
+  ``debugtoolbar.extra_global_panels`` configuration settings to make it
+  simpler to support custom panels without overwriting the default panels.
+
+2.0.2 (2014-02-13)
+------------------
+
+- Fix breaking bugs when run under Py3k.
+
+2.0.1 (2014-02-12)
+------------------
+
+- Fixes a bug in 2.0 expecting pyramid_beaker to be around.
+
+2.0 (2014-02-12)
+----------------
+
+- The toolbar has undergone a major refactoring to mitigate the effects of
+  the toolbar's internal behavior on the application to which it is connected
+  and make it possible to inspect arbitrary requests. It is now available at
+  ``/_debug_toolbar`` and can be used to monitor any and all requests serviced
+  by the Pyramid application that it is wrapping, including non-html responses.
+
+  The toolbar will live-update (on conforming browsers via Server Sent Events)
+  when requests come into the Pyramid application, and can be used to debug and
+  inspect multiple requests simultaneously.
+
+1.0.9 (2013-10-20)
+------------------
+
+- Use new ``pyramid_mako`` configuration directive add_mako_renderer.
+
+1.0.8 (2013-09-09)
+------------------
+
+- Depend on ``pyramid_mako`` (Mako support will be split out of Pyramid in
+  1.5+).
+
+1.0.7 (2013-08-29)
+------------------
+
+- Drop support for Python 2.5.
+
+- Fix computation of proxy addresses.  See
+  https://github.com/Pylons/pyramid_debugtoolbar/pull/100 .
+
+- Make templates compatible with no-MarkupSafe Mako under Python 3.2.
+
+- Decode platform name to Unicode using utf-8 encoding to cope with nonascii
+  characters in platform (e.g. Fedora's Schrodinger's Cat).  See
+  https://github.com/Pylons/pyramid_debugtoolbar/pull/98
+
+- Raise a ``pyramid.exceptions.URLDecodeError`` instead of a raw
+  UnicodeDecodeError when the request path cannot be decoded.  See
+  https://github.com/Pylons/pyramid/issues/1057.
+
+- Added new configuration option: `debugtoolbar.show_on_exc_only` (
+  default=false).  If set to true (`debugtoolbar.show_on_exc_only = true`)
+  the debugtoolbar will only be injected into the response in case a
+  exception is raised. If the response is processed without exception the
+  returned html code is not changed at all.
+  See https://github.com/Pylons/pyramid_debugtoolbar/issues/54
+
+- Fix various UnicodeDecodeError exceptions.
+
+1.0.6 (2013-04-17)
+------------------
+
+- Packaging release only, no code changes.  1.0.5 was a brownbag release due to
+  missing directories in the tarball.
+
+1.0.5 (2013-04-17)
+------------------
+
+- Parse IPs correctly when request.remote_addr is a comma separated list
+  of proxies IPs.
+
+- If you are also using require.js, the debug toolbar's version of jQuery
+  will no longer conflict with your application's version of the library.
+
+- Use the "n" filter to disable default_filters when including the raw
+  SQL in links, leaving only the "u" filter (URL escaping).
+
+- Support for per-request authorization of toolbar middleware via
+  ``config.set_debugtoolbar_request_authorization(callback)`` where callback
+  accepts request object and returns boolean value whether toolbar is enabled
+  or not.
+
+- Short term fix for preventing error when converting binary query params to json.
+
+- Fix sqlalchemy query duration from microseconds to milliseconds.
+
+1.0.4 (2013-01-05)
+------------------
+
+- Add a ``debugtoolbar.excluded_prefixes`` setting.  When a URL path prefix
+  matches one of these prefixes, the toolbar will not be shown on the resulting
+  page.
+
+- Show the prompt and little text file icons show all the time, instead of
+  only on hover.
+
+- Do not set max-height on result boxes (which result in nested scroll on
+  the page, which makes it hard to find information quickly).
+
+- When an expression result is long, do not truncate with an ellipsis, which
+  requires one more click to get at the information I need.
+
+- Support ``pip install`` from the github repository by adding all static files
+  required to install in the ``package_data`` ``setup.py``. Setuptools usually
+  uses Subversion or CVS to tell it what static files it needs to package up
+  for egg distribution, but does not support reading git metadata.
+
+- The debug toolbar now use a patched version of require.js with a distinct
+  private name that cannot clash with the dojo loader or other incompatible
+  versions of require that may already be loaded on the page. You no longer
+  need to add the toolbar to your own require.js to make it work.
+
+1.0.3 (2012-09-23)
+------------------
+
+- The ``valid_host`` custom predicate used internally by pyramid_debugtoolbar
+  views didn't use newer "ipaddr"-based logic.  Symptom: some views may have
+  been incorrectly inaccessible if you used a network mask as a
+  "debugtoolbar.hosts" option.
+
+- The debug console now works with Google App Engine.
+
+- The debug console now adds a shortcut for accessing the last result through
+  ``_``.
+
+1.0.2 (2012-04-19)
+------------------
+
+- Moved the toolbar and debugger javascript files to use requirejs for
+  better dependency loading and module isolation to play better with mutiple
+  library versions. Recurrent problem was with async loading and application
+  specific jquery library where the expected version was overrided by the
+  toolbar one.
+
+  If you are already using requirejs and want the toolbar to load, just add it
+  to your path and module::
+
+    require.config({
+      paths: {
+        "jquery": "jquery-1.7.2.min",
+        "toolbar": "/_debug_toolbar/static/js/toolbar"
+      }
+    });
+
+    require(["jquery", "toolbar"], function($, toolbar) {
+      $(function() {
+        // your module
+      });
+    });
+
+1.0.1 (2012-03-27)
+------------------
+
+- If ``request.remote_addr`` is ``None``, disable the toolbar.
+
+1.0 (2012-03-17)
+----------------
+
+- Don't URL-quote SQL parameters on SQLAlchemy panel.
+
+- Allow hostmask values as ``debugtoolbar.hosts`` entries
+  (e.g. ``192.168.1.0/24``).
+
+0.9.9.1 (2012-02-22)
+--------------------
+
+- When used with Pyramid 1.3a9+, views, routes, and other registrations made
+  by ``pyramid_debugtoolbar`` itself will not show up in the introspectables
+  panel.
+
+0.9.9 (2012-02-19)
+------------------
+
+- Try to take advantage of MakoRendererFactoryHelper in Pyramid 1.3a8+.  If
+  we can do this, the toolbar templates won't be effected by normal mako
+  settings.  The most visible change is that toolbar mako templates now have
+  a ``dbtmako`` extension.
+
+0.9.8 (2012-01-09)
+------------------
+
+- Show request headers instead of mistakenly showing environ values in
+  Headers panel under "Request Headers".  This also fixes a potential
+  UnicodeDecodeError.
+
+- Set content_length on response object when we regenerate app_iter while
+  replacing original content.
+
+0.9.7 (2011-12-09)
+------------------
+
+- The performance panel of the debugtoolbar used a variable named
+  ``function_calls`` which was not initialised when stats are not
+  collected. This caused a ``NameError`` when mako rendered the template with
+  the ``strict_undefined`` option.
+
+- Fix Python 3 compatibility in SQLAlchemy panel.
+
+- Make SQLAlchemy explain and select work again.
+
+0.9.6 (2011-12-09)
+------------------
+
+- Added "Introspection" panel; active only under Pyramid 1.3dev+ (requires
+  Pyramid introspection subsystem).
+
+- Address heisenbug reported where performance panel template variables cause
+  unexpected results.  Can't repeat, but reporter indicates the fix works for
+  him, so hail marying.  See
+  https://github.com/Pylons/pyramid_debugtoolbar/commit/5719c97ea2a3a41fc01e261403d0167cc38f3b49
+
+0.9.5 (2011-11-12)
+------------------
+
+- Adjust tox setup to test older Pyramid and WebOb branches under 2.5.
+
+- Convert all templates to Mako.
+
+- Don't rely on ``pyramid.compat.json``.
+
+- Add Tweens toolbar panel.
+
+0.9.4 (2011-09-28)
+------------------
+
+- Upgrade to jquery 1.6.4 and tablesorter plugin 2.0.5b
+
+- Introduced new setting ``debugtoolbar.button_style``. Which can be used
+  to override the default style (top:30px) set by ``toolbar.css``.
+
+- Compatible with Python 3.2 (requires Pyramid 1.3dev+).
+
+- Appease settings values that were sensitive to ``__getattr__`` in the
+  settings debug panel (e.g. MongoDB databases).  See
+  https://github.com/Pylons/pyramid_debugtoolbar/issues/30
+
+0.9.3 (2011-09-12)
+------------------
+
+- All debug toolbar panels and underlying views are now always executable by
+  entirely anonymous users, regardless of the default permission that may be
+  in effect (use the ``NO_PERMISSION_REQUIRED`` permission for all
+  debugtoolbar views).
+
+- Toolbar cookie settings name changed (from fldt to p_dt), to avoid messing
+  up folks who use both the flask debugtoolbar and Pyramid's.
+
+- Fix IE7 and IE8 renderings of the toolbar.
+
+0.9.2 (2011-09-05)
+------------------
+
+- Log an exception body to the debug toolbar logger when an exception
+  happens.
+
+- Don't reset the root logger level to NOTSET in the logging panel (changes
+  console logging output to sanity again).
+
+0.9.1 (2011-08-30)
+------------------
+
+- The ``debugtoolbar.intercept_exc`` setting is now a tri-state setting.  It
+  can be one of ``debug``, ``display`` or ``false``.  ``debug`` means show
+  the pretty traceback page with debugging controls.  ``display`` means show
+  the pretty traceback package but omit the debugging controls.  ``false``
+  means don't show the pretty traceback page.  For backwards compatibility
+  purposes, ``true`` means ``debug``.
+
+- A URL is now logged to the console for each exception when
+  ``debugtoolbar.intercept_exc`` is ``debug`` or ``display``.  This URL leads
+  to a rendering of the "pretty" traceback page for an exception.  This is
+  useful when the exception was caused by an AJAX or non-human-driven
+  request.  This URL is also injected into the pretty traceback page (at the
+  bottom).
+
+- "Unfixed" indentation of SQL EXPLAIN done in 0.9, it broke the explain page
+  when a column value isn't a string.
+
+0.9 (2011-08-29)
+----------------
+
+- Fixed indentation of SQL EXPLAIN by replacing spaces with HTML spaces.
+
+- ``response.charset`` in some undefined user-reported cases may be ``None``,
+  which would lead to an exception when attempting to render the debug
+  toolbar.  In such cases we now assume the charset is UTF-8.
+
+- Some renderings of the request vars and renderer values would raise an
+  uncaught exception.
+
+0.8 (2011-08-24)
+----------------
+
+- Try to cope with braindead Debian Python installs which package the
+  ``pstats`` module separately from Python for god only knows what reason.
+  Turn the performance panel off in this case instead of crashing.
+
+0.7 (2011-08-24)
+----------------
+
+- Docs-only changes.
+
+0.6 (2011-08-21)
+----------------
+
+- Do not register an alias when registering an implicit tween factory (compat
+  with future 1.2 release).
+
+0.5 (2011-08-18)
+----------------
+
+- The toolbar didn't work under Windows due to usage of the ``resource``
+  module: https://github.com/Pylons/pyramid_debugtoolbar/issues/12
+
+0.4 (2011-08-18)
+----------------
+
+- Change the default value for ``debugtoolbar.intercept_redirects`` to
+  ``false.`` Rationale: it confuses people when first developing if the
+  application they're working on has a home page which does a redirection.
+
+0.3 (2011-08-15)
+----------------
+
+- Request vars panel would cause a UnicodeDecodeError under some
+  circumstances (see https://github.com/Pylons/pyramid_debugtoolbar/issues/9).
+
+- Dynamicize URLs for SQLAlchemy subpanels.
+
+- Require "pyramid>=1.2dev" for install; the trunk is now "1.2dev" instead of
+  "1.1.1dev".
+
+- Requires trunk after 2011-08-14: WSGIHTTPException "prepare" method and
+  ``alias`` param to add_tween, BeforeRender event has no "_system" attr.
+
+- Fix memory leak.
+
+- HTML HTTP exceptions now are rendered with the debug toolbar div.
+
+- Added NotFound page to demo app and selenium tests.
+
+0.2 (2011-08-07)
+----------------
+
+- Add SQLAlchemy "explain" and "select" pages (available from the SQLALchemy
+  panel next to each query shown in the page).
+
+- Requires newer Pyramid trunk (checked out on 2011-08-07 or later).
+
+- Add a link to the SQLAlchemy demo page from the demo app index page.
+
+0.1 (2011-07-30)
+----------------
+
+- Initial release.
+
+
