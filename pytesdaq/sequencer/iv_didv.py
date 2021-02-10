@@ -169,7 +169,17 @@ class IV_dIdV(Sequencer):
                 for channel in self._selected_channel_list:
                     self._instrument.set_tes_bias(bias, tes_channel=channel)
                     
+
+                # sleep
+                sleeptime_s = 10
+                if tes_bias_change_sleep_time in sweep_config:
+                    sleeptime_s = sweep_config['tes_bias_change_sleep_time']
+                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
+                time.sleep(sleeptime_s)
                 
+
+
+                    
                 # -----------
                 # IV
                 # ----------

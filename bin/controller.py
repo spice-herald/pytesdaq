@@ -4,6 +4,7 @@ import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import  arg_utils
 import os
 from math import nan
+from pprint import pprint
 
 if __name__ == "__main__":
 
@@ -31,10 +32,17 @@ if __name__ == "__main__":
                         help = 'Read/write Variable output gain')
     
     parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+
+
+    # signal generator
+    parser.add_argument('--signal_gen_on', action="store_true", help = 'Turn on signal gen')
+    parser.add_argument('--signal_gen_off', action="store_true", help = 'Turn off signal gen')
+    parser.add_argument('--signal_gen_voltage', nargs='?', type=float, const=nan, default=None,
+                        help = 'Signal generator voltage amplitude [mV]')
+    parser.add_argument('--signal_gen_frequency', nargs='?', type=float, const=nan, default=None,
+                        help = 'Signal generator frequency [Hz]')
+
     
-    #parser.add_argument('--signal_gen_connection', nargs='?', type = str, const=nan, default=None,
-    #                    help = 'Read/write signal generator connection(s): "tes" or "feedback" or both (comma seprated)')
-    # parser.add_argument('--feedback_mode', nargs='?', type = str, const=nan, default=None, help = 'Feedback mode: "close" or "open"')
 
     # verbose
     parser.add_argument('--verbose',action="store_true",help='Screen output')
@@ -46,11 +54,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    # check if channels selected
-    if  args.tes_channels is None and args.detector_channels is None and args.all is None:
-        print('Please select TES or detector channel(s)! Type --help for channel arguments.')
-        exit()
-        
 
     verbose = False
     if args.verbose:
@@ -60,7 +63,7 @@ if __name__ == "__main__":
     
     
     # ========================
-    # Connection check
+    # Instrument Configuration
     # ========================
 
     # file name
@@ -80,6 +83,25 @@ if __name__ == "__main__":
     config = settings.Config(setup_file=setup_file)
 
 
+    # ========================
+    # Channels
+    # ========================
+
+    is_signal_gen = False
+    if (args.signal_gen_on or args.signal_gen_off
+        or args.signal_gen_voltage is not None
+        or args.signal_gen_frequency is not None):
+        is_signal_gen = True
+
+
+    # check if channels selected
+    if  args.tes_channels is None and args.detector_channels is None and not is_signal_gen:
+        print('Please select TES or detector channel(s)! Type --help for channel arguments.')
+        exit()
+        
+
+
+        
     # channels
     tes_channel_list = None
     detector_channel_list = None
@@ -92,21 +114,25 @@ if __name__ == "__main__":
         nb_channels = len(detector_channel_list)
 
 
-    if nb_channels==0:
+    if not is_signal_gen and nb_channels==0:
         print('Please select TES or detector channel(s)! Type --help for channel arguments.')
         exit()
-    
+        
 
     
     # ========================
-    # Read/Write board
+    # Instantiate Instrument
     # ========================
 
-
-    # instantiate
     myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
 
 
+
+    # ========================
+    # SQUID/TES controller
+    # ========================
+
+    
     # loop channels
     for ichan in range(nb_channels):
 
@@ -216,30 +242,33 @@ if __name__ == "__main__":
     # -----------
     # Read all 
     # -----------
-    '''
-    if args.read_all:
-        settings = myinstrument.set_output_gain(tes_channel=tes_channel,
-                                                detector_channel=detector_channel)
-                
-            # read from board
-            readback = myinstrument.get_output_total_gain(tes_channel=tes_channel,
-                                                          detector_channel=detector_channel)
-                
-            print('Total output gain (fix*variable gains) for channel ' + channel + ' = ' + str(readback))
-    '''              
+
+    
+    if args.read_all and nb_channels>0:
+        settings = myinstrument.read_all(tes_channel_list=tes_channel_list,
+                                         detector_channel_list=detector_channel_list)
+        pprint(settings)
+        
+        
 
         
             
-    # --------------
-    # Sig gen
-    # --------------
-    #myinstrument.set_signal_gen_params(tes_channel=2, source='feedback', shape='triangle', frequency=110, amplitude=150)
-    #data = myinstrument.get_signal_gen_params(tes_channel=2)
-    #myinstrument.set_signal_gen_onoff('off',tes_channel=2)
+    # -----------------
+    # Signal generator
+    # -----------------
+    if args.signal_gen_on and args.signal_gen_off:
+        print('ERROR: Turn signal generator on or off, not both!')
+    
+    if args.signal_gen_on:
+        myinstrument.set_signal_gen_onoff('on')
+        
+    if args.signal_gen_off:
+        myinstrument.set_signal_gen_onoff('off')
 
-    #data = myinstrument.get_signal_gen_onoff(tes_channel=2)
-    #print(data)
-    #print(bias)
-
-
+    if args.signal_gen_voltage is not None:
+        myinstrument.set_signal_gen_params(voltage=args.signal_gen_voltage)
+        
+    if args.signal_gen_frequency is not None:
+        myinstrument.set_signal_gen_params(frequency=args.signal_gen_frequency)
+        
     

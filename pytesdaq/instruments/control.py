@@ -336,18 +336,20 @@ class Control:
             return
         
         
-        # get readout controller ID and Channel (FIXME: Is it necessary)
-        controller_id, controller_channel = (
-            connection_utils.get_controller_info(self._connection_table,
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id,
-                                                 adc_channel=adc_channel)
-            )
-
         
         if self._signal_generator_name == 'magnicon':
-            
+
+            # get readout controller ID and Channel (FIXME: Is it necessary)
+            controller_id, controller_channel = (
+                connection_utils.get_controller_info(self._connection_table,
+                                                     tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id,
+                                                     adc_channel=adc_channel)
+            )
+
+
+                        
             mon_onoff = 'OFF'
             gen1_onoff = 'OFF'
             gen2_onoff = 'OFF'
@@ -377,8 +379,8 @@ class Control:
                               adc_id=None, adc_channel=None,
                               signal_gen_num=1, source=None,
                               voltage=None, current=None,
-                              frequency=None,
-                              shape='square', phase_shift=0, freq_div=0, half_pp_offset='OFF'):
+                              frequency=None, shape=None, phase_shift=0,
+                              freq_div=0, half_pp_offset='OFF'):
 
         """
         Set signal generator parameters
@@ -394,33 +396,16 @@ class Control:
 
 
         # check parameters
-        if source is None or frequency is None or (voltage is None and current is None):
-            print('ERROR: Required parameters for signal generator =' +
-                  ' "source", "current" or "voltage", and "frequency"')
-            return
-
-
         if voltage is not None and current is not None:
             print('ERROR: Set signal generator amplitude either with "current" or "voltage", not both!')
             return
         
-        if source != 'tes' and source != 'feedback':
+        if source is not None and (source != 'tes' and source != 'feedback'):
             print('ERROR: Source can be either "tes" or "feedback"')
             
-        # get readout controller ID and Channel
-        controller_id, controller_channel = (
-            connection_utils.get_controller_info(self._connection_table,
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id,
-                                                 adc_channel=adc_channel)
-        )
-        
-
-        
+              
         if self._dummy_mode:
-            print('INFO: Setting signal generator #' + str(signal_gen_num) + ', ' + 
-                  controller_id + ' channel ' + str(controller_channel))
+            print('INFO: Setting signal generator #' + str(signal_gen_num))
             return
 
 
@@ -432,11 +417,27 @@ class Control:
         # magnicon
         if self._signal_generator_name == 'magnicon': 
 
-                      
+
+
+            # get readout controller ID and Channel
+            controller_id, controller_channel = (
+                connection_utils.get_controller_info(self._connection_table,
+                                                     tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id,
+                                                     adc_channel=adc_channel)
+            )
+
+
+
+
+            
             # convert some parameters
             source_magnicon = 'I'
             if source == 'feedback':
                 source_magnicon = 'Ib'
+
+
 
             readback_amp, readback_freq = (
                 self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
@@ -451,24 +452,37 @@ class Control:
 
 
             # shape
-            if shape == 'sawtoothpos' or shape == 'sawtoothneg':
-                shape = 'ramp'
-                
-            self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
+            if shape is not None:
+                if shape == 'sawtoothpos' or shape == 'sawtoothneg':
+                    shape = 'ramp'
+                self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
             
             # amplitude
             if voltage is None and current is not None:
                 resistance = float(self._config.get_signal_gen_tes_resistance())
                 voltage = resistance*current/1000
 
-            self._signal_generator_inst.set_amplitude(voltage, unit='mVpp', source=signal_gen_num)
+            if voltage is not None:
+                self._signal_generator_inst.set_amplitude(voltage, unit='mVpp', source=signal_gen_num)
 
             # frequency
-            self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
+            if frequency is not None:
+                self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
 
 
             # source
-            if self._squid_controller_name == 'feb':
+            if source is not None:
+
+                
+                # get readout controller ID and Channel
+                controller_id, controller_channel = (
+                    connection_utils.get_controller_info(self._connection_table,
+                                                         tes_channel=tes_channel,
+                                                         detector_channel=detector_channel,
+                                                         adc_id=adc_id,
+                                                         adc_channel=adc_channel)
+                )
+
 
                 connect_to_tes = False
                 connect_to_feedback = False
@@ -982,7 +996,7 @@ class Control:
             else:
                 output_dict['source'] = source
 
-            output_dict['current'] = amp
+            output_dict['current'] = amp/1000000.0
             output_dict['voltage'] = []
             output_dict['frequency'] = freq
             output_dict['shape'] = shape
@@ -996,12 +1010,12 @@ class Control:
         else:
 
             # signal generator parameter
-            output_dict['voltage'] = self._signal_generator_inst.get_amplitude(source=signal_gen_num)
+            output_dict['voltage'] = float(self._signal_generator_inst.get_amplitude(source=signal_gen_num))
             resistance = float(self._config.get_signal_gen_tes_resistance())
-            output_dict['current']  = (output_dict['voltage']/resistance)*1000
-            output_dict['frequency'] = self._signal_generator_inst.get_frequency(source=signal_gen_num)
+            output_dict['current']  = float(output_dict['voltage']/resistance)
+            output_dict['frequency'] = float(self._signal_generator_inst.get_frequency(source=signal_gen_num))
             output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
-
+            
             # source
             if self._squid_controller_name == 'feb':
                 
@@ -1285,6 +1299,18 @@ class Control:
 
                 if val == nan or val is None:
                     val = -999999
+
+
+                # change units of some parameter:
+
+                # uA -> A
+                if param=='tes_bias' or param=='squid_bias':
+                    val = val/1000000.0
+
+                # mV -> V
+                if param=='lock_point_voltage':
+                    val = val/1000.0
+                
                 output_dict[param].append(val)  
             
                 # wait
@@ -1364,8 +1390,7 @@ class Control:
 
         param_val = nan
         if not self._read_from_redis:
-            print('Into Redis block')
-
+          
             if self._squid_controller_name == 'feb':
                 # CDMS FEB device
                 
