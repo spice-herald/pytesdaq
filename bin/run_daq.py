@@ -143,10 +143,10 @@ if __name__ == "__main__":
     # Detector config
     # ======================== 
     det_config = dict()
-    myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
+    myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=True, verbose=verbose)
     for adc_name in adc_list:
         config = adc_config[adc_name]
-        det_config[adc_name] = myinstrument.read_all(adc_id=adc_name, adc_channel_list=config['channel_list'])
+#        det_config[adc_name] = myinstrument.read_all(adc_id=adc_name, adc_channel_list=config['channel_list'])
         
     
     # ========================
