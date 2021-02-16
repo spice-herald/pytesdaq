@@ -630,6 +630,10 @@ class Readout:
                     if 'beta' in result:
                         result_list.append(['beta', f"{result['beta']:.3f}"])
 
+                    if 'gratio' in result:
+                        result_list.append(['gratio', f"{result['gratio']:.3f}"])
+
+                        
                     if resistance_type=='R0':
                         r0_infinite = (abs(1/didv) + rp + rshunt)*1000
                         result_list.append(['R0 (Infinite l) [mOhms]', f"{r0_infinite:.2f}"])
