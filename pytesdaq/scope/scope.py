@@ -498,12 +498,25 @@ class MainWindow(QtWidgets.QMainWindow):
         
         if self._running_avg_checkbox.isChecked():
             self._running_avg_spinbox.setEnabled(True)
+            self._pileup_cut_checkbox.setEnabled(True)
             value = int(self._running_avg_spinbox.value())
             self._readout.update_analysis_config(enable_running_avg=True, nb_events_avg=value)
         else:
             #self._running_avg_spinbox.setProperty('value', 1)
             self._running_avg_spinbox.setEnabled(False)
-            self._readout.update_analysis_config(enable_running_avg = False)
+            self._pileup_cut_checkbox.setEnabled(False)
+            self._pileup_cut_checkbox.setChecked(False)
+            self._readout.update_analysis_config(enable_running_avg=False,
+                                                 enable_pileup_rejection=False)
+
+    def _handle_pileup_cut(self):
+        
+        if self._pileup_cut_checkbox.isChecked():
+            self._readout.update_analysis_config(enable_pileup_rejection=True)
+        else:
+            self._readout.update_analysis_config(enable_pileup_rejection=False)
+       
+
 
 
 
@@ -1071,7 +1084,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
-        self._running_avg_checkbox.setGeometry(QtCore.QRect(16, 16, 109, 21))
+        self._running_avg_checkbox.setGeometry(QtCore.QRect(13, 10, 109, 21))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -1082,16 +1095,25 @@ class MainWindow(QtWidgets.QMainWindow):
         # running avg spin box
         self._running_avg_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._running_avg_spinbox.setEnabled(False)
-        self._running_avg_spinbox.setGeometry(QtCore.QRect(34, 40, 85, 21))
+        self._running_avg_spinbox.setGeometry(QtCore.QRect(31, 34, 85, 21))
         self._running_avg_spinbox.setMaximum(500)
         self._running_avg_spinbox.setProperty('value', 1)
         self._running_avg_spinbox.setObjectName('runningAvgSpinBox')
         self._running_avg_spinbox.setEnabled(False)
 
+        
+        self._pileup_cut_checkbox = QtWidgets.QCheckBox(self._tools_frame)
+        self._pileup_cut_checkbox.setGeometry(QtCore.QRect(13, 65, 130, 21))
+        self._pileup_cut_checkbox.setFont(font)
+        self._pileup_cut_checkbox.setObjectName('runningAvgCheckBox')
+        self._pileup_cut_checkbox.setText('Pileup Rejection')
+        self._pileup_cut_checkbox.setEnabled(False)
 
+
+        
         # add lopw pass filter
         self._lpfilter_checkbox = QtWidgets.QCheckBox(self._tools_frame)
-        self._lpfilter_checkbox.setGeometry(QtCore.QRect(16, 76, 119, 21))
+        self._lpfilter_checkbox.setGeometry(QtCore.QRect(13, 96, 119, 21))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -1103,7 +1125,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # lp filter spin box
         self._lpfilter_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._lpfilter_spinbox.setEnabled(False)
-        self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 100, 83, 21))
+        self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 120, 83, 21))
         self._lpfilter_spinbox.setMinimum(1)
         self._lpfilter_spinbox.setMaximum(500)
         self._lpfilter_spinbox.setObjectName('lpFilterSpinBox')
@@ -1117,7 +1139,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tools_button.clicked.connect(self._show_tools)
         self._read_board_button.clicked.connect(self._handle_read_board)
         #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
-
+        self._pileup_cut_checkbox.toggled.connect(self._handle_pileup_cut)
 
 
     def _set_display_button(self, do_run):

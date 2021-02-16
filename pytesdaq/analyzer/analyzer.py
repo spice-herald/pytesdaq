@@ -10,16 +10,17 @@ class Analyzer:
         
         # Frequency array
         self._freq_array = None
-      
 
         # intialize analysis configuration
         self._initialize_config()
-        
 
-        # initialize data buffer for running avg
+        # Running avg data buffer
         self._buffer = None
         self._nb_events_buffer = 0
-        
+
+        # Running avg data buffer cuts
+        self._buffer_cuts = None
+                
         # didv fit results
         self._didv_fit_results = None
         
@@ -74,7 +75,9 @@ class Analyzer:
         # Pileup rejection...
         # ---------------------
 
-        # FIXME.... ;-)
+        if self._analysis_config['enable_pileup_rejection']:
+            self._calc_cuts(data_array, adc_config['sample_rate'])
+            
 
           
         # ---------------------
@@ -152,6 +155,7 @@ class Analyzer:
 
 
 
+    
     def normalize(self,data_array, adc_config, unit, norm_list=None):
         """
         Normalize array
@@ -385,11 +389,6 @@ class Analyzer:
         self._nb_events_buffer = self._buffer.shape[2]
 
     
-
-   
-
-
-
         
 
     def _calc_running_avg(self):
@@ -398,14 +397,85 @@ class Analyzer:
         """
         
         data_array = []
-   
+        if self._buffer is None:
+            return  data_array
+
+    
         if self._buffer is not None:
-            data_array = np.mean(self._buffer, axis=2)
+
+            # apply pileup rejection cuts
+            nb_events = self._buffer.shape[2]
+            if self._analysis_config['enable_pileup_rejection'] and nb_events>2:
+
+                # initialize
+                nb_channels = self._buffer.shape[0]
+                nb_samples =  self._buffer.shape[1]
+                data_array = np.zeros((nb_channels,nb_samples), dtype=np.float64)
+            
+                # loop channels
+                for ichan in range(nb_channels):
+
+                    # min max
+                    cut_data = self._buffer_cuts['minmax'][ichan,:]
+                    cminmax = qp.cut.iterstat(cut_data, cut=2, precision=10000.0)[2]
+                    data = self._buffer[ichan,:,cminmax]
+                    data_array[ichan,:] = np.mean(data, axis=0)
+            else:
+                data_array = np.mean(self._buffer, axis=2)
 
         return data_array
-    
-    
 
+
+    
+    
+    def _calc_cuts(self, data_array, sample_rate):
+        """
+        Calculate cuts  (require running average)
+        """
+
+        # initialize if no cut calculation yet
+        # or running average reset
+        if (self._buffer is None or self._analysis_config['reset_running_avg']
+            or self._buffer_cuts is None):
+            self._buffer_cuts = dict()
+            self._analysis_config['reset_running_avg'] = True
+        else:
+            nb_channels = data_array.shape[0]
+            nb_events_buffer = self._buffer.shape[2]
+            for cut,val in self._buffer_cuts.items():
+                if (val.shape[0]!=nb_channels
+                    or val.shape[1]!=nb_events_buffer):
+                    self._buffer_cuts = dict()
+                    self._analysis_config['reset_running_avg'] = True
+                    
+                    
+        # --------
+        # min max
+        # --------
+
+        # calc
+        data_max = np.amax(data_array, axis=1)
+        data_min = np.amin(data_array, axis=1)
+        min_max = data_max-data_min
+
+        # store
+        min_max.shape +=(1,)
+        if 'minmax' not in self._buffer_cuts:
+            self._buffer_cuts['minmax'] = min_max
+        else:
+            
+            # delete previous value if needed
+            nb_events_buffer = self._buffer_cuts['minmax'].shape[1]
+            if self._analysis_config['nb_events_avg']<=nb_events_buffer:
+                nb_to_delete = nb_events_buffer-self._analysis_config['nb_events_avg']+1
+                self._buffer_cuts['minmax'] = np.delete(self._buffer_cuts['minmax'],
+                                                        list(range(nb_to_delete)), axis=1)
+            # append
+            self._buffer_cuts['minmax'] = np.append(self._buffer_cuts['minmax'],
+                                                    min_max, axis=1)
+
+
+        
     def _initialize_config(self):
         """
         Initialize analysis configuration
