@@ -329,15 +329,41 @@ class Analyzer:
                 print('Info: dIdV 3-pole Fit Done')
 
 
-            # Fit result
+
+            # Calculate R0/I0/P0 (infinite loop
+            # approximation)
+            if ((self._analysis_config['didv_2pole'] or
+                 self._analysis_config['didv_3pole'])
+                and 'smallsignalparams' in result):
+                didv = result['didv0']
+                tes_bias = self._analysis_config['tes_bias_list'][ichan]
+              
+                # R0
+                r0_infinite = (abs(1/didv) + rp + rshunt)
+
+                # IO
+                i0_infinite = (tes_bias*rshunt)/(r0_infinite+rshunt+rp)
+
+                # P0
+                p0_infinite = tes_bias*rshunt*i0_infinite - (rp + rshunt)*pow(i0_infinite,2)
+                result['infinite_l'] = dict()
+                result['infinite_l']['r0'] = r0_infinite
+                result['infinite_l']['i0'] = i0_infinite
+                result['infinite_l']['p0'] = p0_infinite
+            
+
+                
+            # Add result to list
+            result_list.append(result)
+
+            # Fitted response
             dt = 1/sample_rate
             time = np.arange(0,nb_samples)*dt
-            result_list.append(result)
-            
+                      
             key = 'params'
             if 'smallsignalparams' in result:
                 key = 'smallsignalparams'
-            
+
             fit_array[ichan,:] = norm*qp.squarewaveresponse(
                 time,
                 sg_current,
@@ -492,6 +518,7 @@ class Analyzer:
         self._analysis_config['enable_pileup_rejection'] = False
         self._analysis_config['signal_gen_current'] = None
         self._analysis_config['signal_gen_frequency'] = None
+        self._analysis_config['tes_bias_list'] = None
         self._analysis_config['rshunt'] = 0.005
         self._analysis_config['rp'] = 0.003
         self._analysis_config['r0'] = 0.2

@@ -15,7 +15,7 @@ from datetime import datetime
 
 class MainWindow(QtWidgets.QMainWindow):
     
-    def __init__(self):
+    def __init__(self, setup_file=None):
         super().__init__()
                
 
@@ -66,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         
         # initialize readout
-        self._readout = readout.Readout()
+        self._readout = readout.Readout(setup_file=setup_file)
         self._readout.register_ui(self._axes,self._canvas, self.statusBar(),
                                   self._channels_color_map,
                                   self._display_control_button)

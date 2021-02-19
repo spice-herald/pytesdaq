@@ -16,8 +16,11 @@ from pytesdaq.utils import  arg_utils
 
 class Readout:
     
-    def __init__(self):
+    def __init__(self, setup_file=None):
             
+
+        # setup file
+        self._setup_file = setup_file
         
         #self._web_scope = web_scope
 
@@ -140,7 +143,7 @@ class Readout:
 
 
         # read configuration file
-        self._config = settings.Config()
+        self._config = settings.Config(setup_file=self._setup_file)
         self._adc_config = dict()
 
         # initialize
@@ -461,6 +464,7 @@ class Readout:
             # get signal gen
             if self._do_get_sg or self._analyzer.get_config('signal_gen_current') is None:
                 self._fill_signal_gen()
+                self._fill_tes_bias()
                 self._do_get_sg = False       
 
             # fit parameter
@@ -591,13 +595,19 @@ class Readout:
                 for ichan in range(nb_chan):
 
                     result_list = list()
+                    infinite_l_result_list = list()
                     falltimes_list = list()
                     
                     chan_name = self._selected_channel_name_list[ichan]
                     didv = self._didv_data_dict['results'][ichan]['didv0']
                     result = self._didv_data_dict['results'][ichan]['smallsignalparams']
                     falltimes = self._didv_data_dict['results'][ichan]['falltimes']
-                                        
+                    result_infinite_l = dict()
+                    if 'infinite_l' in self._didv_data_dict['results'][ichan]:
+                        result_infinite_l = self._didv_data_dict['results'][ichan]['infinite_l']
+                        
+                    
+                    
                     rshunt = result['rsh']
                     result_list.append(['Input Rsh [mOhms]', f"{rshunt*1000:.2f}"])
 
@@ -633,12 +643,20 @@ class Readout:
                     if 'gratio' in result:
                         result_list.append(['gratio', f"{result['gratio']:.3f}"])
 
+                    
+                    if resistance_type=='R0' and result_infinite_l:
+                        r0_infinite = result_infinite_l['r0']*1000
+                        i0_infinite = result_infinite_l['i0']*1e6
+                        p0_infinite = result_infinite_l['p0']*1e15
                         
-                    if resistance_type=='R0':
-                        r0_infinite = (abs(1/didv) + rp + rshunt)*1000
-                        result_list.append(['R0 (Infinite l) [mOhms]', f"{r0_infinite:.2f}"])
-
-
+                        infinite_l_result_list.append(['R0 [mOhms]',
+                                                       f"{r0_infinite:.2f}"])
+                        infinite_l_result_list.append(['I0 [uA]',
+                                                       f"{i0_infinite:.3f}"])
+                        infinite_l_result_list.append(['P0 [fWatts]',
+                                                       f"{p0_infinite:.2f}"])
+                        
+                    # Fall times
                     falltime_name = ['Tau (L/R) [us]','Tau_eff [us]', 'Tau3 [us]']
                     for ift in range(len(falltimes)):
                         falltime = falltimes[ift]*1e6
@@ -648,16 +666,25 @@ class Readout:
                     smallsignal_pd = pd.DataFrame(result_list, columns = ['Parameter','Value'])
                     falltime_pd = pd.DataFrame(falltimes_list, columns = ['Parameter','Value'])
 
+                    infinite_l_pd = None
+                    if infinite_l_result_list:
+                        infinite_l_pd = pd.DataFrame(infinite_l_result_list, columns = ['Parameter','Value'])
+
+                    
                     # insert to UI
                     chan_html = "<font color='red' size='4'><u>" + chan_name + "</u><br></font>"
                     self._fit_result_field.insertHtml(chan_html)
                     self._fit_result_field.insertHtml(
                         "<br><font color='blue' size='3'>Small Signal Parameters</font>")
                     self._fit_result_field.insertHtml(smallsignal_pd.to_html(index=False))
+                    if infinite_l_pd is not None:
+                        self._fit_result_field.insertHtml(
+                            "<br><br><font color='blue' size='3'>Infinite Loop Gain Approx.</font>")
+                        self._fit_result_field.insertHtml(infinite_l_pd.to_html(index=False))
                     self._fit_result_field.insertHtml(
                         "<br><br><font color='blue' size='3'>Pole Fall Times</font>")
                     self._fit_result_field.insertHtml(falltime_pd.to_html(index=False))
-                    self._fit_result_field.insertHtml("<br><br><br>")
+                    self._fit_result_field.insertHtml("<br><br><br><br>")
                 
 
 
@@ -692,7 +719,8 @@ class Readout:
                 
     
 
-    def read_from_board(self, read_norm=False, read_sg=False):
+    def read_from_board(self, read_norm=False, read_sg=False,
+                        read_bias=False):
         """
         Read from board, FEB/Magnicon or signal generator
         Save in analysis config
@@ -767,8 +795,15 @@ class Readout:
             self._analyzer.set_config('signal_gen_frequency', signal_gen_info['frequency'])
             
             
+        # TES bias
+        tes_bias_list = list()
+        if read_bias:
+            for chan in self._adc_config['selected_channel_list']:
+                bias = self._instrument.get_tes_bias(adc_id=self._adc_name,
+                                                     adc_channel=chan)
+                tes_bias_list.append(bias)
+            self._analyzer.set_config('tes_bias_list', tes_bias_list)
             
-
             
 
     def _plot_data(self, data_array, fit_array=None, fit_dt=None, freq_array=[]):
@@ -941,13 +976,37 @@ class Readout:
                 self._analyzer.set_config('signal_gen_frequency', float(settings['signal_gen_frequency']))
                 break
 
+
+
+            
+    def _fill_tes_bias(self):
+        """
+        TES bias
+        """
+              
+        if self._data_source == 'niadc':
+            self.read_from_board(read_bias=True)
+            
+        elif self._data_source == 'hdf5':
+            
+            tes_bias_list = list()
+            for chan in self._adc_config['selected_channel_list']:
+                chan_index = self._detector_config['connection_map']['adc_chans'].index(chan)
+                detector_name = self._detector_config['connection_map']['detector_chans'][chan_index]
+                settings = self._detector_config['settings'][detector_name]
+                bias = float(self._detector_config['settings'][detector_name]['tes_bias'])
+                tes_bias_list.append(bias)
+            self._analyzer.set_config('tes_bias_list', tes_bias_list)
+
     
 
 
     def _fill_fit_param(self):
         """
-        Shunt Resistance
+        Shunt Resistance 
+        (one value for all channels)
         """
+        
         if self._data_source == 'hdf5':
             
             for chan in self._adc_config['selected_channel_list']:
