@@ -797,11 +797,11 @@ class Readout:
             
         # TES bias
         tes_bias_list = list()
-        if read_bias:
+        if read_bias or read_sg:
             for chan in self._adc_config['selected_channel_list']:
-                bias = self._instrument.get_tes_bias(adc_id=self._adc_name,
-                                                     adc_channel=chan)
-                tes_bias_list.append(bias)
+                bias = float(self._instrument.get_tes_bias(adc_id=self._adc_name,
+                                                           adc_channel=chan))
+                tes_bias_list.append(bias*1e-6)
             self._analyzer.set_config('tes_bias_list', tes_bias_list)
             
             
