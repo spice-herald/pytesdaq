@@ -1244,7 +1244,7 @@ class ToolsWindow(QtWidgets.QWidget):
 
 
         
-        # updat parameters
+        # update parameters
         rp = float(self._rp_spinbox.value())/1000
         self._readout.update_analysis_config(rp=rp)
 
@@ -1254,6 +1254,11 @@ class ToolsWindow(QtWidgets.QWidget):
         rshunt = float(self._rshunt_spinbox.value())/1000
         self._readout.update_analysis_config(rshunt=rshunt)
 
+        if self._phase180_checkbox.isChecked():
+            self._readout.update_analysis_config(add_180phase=True)
+        else:
+            self._readout.update_analysis_config(add_180phase=False)
+            
 
         r0 = float(self._r0_spinbox.value()/1000)
         self._readout.update_analysis_config(r0=r0)
@@ -1563,6 +1568,12 @@ class ToolsWindow(QtWidgets.QWidget):
         dt_unit_label.setObjectName('dtUniyLabel')
         dt_unit_label.setText('[mus]')
         
+        # add phase
+        self._phase180_checkbox = QtWidgets.QCheckBox(self._didv_tab)
+        self._phase180_checkbox.setGeometry(QtCore.QRect(215, 117, 149, 21))
+        self._phase180_checkbox.setFont(font)
+        self._phase180_checkbox.setObjectName('phase180CheckBox')
+        self._phase180_checkbox.setText('Add 180 Phase')
 
         
 

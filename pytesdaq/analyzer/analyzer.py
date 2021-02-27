@@ -260,8 +260,8 @@ class Analyzer:
         dt = self._analysis_config['dt']
         r0 = self._analysis_config['r0'] 
         dutycycle=0.5
-
-
+        add180phase = self._analysis_config['add_180phase']
+             
         # check normalization
         norm = 1
         if unit is not None:
@@ -288,7 +288,7 @@ class Analyzer:
                                 rshunt,
                                 r0=r0, rp=rp,
                                 dutycycle=dutycycle,
-                                add180phase=False,
+                                add180phase=add180phase,
                                 dt0=dt)
             
             # process
@@ -523,6 +523,7 @@ class Analyzer:
         self._analysis_config['rp'] = 0.003
         self._analysis_config['r0'] = 0.2
         self._analysis_config['dt'] = 2e-6
+        self._analysis_config['add_180phase'] = False
         self._analysis_config['fit_didv'] = False
         self._analysis_config['didv_1pole'] = False
         self._analysis_config['didv_2pole'] = False

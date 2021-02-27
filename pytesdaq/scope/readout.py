@@ -256,7 +256,8 @@ class Readout:
                                fit_didv=None, didv_1pole=None,
                                didv_2pole=None, didv_3pole=None,
                                didv_measurement=None,
-                               rshunt=None, rp=None, r0=None, dt=None):
+                               rshunt=None, rp=None, r0=None,
+                               dt=None, add_180phase=None):
         
         """
         Update analysis configuration
@@ -311,6 +312,9 @@ class Readout:
             
         if dt is not None:
             self._analyzer.set_config('dt', dt)
+            
+        if add_180phase is not None:
+            self._analyzer.set_config('add_180phase', add_180phase)
             
             
         # redraw after analysis update
@@ -657,7 +661,7 @@ class Readout:
                                                        f"{p0_infinite:.2f}"])
                         
                     # Fall times
-                    falltime_name = ['Tau (L/R) [us]','Tau_eff [us]', 'Tau3 [us]']
+                    falltime_name = ['Tau+ (~Tau_L/R) [us]','Tau- (~Tau_eff) [us]', 'Tau3 [us]']
                     for ift in range(len(falltimes)):
                         falltime = falltimes[ift]*1e6
                         falltimes_list.append([falltime_name[ift], f"{falltime:.3f}"])

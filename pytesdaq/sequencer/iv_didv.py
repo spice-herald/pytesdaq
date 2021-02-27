@@ -160,6 +160,7 @@ class IV_dIdV(Sequencer):
             tes_bias_vect = sweep_config['tes_bias_vect']
             nb_steps = len(tes_bias_vect)
             istep = 0
+           
             for bias in tes_bias_vect:
 
                 # set bias all channels
@@ -172,9 +173,9 @@ class IV_dIdV(Sequencer):
 
                 # sleep
                 sleeptime_s = 10
-                if tes_bias_change_sleep_time in sweep_config:
-                    sleeptime_s = sweep_config['tes_bias_change_sleep_time']
-                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
+                #if tes_bias_change_sleep_time in sweep_config:
+                #    sleeptime_s = sweep_config['tes_bias_change_sleep_time']
+                #print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
                 time.sleep(sleeptime_s)
                 
 
@@ -571,7 +572,7 @@ class IV_dIdV(Sequencer):
                     tes_bias_vect = tes_bias_vect[::-1]
              
             else:
-                required_parameter = ['tes_bias_min','tes_bias_max','tes_bias_step_n',
+                required_parameter = ['use_negative_bias', 'tes_bias_min','tes_bias_max','tes_bias_step_n',
                                       'tes_bias_step_t','tes_bias_t']
 
                 for key in required_parameter:
@@ -596,6 +597,8 @@ class IV_dIdV(Sequencer):
                                                          axis=0))
 
                 tes_bias_vect = tes_bias_vect[::-1]
+                if self._sequencer_config['use_negative_bias']:
+                    tes_bias_vect = [-x for x in tes_bias_vect]
              
                 
             config_dict['tes_bias_vect'] =  tes_bias_vect 
