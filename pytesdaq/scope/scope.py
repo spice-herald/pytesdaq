@@ -498,26 +498,18 @@ class MainWindow(QtWidgets.QMainWindow):
         
         if self._running_avg_checkbox.isChecked():
             self._running_avg_spinbox.setEnabled(True)
-            self._pileup_cut_checkbox.setEnabled(True)
+            #self._pileup_cut_checkbox.setEnabled(True)
             value = int(self._running_avg_spinbox.value())
             self._readout.update_analysis_config(enable_running_avg=True, nb_events_avg=value)
         else:
             #self._running_avg_spinbox.setProperty('value', 1)
             self._running_avg_spinbox.setEnabled(False)
-            self._pileup_cut_checkbox.setEnabled(False)
-            self._pileup_cut_checkbox.setChecked(False)
+            #self._pileup_cut_checkbox.setEnabled(False)
+            #self._pileup_cut_checkbox.setChecked(False)
             self._readout.update_analysis_config(enable_running_avg=False,
                                                  enable_pileup_rejection=False)
 
-    def _handle_pileup_cut(self):
-        
-        if self._pileup_cut_checkbox.isChecked():
-            self._readout.update_analysis_config(enable_pileup_rejection=True)
-        else:
-            self._readout.update_analysis_config(enable_pileup_rejection=False)
-       
-
-
+  
 
 
     def _init_main_frame(self):
@@ -1084,7 +1076,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # add running avg box
         self._running_avg_checkbox = QtWidgets.QCheckBox(self._tools_frame)
-        self._running_avg_checkbox.setGeometry(QtCore.QRect(13, 10, 109, 21))
+        self._running_avg_checkbox.setGeometry(QtCore.QRect(13, 15, 109, 21))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -1095,25 +1087,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # running avg spin box
         self._running_avg_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._running_avg_spinbox.setEnabled(False)
-        self._running_avg_spinbox.setGeometry(QtCore.QRect(31, 34, 85, 21))
+        self._running_avg_spinbox.setGeometry(QtCore.QRect(31, 39, 85, 21))
         self._running_avg_spinbox.setMaximum(500)
         self._running_avg_spinbox.setProperty('value', 1)
         self._running_avg_spinbox.setObjectName('runningAvgSpinBox')
         self._running_avg_spinbox.setEnabled(False)
 
-        
-        self._pileup_cut_checkbox = QtWidgets.QCheckBox(self._tools_frame)
-        self._pileup_cut_checkbox.setGeometry(QtCore.QRect(13, 65, 130, 21))
-        self._pileup_cut_checkbox.setFont(font)
-        self._pileup_cut_checkbox.setObjectName('runningAvgCheckBox')
-        self._pileup_cut_checkbox.setText('Pileup Rejection')
-        self._pileup_cut_checkbox.setEnabled(False)
-
-
-        
+               
         # add lopw pass filter
         self._lpfilter_checkbox = QtWidgets.QCheckBox(self._tools_frame)
-        self._lpfilter_checkbox.setGeometry(QtCore.QRect(13, 96, 119, 21))
+        self._lpfilter_checkbox.setGeometry(QtCore.QRect(13, 86, 119, 21))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
@@ -1125,7 +1108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # lp filter spin box
         self._lpfilter_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._lpfilter_spinbox.setEnabled(False)
-        self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 120, 83, 21))
+        self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 110, 83, 21))
         self._lpfilter_spinbox.setMinimum(1)
         self._lpfilter_spinbox.setMaximum(500)
         self._lpfilter_spinbox.setObjectName('lpFilterSpinBox')
@@ -1139,8 +1122,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tools_button.clicked.connect(self._show_tools)
         self._read_board_button.clicked.connect(self._handle_read_board)
         #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
-        self._pileup_cut_checkbox.toggled.connect(self._handle_pileup_cut)
-
+     
 
     def _set_display_button(self, do_run):
         
@@ -1181,7 +1163,7 @@ class ToolsWindow(QtWidgets.QWidget):
         #layout.addWidget(self.label)
         #self.setLayout(layout)
 
-        self.resize(440, 410)
+        self.resize(500, 510)
         self.setStyleSheet('background-color: rgb(211, 252, 255);')
         self.setWindowTitle('Tools')
 
@@ -1201,7 +1183,7 @@ class ToolsWindow(QtWidgets.QWidget):
         # register
         self._readout.register_tools_ui(self._fit_button, self._text_field,
                                         self._rshunt_spinbox, self._rp_spinbox,
-                                        self._dt_spinbox)
+                                        self._dt_spinbox, self._pileup_selection)
 
         
         
@@ -1292,6 +1274,55 @@ class ToolsWindow(QtWidgets.QWidget):
             self._readout.update_analysis_config(didv_3pole=False)
       
 
+    def _handle_cuts(self):
+        """
+        Handle cut selection
+        """
+        cut_dict = dict()
+        if self._minmax_checkbox.isChecked():
+            sigma = int(self._minmax_spinbox.value())
+            cut_dict['minmax'] = sigma
+
+        if self._ofamp_checkbox.isChecked():
+            sigma = int(self._ofamp_spinbox.value())
+            cut_dict['ofamp'] = sigma
+
+        if self._slope_checkbox.isChecked():
+            sigma = int(self._slope_spinbox.value())
+            cut_dict['slope'] = sigma
+
+        if self._baseline_checkbox.isChecked():
+            sigma = int(self._baseline_spinbox.value())
+            cut_dict['baseline'] = sigma
+
+        if self._ofchi2_checkbox.isChecked():
+            sigma = int(self._ofchi2_spinbox.value())
+            cut_dict['ofchi2'] = sigma
+
+
+        self._readout.update_analysis_config(pileup_cuts=cut_dict)
+
+
+        
+    def _handle_pileup_rejection(self):
+        """
+        Handle pileup rejection enabling
+        """
+
+        # enable
+        do_pileup_rejection = False
+        if self._pileup_selection.isChecked():
+            self._tools_tabs.setTabVisible(1, True)
+            self._tools_tabs.setCurrentIndex(1)
+            self._handle_cuts()
+            do_pileup_rejection = True
+        else:
+            self._tools_tabs.setTabVisible(1, False)
+            
+        self._readout.update_analysis_config(enable_pileup_rejection=do_pileup_rejection)
+
+            
+            
     def _handle_measurement(self):
         """
         Handle measurement selection
@@ -1317,6 +1348,7 @@ class ToolsWindow(QtWidgets.QWidget):
                 self._rp_spinbox.setEnabled(True)
                 measurement = 'Rn'
             self._tools_tabs.setTabVisible(0,True)
+            self._tools_tabs.setCurrentIndex(0)
             self._r0_spinbox.setEnabled(False)
             
         elif selection == 'Transition dIdV Fit':
@@ -1331,6 +1363,7 @@ class ToolsWindow(QtWidgets.QWidget):
             self._rp_spinbox.setEnabled(True)
             self._r0_spinbox.setEnabled(True)
             self._tools_tabs.setTabVisible(0,True)
+            self._tools_tabs.setCurrentIndex(0)
             measurement = 'R0'
                        
         else:
@@ -1338,6 +1371,7 @@ class ToolsWindow(QtWidgets.QWidget):
             self._didv_fit_2pole.setChecked(False)
             self._didv_fit_3pole.setChecked(False)
             self._tools_tabs.setTabVisible(0,False)
+            self._tools_tabs.setCurrentIndex(0)
 
         # clear field
         self._text_field.clear()
@@ -1346,6 +1380,8 @@ class ToolsWindow(QtWidgets.QWidget):
         self._readout.update_analysis_config(didv_measurement=measurement)
 
 
+
+        
     def _setup_didv_fit(self):
         """
         Set units and running avg for dIdV"
@@ -1375,7 +1411,7 @@ class ToolsWindow(QtWidgets.QWidget):
 
         # add main frame
         self._main_frame = QtWidgets.QFrame(self)
-        self._main_frame.resize(440, 410)
+        self._main_frame.resize(500, 510)
         #self._main_frame.setGeometry(QtCore.QRect(290, 76, 597, 597))
         self._main_frame.setStyleSheet('background-color: rgb(211, 252, 255);')
         self._main_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
@@ -1388,20 +1424,58 @@ class ToolsWindow(QtWidgets.QWidget):
         # add pileup
          # 1 pole enable fit
         self._pileup_selection = QtWidgets.QCheckBox(self._main_frame)
-        self._pileup_selection.setGeometry(QtCore.QRect(220, 25, 139, 21))
+        self._pileup_selection.setGeometry(QtCore.QRect(380, 25, 139, 41))
         font = QtGui.QFont()
         font.setBold(True)
         font.setWeight(75)
         self._pileup_selection.setFont(font)
         self._pileup_selection.setObjectName('Pileup')
-        self._pileup_selection.setText('Pileup Rejection')
+        self._pileup_selection.setText(' Pileup \n Rejection')
         self._pileup_selection.setEnabled(False)
 
 
+        # line separator
+        line_separator = QtWidgets.QFrame(self._main_frame)
+        line_separator.setFrameShape(QtWidgets.QFrame.HLine)
+        line_separator.setFrameShadow(QtWidgets.QFrame.Sunken)
+        line_separator.setGeometry(QtCore.QRect(10, 95, 470, 5))
+
+
+        # SQUID 
+        self._squid_button = QtWidgets.QPushButton(self._main_frame)
+        self._squid_button.setGeometry(QtCore.QRect(30, 15, 89, 55))
+        self._squid_button.setFont(font)
+        self._squid_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._squid_button.setObjectName('squidButton')
+        self._squid_button.setText('SQUID\nCheck')
+        self._squid_button.setEnabled(False)
+
+        # Zero Once
+        self._zero_button = QtWidgets.QPushButton(self._main_frame)
+        self._zero_button.setGeometry(QtCore.QRect(140, 15, 89, 55))
+        self._zero_button.setFont(font)
+        self._zero_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._zero_button.setObjectName('zeroButton')
+        self._zero_button.setText('ZERO\nOnce')
+        self._zero_button.setEnabled(False)
+
+        # Place holder
+        self._notsure_button = QtWidgets.QPushButton(self._main_frame)
+        self._notsure_button.setGeometry(QtCore.QRect(250, 15, 89, 55))
+        self._notsure_button.setFont(font)
+        self._notsure_button.setStyleSheet('background-color: rgb(162, 162, 241);')
+        self._notsure_button.setObjectName('notsureButton')
+        #self._notsure_button.setText('Whatever')
+        self._notsure_button.setEnabled(False)
+
+        
+        
+        
+        
         
         # Add fit selection
         self._measurement_combobox = QtWidgets.QComboBox(self._main_frame)
-        self._measurement_combobox.setGeometry(QtCore.QRect(25, 22, 170, 29))
+        self._measurement_combobox.setGeometry(QtCore.QRect(155, 122, 170, 29))
         self._measurement_combobox.setObjectName('measurementComboBox')
         self._measurement_combobox.setStyleSheet("QComboBox"
                                           "{"
@@ -1421,7 +1495,7 @@ class ToolsWindow(QtWidgets.QWidget):
         # add tab
         self._tools_tabs = QtWidgets.QTabWidget(self._main_frame)
         self._tools_tabs.setEnabled(True)
-        self._tools_tabs.setGeometry(QtCore.QRect(12, 75, 410, 325))
+        self._tools_tabs.setGeometry(QtCore.QRect(12, 170, 475, 325))
         font.setBold(True)
         font.setWeight(75)
         self._tools_tabs.setFont(font)
@@ -1429,17 +1503,19 @@ class ToolsWindow(QtWidgets.QWidget):
         self._tools_tabs.setStyleSheet('')
         
         self._init_didv_tab()
+        self._init_cuts_tab()
         self._tools_tabs.setTabVisible(0, False)
-
+        self._tools_tabs.setTabVisible(1, False)
         
         # connect
         self._measurement_combobox.activated.connect(self._handle_measurement)
+        self._pileup_selection.toggled.connect(self._handle_pileup_rejection)
+
+
         
     def _init_didv_tab(self):
-        
-
         """
-        dIdV Tab
+        dIdV measurement Tab
         """
         self._didv_tab = QtWidgets.QWidget()
         self._didv_tab.setEnabled(True)
@@ -1579,7 +1655,7 @@ class ToolsWindow(QtWidgets.QWidget):
 
 
         self._fit_button = QtWidgets.QPushButton(self._didv_tab)
-        self._fit_button.setGeometry(QtCore.QRect(245, 25, 89, 55))
+        self._fit_button.setGeometry(QtCore.QRect(295, 35, 89, 55))
         self._fit_button.setFont(font)
         self._fit_button.setStyleSheet('background-color: rgb(162, 162, 241);')
         self._fit_button.setObjectName('fitButton')
@@ -1588,7 +1664,7 @@ class ToolsWindow(QtWidgets.QWidget):
 
 
         self._text_field = QtWidgets.QTextEdit(self._didv_tab)
-        self._text_field.setGeometry(QtCore.QRect(70, 150, 315, 138))
+        self._text_field.setGeometry(QtCore.QRect(80, 150, 365, 138))
         self._text_field.setReadOnly(True)
 
         self._save_result_button = QtWidgets.QPushButton(self._didv_tab)
@@ -1609,6 +1685,122 @@ class ToolsWindow(QtWidgets.QWidget):
         #self._didv_fit_2pole.toggled.connect(self._handle_fit_selection)
         #self._didv_fit_3pole.toggled.connect(self._handle_fit_selection)
         self._fit_button.clicked.connect(self._handle_fit)
+
+
+    def _init_cuts_tab(self):
+        """
+        Pileup Rejection cuts
+        """
+        self._pileup_cuts_tab = QtWidgets.QWidget()
+        self._pileup_cuts_tab.setEnabled(True)
+        self._pileup_cuts_tab.setStyleSheet('background-color: rgb(231, 252, 255);')
+        self._pileup_cuts_tab.setObjectName('pileupTab')
+        self._tools_tabs.addTab(self._pileup_cuts_tab, 'Pileup Cuts')
+        
+        # font
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+
+
+        # Title  Label
+        
+        cut_title_label = QtWidgets.QLabel(self._pileup_cuts_tab)
+        cut_title_label.setGeometry(QtCore.QRect(10, 20, 250, 15))
+        cut_title_label.setFont(font)
+        cut_title_label.setObjectName('cutsLabel')
+        cut_title_label.setText('Cut name and sigma (ordered!):')
+
+        
+        # Minmax cut
+        self._minmax_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)
+        self._minmax_checkbox.setGeometry(QtCore.QRect(15, 50, 120, 21))
+        self._minmax_checkbox.setFont(font)
+        self._minmax_checkbox.setObjectName('minmaxCheckBox')
+        self._minmax_checkbox.setText('MinMax')
+        self._minmax_checkbox.setChecked(True)
+
+        # Minmax sigma
+        self._minmax_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
+        self._minmax_spinbox.setGeometry(QtCore.QRect(150, 50, 40, 20))
+        self._minmax_spinbox.setMaximum(10)
+        self._minmax_spinbox.setProperty('value', 2)
+        self._minmax_spinbox.setObjectName('minmaxSpinBox')
+        
+
+        # OF Amp cut
+        self._ofamp_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)
+        self._ofamp_checkbox.setGeometry(QtCore.QRect(15, 80, 120, 21))
+        self._ofamp_checkbox.setFont(font)
+        self._ofamp_checkbox.setObjectName('ofampCheckBox')
+        self._ofamp_checkbox.setText('OF Amplitude')
+
+        # OF Amp sigma
+        self._ofamp_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
+        self._ofamp_spinbox.setGeometry(QtCore.QRect(150, 80, 40, 20))
+        self._ofamp_spinbox.setMaximum(10)
+        self._ofamp_spinbox.setProperty('value', 2)
+        self._ofamp_spinbox.setObjectName('ofampSpinBox')
+        
+        # Slope cut
+        self._slope_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)
+        self._slope_checkbox.setGeometry(QtCore.QRect(15, 110, 120, 21))
+        self._slope_checkbox.setFont(font)
+        self._slope_checkbox.setObjectName('slopeCheckBox')
+        self._slope_checkbox.setText('Slope')
+
+        # Slope sigma
+        self._slope_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
+        self._slope_spinbox.setGeometry(QtCore.QRect(150, 110, 40, 20))
+        self._slope_spinbox.setMaximum(10)
+        self._slope_spinbox.setProperty('value', 2)
+        self._slope_spinbox.setObjectName('slopeSpinBox')
+        
+
+
+        # Baseline cut
+        self._baseline_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)
+        self._baseline_checkbox.setGeometry(QtCore.QRect(15, 140, 120, 21))
+        self._baseline_checkbox.setFont(font)
+        self._baseline_checkbox.setObjectName('baselineCheckBox')
+        self._baseline_checkbox.setText('Baseline')
+
+        # Baseline sigma
+        self._baseline_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
+        self._baseline_spinbox.setGeometry(QtCore.QRect(150, 140, 40, 20))
+        self._baseline_spinbox.setMaximum(10)
+        self._baseline_spinbox.setProperty('value', 2)
+        self._baseline_spinbox.setObjectName('baselineSpinBox')
+        
+
+        # OF chi2 cut
+        self._ofchi2_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)
+        self._ofchi2_checkbox.setGeometry(QtCore.QRect(15, 170, 120, 21))
+        self._ofchi2_checkbox.setFont(font)
+        self._ofchi2_checkbox.setObjectName('ofchi2CheckBox')
+        self._ofchi2_checkbox.setText('OF Chi2')
+
+        # Ofchi2 sigma
+        self._ofchi2_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
+        self._ofchi2_spinbox.setGeometry(QtCore.QRect(150, 170, 40, 20))
+        self._ofchi2_spinbox.setMaximum(10)
+        self._ofchi2_spinbox.setProperty('value', 3)
+        self._ofchi2_spinbox.setObjectName('ofchi2SpinBox')
+        
+
+        # connect
+        self._minmax_checkbox.toggled.connect(self._handle_cuts)
+        self._ofamp_checkbox.toggled.connect(self._handle_cuts)
+        self._ofchi2_checkbox.toggled.connect(self._handle_cuts)
+        self._slope_checkbox.toggled.connect(self._handle_cuts)
+        self._baseline_checkbox.toggled.connect(self._handle_cuts)
+        self._minmax_spinbox.valueChanged.connect(self._handle_cuts)
+        self._ofamp_spinbox.valueChanged.connect(self._handle_cuts)
+        self._ofchi2_spinbox.valueChanged.connect(self._handle_cuts)
+        self._slope_spinbox.valueChanged.connect(self._handle_cuts)
+        self._baseline_spinbox.valueChanged.connect(self._handle_cuts)
+
+        
         
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)

@@ -16,7 +16,7 @@ class Analyzer:
 
         # Running avg data buffer
         self._buffer = None
-        self._nb_events_buffer = 0
+        self._nb_events_running_avg = 0
 
         # Running avg data buffer cuts
         self._buffer_cuts = None
@@ -69,16 +69,21 @@ class Analyzer:
                 self._analysis_config[key] = val
             if self._analysis_config['norm_type']=='NoNorm':
                 self._analysis_config['norm_list'] = None
+
+
                 
 
         # ---------------------
-        # Pileup rejection...
+        # Pileup rejection calc
+        # (for running avg)
         # ---------------------
-
-        if self._analysis_config['enable_pileup_rejection']:
-            self._calc_cuts(data_array, adc_config['sample_rate'])
-            
-
+        cuts_val = None
+        if (self._analysis_config['enable_pileup_rejection']
+            and self._analysis_config['pileup_cuts'] is not None):
+            cuts_val = self._calc_cuts(data_array, adc_config['sample_rate'])
+           
+           
+    
           
         # ---------------------
         # normalization
@@ -92,8 +97,7 @@ class Analyzer:
 
         # ---------------------
         # PSD
-        # ---------------------
-        
+        # ---------------------        
         if self._analysis_config['calc_psd']:
             data_array = self.calc_psd(data_array, adc_config['sample_rate'])
         else:
@@ -108,27 +112,23 @@ class Analyzer:
         if self._analysis_config['enable_running_avg']:
                         
             # store in buffer
-            self._store_data(data_array)
+            self._store_data(data_array, cuts_val)
 
             # get running average
             data_array = self._calc_running_avg()
                         
         else:
             self._buffer = None
-            self._nb_events_buffer = 0
+            self._nb_events_running_avg = 0
+            self._buffer_cuts = None
 
-
-
-        #if self._analysis_config['fit_didv'] and 'offset' not in didv_dict:
-        #    didv_dict['offset'] = self.calc_offset(data_array)
-                
 
                 
         # ---------------------
         # dIdV Fit
         # ---------------------
         didv_data_dict = None
-        if self._analysis_config['fit_didv'] and self._nb_events_buffer>=25:
+        if self._analysis_config['fit_didv'] and self._nb_events_running_avg>=25:
             
             # check if prior results available
             #if self._didv_fit_results is not None:
@@ -380,41 +380,91 @@ class Analyzer:
 
     
     
-    def _store_data(self, data_array):
+    def _store_data(self, data_array, cuts_val):
         """
         Store data in buffer for running_avg
         Buffer dimensions: (nb_channels, nb_samples, nb_events)
         """
 
-        # add extra dimension
+        # add extra dimension to data array
         data_array.shape +=(1,)
-
-        # check dimension
+        
+        
+        # check data buffer dimension
         dims_buffer = []
-        if self._buffer is not None:
+        do_reset_buffer = False
+
+        if (self._analysis_config['reset_running_avg']
+            or self._buffer is None
+            or (self._analysis_config['enable_pileup_rejection']
+                and self._buffer_cuts is None)):      
+            do_reset_buffer = True
+        else:
+            
+            # data buffer
             dims_buffer = self._buffer.shape
             dims_array = data_array.shape
             if dims_buffer[0:2] != dims_array[0:2]:
-                do_reset = True
-            
+                do_reset_buffer = True
+
+            # cut buffer
+            if self._analysis_config['enable_pileup_rejection']:
+
+                for cut_name,val in self._buffer_cuts.items():
+
+                    # dimension
+                    if (val.shape[0] != dims_buffer[0]
+                        or val.shape[1] != dims_buffer[2]):
+                        do_reset_buffer = True
+
+                    # cut availability
+                    if cut_name not in cuts_val:
+                        do_reset_buffer = True
+
+                
+                        
+
         # reset if needed
-        if self._analysis_config['reset_running_avg'] or self._buffer is None:
+        if do_reset_buffer:
+            
+            # data buffer
             self._buffer = data_array
-            self._nb_events_buffer = 1
+
+            # cut buffer
+            if self._analysis_config['enable_pileup_rejection']:
+                self._buffer_cuts = cuts_val
+             
+            # reset internal parameters
+            self._nb_events_running_avg = 1
             self._analysis_config['reset_running_avg'] = False
+            
             return
 
         
         # delete elements
-        if self._analysis_config['nb_events_avg']<=dims_buffer[2]:
-            nb_to_delete = dims_buffer[2]-self._analysis_config['nb_events_avg']+1
+        if self._nb_events_running_avg>=self._analysis_config['nb_events_avg']:
+
+            nb_to_delete = self._nb_events_running_avg-self._analysis_config['nb_events_avg']+1
+                    
+            # data buffer
             self._buffer = np.delete(self._buffer, list(range(nb_to_delete)), axis=2)
-            
+
+            # cut buffer
+            if self._analysis_config['enable_pileup_rejection']:
+                for cut_name,val in self._buffer_cuts.items():
+                    self._buffer_cuts[cut_name] = np.delete(val,
+                                                            list(range(nb_to_delete)),
+                                                            axis=1)
+                
         # append elements
         self._buffer = np.append(self._buffer, data_array, axis=2)
-        self._nb_events_buffer = self._buffer.shape[2]
+        if self._analysis_config['enable_pileup_rejection']:
+            for cut_name,val in self._buffer_cuts.items():
+                self._buffer_cuts[cut_name] = np.append(self._buffer_cuts[cut_name],
+                                                        cuts_val[cut_name], axis=1)
 
-    
+
+        
         
 
     def _calc_running_avg(self):
@@ -427,80 +477,156 @@ class Analyzer:
             return  data_array
 
     
-        if self._buffer is not None:
+        # apply pileup rejection cuts
+        nb_events = self._buffer.shape[2]
+        self._nb_events_running_avg = nb_events
+        if (self._analysis_config['enable_pileup_rejection']
+            and self._buffer_cuts is not None
+            and nb_events>2):
 
-            # apply pileup rejection cuts
-            nb_events = self._buffer.shape[2]
-            if self._analysis_config['enable_pileup_rejection'] and nb_events>2:
-
-                # initialize
-                nb_channels = self._buffer.shape[0]
-                nb_samples =  self._buffer.shape[1]
-                data_array = np.zeros((nb_channels,nb_samples), dtype=np.float64)
+            # initialize
+            nb_channels = self._buffer.shape[0]
+            nb_samples =  self._buffer.shape[1]
+            data_array = np.zeros((nb_channels,nb_samples), dtype=np.float64)
             
-                # loop channels
-                for ichan in range(nb_channels):
+            # loop channels
+            nb_events_min = 999999
+            for ichan in range(nb_channels):
+                    
+                cut_inds = np.arange(nb_events)
+                cut = np.ones(nb_events, dtype=bool)
 
-                    # min max
-                    cut_data = self._buffer_cuts['minmax'][ichan,:]
-                    cminmax = qp.cut.iterstat(cut_data, cut=2, precision=10000.0)[2]
-                    data = self._buffer[ichan,:,cminmax]
-                    data_array[ichan,:] = np.mean(data, axis=0)
-            else:
-                data_array = np.mean(self._buffer, axis=2)
 
+                for cut_name,cut_sigma in self._analysis_config['pileup_cuts'].items():
+                    cut_data = self._buffer_cuts[cut_name][ichan,cut_inds]
+                    cut = qp.cut.iterstat(cut_data, cut=cut_sigma, precision=10000.0)[2]
+                    cut_inds = np.where(cut)[0]
+               
+
+                # apply cut
+                ctot = np.zeros(nb_events, dtype=bool)
+                ctot[cut_inds] = True
+                data = self._buffer[ichan,:,ctot]
+                if data.shape[1]<nb_events_min:
+                    nb_events_min = data.shape[0]
+                data_array[ichan,:] = np.mean(data, axis=0)
+
+            self._nb_events_running_avg = nb_events_min
+        else:
+            data_array = np.mean(self._buffer, axis=2)
+
+                   
         return data_array
 
 
-    
+
     
     def _calc_cuts(self, data_array, sample_rate):
         """
-        Calculate cuts  (require running average)
+        Calculate cut values for pile-up rejection
         """
 
-        # initialize if no cut calculation yet
-        # or running average reset
-        if (self._buffer is None or self._analysis_config['reset_running_avg']
-            or self._buffer_cuts is None):
-            self._buffer_cuts = dict()
-            self._analysis_config['reset_running_avg'] = True
-        else:
-            nb_channels = data_array.shape[0]
-            nb_events_buffer = self._buffer.shape[2]
-            for cut,val in self._buffer_cuts.items():
-                if (val.shape[0]!=nb_channels
-                    or val.shape[1]!=nb_events_buffer):
-                    self._buffer_cuts = dict()
-                    self._analysis_config['reset_running_avg'] = True
-                    
-                    
+        # initialize 
+        cuts_val = dict()
+        nb_channels = data_array.shape[0]
+        nb_samples = data_array.shape[1]
+        
+
         # --------
         # min max
-        # --------
+        # --------    
+        if 'minmax' in self._analysis_config['pileup_cuts']:
+            data_max = np.amax(data_array, axis=1)
+            data_min = np.amin(data_array, axis=1)
+            cut_val = data_max-data_min
+            cut_val.shape += (1,)
+            cuts_val['minmax'] = cut_val
 
-        # calc
-        data_max = np.amax(data_array, axis=1)
-        data_min = np.amin(data_array, axis=1)
-        min_max = data_max-data_min
 
-        # store
-        min_max.shape +=(1,)
-        if 'minmax' not in self._buffer_cuts:
-            self._buffer_cuts['minmax'] = min_max
-        else:
+        # -----------
+        # OF amp/chi2
+        # -----------
+        if ('ofamp' in self._analysis_config['pileup_cuts'] or
+            'ofchi2' in self._analysis_config['pileup_cuts']):
+                        
+            #  Build template
+            tau_risepulse = 10.0e-6
+            tau_fallpulse = 100.0e-6
             
-            # delete previous value if needed
-            nb_events_buffer = self._buffer_cuts['minmax'].shape[1]
-            if self._analysis_config['nb_events_avg']<=nb_events_buffer:
-                nb_to_delete = nb_events_buffer-self._analysis_config['nb_events_avg']+1
-                self._buffer_cuts['minmax'] = np.delete(self._buffer_cuts['minmax'],
-                                                        list(range(nb_to_delete)), axis=1)
-            # append
-            self._buffer_cuts['minmax'] = np.append(self._buffer_cuts['minmax'],
-                                                    min_max, axis=1)
+            ind_trigger = round(nb_samples/2)
+            time = 1.0/sample_rate*(np.arange(1, nb_samples+1)-ind_trigger)
+            lgc_b0 = time < 0.0
+            
+            dummytemplate = (1.0-np.exp(-time/tau_risepulse))*np.exp(-time/tau_fallpulse)
+            dummytemplate[lgc_b0]=0.0
+            dummytemplate = dummytemplate/max(dummytemplate)
+            
+            # assume we just have white noise
+            dummypsd = np.ones(nb_samples)
+            
+            # OF
+            amp = list()
+            chi2 = list()
+            for ichan in range(0, nb_channels):
+                trace = data_array[ichan, :]
+                trace_amp, trace_t0, trace_chi2 = qp.ofamp(trace, dummytemplate, dummypsd, sample_rate)
+                amp.append(trace_amp)
+                chi2.append(trace_chi2)
+
+            # store
+            if 'ofamp' in self._analysis_config['pileup_cuts']:
+                cut_val = np.asarray(amp)
+                cut_val.shape += (1,)
+                cuts_val['ofamp'] = cut_val
+
+            if 'ofchi2' in self._analysis_config['pileup_cuts']:
+                cut_val = np.asarray(chi2)
+                cut_val.shape += (1,)
+                cuts_val['ofchi2'] = cut_val
+        
+            
+
+            
+        
+        # -----------
+        # slope
+        # -----------
+
+        if 'slope' in self._analysis_config['pileup_cuts']:
+        
+            # interval definition
+            slope_rangebegin = range(0, int(nb_samples/10))
+            slope_rangeend = range(int(9*nb_samples/10), nb_samples)
+            
+            # calculate meam
+            traces_begin = np.mean(data_array[:, slope_rangebegin], axis=1)
+            traces_end = np.mean(data_array[:, slope_rangeend], axis=1)
+
+            # slope
+            cut_val = traces_end - traces_begin
+            cut_val.shape += (1,)
+
+            # store
+            cuts_val['slope'] = cut_val 
 
 
+
+        
+        # -----------
+        # baseline
+        # ----------- 
+        if 'baseline' in self._analysis_config['pileup_cuts']:
+            cut_val =  np.mean(data_array, axis=1)
+            cut_val.shape += (1,)
+            cuts_val['baseline'] = cut_val 
+        
+
+        return cuts_val
+    
+
+  
+
+        
         
     def _initialize_config(self):
         """
@@ -515,7 +641,6 @@ class Analyzer:
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
         self._analysis_config['nb_events_avg'] = 1
-        self._analysis_config['enable_pileup_rejection'] = False
         self._analysis_config['signal_gen_current'] = None
         self._analysis_config['signal_gen_frequency'] = None
         self._analysis_config['tes_bias_list'] = None
@@ -529,3 +654,8 @@ class Analyzer:
         self._analysis_config['didv_2pole'] = False
         self._analysis_config['didv_3pole'] = False
         self._analysis_config['didv_measurement'] = False
+        self._analysis_config['enable_pileup_rejection'] = False
+        self._analysis_config['pileup_cuts'] = None
+        
+        
+        

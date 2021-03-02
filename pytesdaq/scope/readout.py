@@ -100,11 +100,14 @@ class Readout:
 
             
     def register_tools_ui(self, fit_button, result_field,
-                          rshunt_spinbox, rp_spinbox, dt_spinbox):
+                          rshunt_spinbox, rp_spinbox, dt_spinbox,
+                          pileup_checkbox):
         self._ui_widget['fit'] = fit_button
         self._ui_widget['rshunt'] = rshunt_spinbox
         self._ui_widget['rp'] = rp_spinbox
         self._ui_widget['dt'] = dt_spinbox
+        self._ui_widget['pileup'] = pileup_checkbox
+        
         self._fit_result_field = result_field
 
 
@@ -250,6 +253,7 @@ class Readout:
     def update_analysis_config(self, norm_type=None, unit=None,
                                calc_psd=None,
                                enable_pileup_rejection=None,
+                               pileup_cuts=None,
                                enable_running_avg=None,
                                reset_running_avg=None,
                                nb_events_avg=None,
@@ -316,6 +320,11 @@ class Readout:
         if add_180phase is not None:
             self._analyzer.set_config('add_180phase', add_180phase)
             
+        if pileup_cuts is not None:
+            self._analyzer.set_config('pileup_cuts', pileup_cuts)
+
+
+
             
         # redraw after analysis update
         self._first_draw = True
@@ -323,10 +332,23 @@ class Readout:
 
         # reset running avg
         if (norm_type is not None or unit is not None or 
-            calc_psd is not None or enable_pileup_rejection is not None):
+            calc_psd is not None or enable_pileup_rejection is not None or
+            pileup_cuts is not None):
             self._analyzer.set_config('reset_running_avg', True)
 
-        
+
+        # ui update
+
+        if self._is_qt_ui:
+            
+            # pileup:
+            if enable_running_avg is not None:
+                if enable_running_avg:
+                    self._ui_widget['pileup'].setEnabled(True)
+                else:
+                    self._ui_widget['pileup'].setChecked(False)
+                    self._ui_widget['pileup'].setEnabled(False)
+            
 
     def set_auto_scale(self, enable_auto_scale):
         self._enable_auto_scale  = enable_auto_scale
