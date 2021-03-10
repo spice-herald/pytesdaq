@@ -58,9 +58,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._init_channel_frame()
         self._init_tools_frame()
 
-        # tools
-        self._tools = None
-        
+              
         # show
         self.show()
 
@@ -73,7 +71,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
 
-   
+        # tools
+        self._tools = ToolsWindow(readout=self._readout,
+                                  unit_combobox=self._unit_combobox,
+                                  running_avg_checkbox=self._running_avg_checkbox,
+                                  running_avg_spinbox=self._running_avg_spinbox)
+            
         
     def closeEvent(self,event):
         """
@@ -1142,8 +1145,6 @@ class MainWindow(QtWidgets.QMainWindow):
                                       unit_combobox=self._unit_combobox,
                                       running_avg_checkbox=self._running_avg_checkbox,
                                       running_avg_spinbox=self._running_avg_spinbox)
-            
-            
             
         self._tools.show()
         self._tools.setWindowState(QtCore.Qt.WindowActive)
