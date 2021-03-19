@@ -378,7 +378,7 @@ class Control:
                               detector_channel=None,
                               adc_id=None, adc_channel=None,
                               signal_gen_num=1, source=None,
-                              voltage=None, current=None,
+                              voltage=None, current=None, offset=None,
                               frequency=None, shape=None, phase_shift=0,
                               freq_div=0, half_pp_offset='OFF'):
 
@@ -390,6 +390,7 @@ class Control:
         current: peak-to-peak current amplitude  [uA]
         frequency: Float [Hz] (Default = 100 Hz)
         shape: 'triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise'
+        offset: DC offset in mV
         """
         
         
@@ -470,6 +471,12 @@ class Control:
                 self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
 
 
+            # offset
+            if offset is not None:
+                self._signal_generator_inst.set_offset(offset, unit='mV', source=signal_gen_num)
+
+
+                
             # source
             if source is not None:
 

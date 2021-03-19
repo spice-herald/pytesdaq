@@ -200,7 +200,91 @@ class KeysightFuncGenerator(VisaInstrument):
         return amplitude
 
 
+    def set_offset(self, offset, unit='V', source=1):
 
+        """
+        Set signal offset
+       
+        Parameters
+        ----------
+        offset: float
+          signal generator offset
+
+        unit: string
+          offset unit: 'V','mV'
+
+        source: integer
+           signal genertor output channel
+
+        """
+
+
+        unit_list = ['V', 'mV']
+
+        if unit not in unit_list:
+            print('ERROR: Unit not recognized!')
+            print('Choice is "V","mV"')
+            if self._raise_errors:
+                raise
+            else:
+                return
+                     
+        if unit == 'mV':
+            offset = float(offset)/1000
+            
+     
+        # set offset
+        command = 'SOUR' + str(source) + ':VOLT:OFFS ' + str(offset)
+        self._write(command)
+
+
+
+        
+    def get_offset(self, unit='V', source=1):
+        
+        """
+        Get signal offset
+       
+        Parameters
+        ----------
+       
+        unit: string
+          offset unit: 'V','mV'
+
+        source: integer
+           signal genertor output channel
+
+        Returns
+        -------
+        
+        offset: float
+          offset with unit based on "unit" parameter
+
+
+        """
+
+
+        unit_list = ['V', 'mV']
+
+        if unit not in unit_list:
+            print('ERROR: Unit not recognized!')
+            print('Choice is "V","mV"')
+            if self._raise_errors:
+                raise
+            else:
+                return
+         
+        # query offset
+        command = 'SOUR' + str(source) + ':VOLT:OFFS?'
+        offset = float(self._query(command))
+
+        if unit=='mV':
+            offset *= 1000
+
+        return offset
+
+
+          
     
     def set_frequency(self,frequency,unit='Hz',source=1):
 
