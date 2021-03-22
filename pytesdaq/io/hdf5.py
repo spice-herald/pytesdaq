@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from glob import glob
 from pytesdaq.utils import connection_utils
-
+import stat
 
 
 class H5Reader:
@@ -20,7 +20,7 @@ class H5Reader:
         self._file_list = list()
         
 
-        # current file  info
+        # current file info
         self._current_file = None
         self._current_file_name = None
         self._current_file_metadata = dict()
@@ -161,9 +161,47 @@ class H5Reader:
         return array
 
 
+
+    def read_single_event(self, event_index, filepath=None, include_metadata=False,
+                          adc_name='adc1'):
+        """
+        Read a single event
+        """
+
+        #  set file list
+        if filepath is not None:
+            self.set_files(filepath)
+
+        # open file if needed (first file)
+        if self._current_file is None:
+            self._open_file(self._file_list[0])
+
+        # dataset
+        dataset_name = 'event_' + str(event_index)
+        dataset = self._current_file[adc_name][dataset_name]
+        
+        # array
+        dims = dataset.shape
+        array = np.zeros((dims[0],dims[1]), dtype=np.int16)
+        dataset.read_direct(array)
+      
+        # metadata
+        if include_metadata:
+            info = self._extract_metadata(dataset.attrs)
+            info.update(self._extract_metadata(self._current_file[adc_name].attrs))
+            return array, info
+              
+        return array
+
+
+
+
+
+    
     
     def read_many_events(self, filepath=None, nevents=0,
                          output_format=1,
+                         event_indices=None,
                          include_metadata=False,
                          adc_name='adc1',
                          detector_chans=None,
@@ -222,7 +260,7 @@ class H5Reader:
         # detector/channel
         if detector_chans is not None and not isinstance(detector_chans, list):
             detector_chans = [detector_chans]
-
+        
 
                  
         # ---------------------
@@ -376,6 +414,7 @@ class H5Reader:
             # read event
             array_int, info = self.read_event(include_metadata=True)
 
+                       
             # add connections to metadata
             connections = self.get_connection_dict(adc_name=adc_name, metadata=info)
             info['detector_chans'] = [connections['detector_chans'][i] for i in array_indices]
@@ -681,7 +720,7 @@ class H5Reader:
     
   
 
-    def _open_file(self,file_name, rw_string='r', load_metadata=True):
+    def _open_file(self, file_name, rw_string='r', load_metadata=True):
         """
         open file 
         """
@@ -807,16 +846,268 @@ class H5Reader:
 
 
 
-    def _extract_metadata(self,attributes):   
+    def _extract_metadata(self, attributes):   
         metadata_dict = dict()
         for key in attributes.keys():
             value = attributes[key]
             if isinstance(value,bytes):
                 value = value.decode()
-            elif (isinstance(value,np.ndarray) and 
-                  value.dtype=='object'):
-                value = value.astype('str')
+            elif isinstance(value, np.ndarray):
+                if value.dtype == np.object:
+                    value = value.astype(str)
             metadata_dict[key] = value
         return metadata_dict
         
 
+
+
+    
+class H5Writer:
+    
+    def __init__(self, raise_errors=True, verbose=True):
+
+
+        self._raise_errors = raise_errors
+        self._verbose = verbose
+        
+        # list of files
+        self._series_name = None
+        self._series_path = None
+
+        # current file info
+        self._current_file = None
+        self._current_file_name = None
+        self._current_file_nb_events = 0
+        self._current_file_event_counter = 0
+        self._current_file_adc_group = None
+        self._current_file_detconfig_group = None
+        
+        # metadata
+        self._file_metadata = None
+        self._detector_config = None
+        self._adc_config  = None
+
+        
+        # event counter
+        self._global_event_counter = 0
+         
+        # file counter
+        self._file_counter = 0
+
+        # max event per dump
+        self._nb_events_per_dump_max = 1000
+        self._adc_name = 'adc1'
+
+
+    def initialize(self, series_name, data_path='./'):
+        """
+        Initialize new writing
+        """
+
+        self._series_name = series_name
+              
+        # clear everything
+        self.clear()
+
+        # create new directory
+        self._series_path = data_path + '/' + series_name
+        
+        if not os.path.isdir(self._series_path):
+            os.mkdir(self._series_path)
+            os.chmod(self._series_path,
+                     stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+
+
+    def set_metadata(self, file_metadata=None, adc_config=None, detector_config=None):
+        """
+        Set metadata which will be written  in each files
+        file_metadata = general data taking information (file level metadata)
+        adc_config = adc configuration (group level metadata)
+        detector_config = detector settings (group level metadata)
+        """
+
+        if file_metadata is not None:
+        
+            if isinstance(file_metadata, dict):
+                self._file_metadata = file_metadata
+            else:
+                print('WARNING: metadata needs to be a dictionary')
+
+                
+        if adc_config is not None:
+            
+            if isinstance(adc_config, dict):
+                self._adc_config = adc_config
+            else:
+                print('WARNING: adc_config needs to be a dictionary')
+
+
+        if detector_config is not None:
+
+            if isinstance(detector_config, dict):
+                self._detector_config = detector_config
+            else:
+                print('WARNING: detector config needs to be a dictionary')
+
+
+                
+
+            
+
+    def close(self):
+        """
+        close current file
+        """
+
+        self._close_file()
+            
+        
+    def clear(self):
+        self._close_file()
+        self._file_counter = 0
+        self._current_file = None
+        self._current_file_name = None
+        self._current_file_adc_group = None
+        self._current_file_detconfig_group = None    
+        self._current_file_event_counter = 0
+        self._global_event_counter = 0
+        self._file_metadata = None
+        self._detector_config = None
+        self._adc_config = None
+     
+        
+    def write_event(self, data_array, prefix=None, dataset_metadata=None,
+                    adc_name='adc1'):
+        """
+        write pulse data in files
+        """
+
+
+        # open file if needed
+        if (self._current_file is None or
+            self._current_file_event_counter >= self._nb_events_per_dump_max):
+            self._open_file(prefix=prefix)
+
+
+        # event counter
+        self._current_file_event_counter += 1
+        self._global_event_counter += 1
+        
+        # create dataset
+        dataset_name = 'event_' + str(self._current_file_event_counter)
+        dataset = self._current_file_adc_group.create_dataset(dataset_name, data=data_array)
+      
+        # add metadata
+        if dataset_metadata is not None:
+            for key,val in dataset_metadata.items():
+                if (isinstance(val, np.ndarray) and val.dtype.type is np.str_):
+                    dt = h5py.string_dtype()
+                    val = val.astype(dt)
+                dataset.attrs[key] = val
+
+        dataset.attrs['event_id'] = self._global_event_counter 
+        dataset.attrs['event_index'] = self._current_file_event_counter
+        dataset.attrs['event_num'] = self._file_counter *100000 + self._current_file_event_counter
+                
+        # update number of events
+        self._current_file_adc_group.attrs['nb_events'] = self._current_file_event_counter
+
+
+        # flush
+        self._current_file.flush()
+        
+
+
+
+
+
+                    
+    def _open_file(self, prefix=None):
+        """
+        open file 
+        """
+
+        # close file if needed
+        if self._current_file is not None:
+            self._close_file()
+
+
+        # dump
+        self._file_counter +=1
+        dump = str(self._file_counter)
+        for x in range(1,5-len(dump)):
+            if x>=1:
+                dump = '0'+dump
+
+
+        # full file name
+        file_name = self._series_path + '/'
+        if prefix is not None:
+            file_name += prefix + '_'
+        file_name += self._series_name + '_F' + dump + '.hdf5'
+        print('INFO: Opening file name "' + file_name + '"')
+        
+        
+        file = None
+        try:
+            file = h5py.File(file_name, 'w')
+        except:
+            print('ERROR: Unable to open file ' + file_name)
+            return
+
+        self._current_file = file
+        self._current_file_name = file_name
+        self._current_file_nb_events = 0
+        self._current_file_event_counter = 0
+
+
+        # file metadata
+        if self._file_metadata is not None:
+            for key,val in self._file_metadata.items():
+                if (isinstance(val, np.ndarray) and val.dtype.type is np.str_):
+                    dt = h5py.string_dtype()
+                    val = val.astype(dt)
+                self._current_file.attrs[key] = val
+                
+            
+        # detector config
+        if self._detector_config is not None:
+            for config_key,config_val in self._detector_config.items():
+                if isinstance(config_val,dict):
+                    self._current_file_detconfig_group = self._current_file.create_group(config_key)
+                    for key,val in config_val.items():
+                        if (isinstance(val, np.ndarray) and val.dtype.type is np.str_):
+                            dt = h5py.string_dtype()
+                            val = val.astype(dt)
+                        self._current_file_detconfig_group.attrs[key] = val
+        
+        # create adc group
+        if self._adc_config is not None:
+            for config_key,config_val in self._adc_config.items():
+                if isinstance(config_val,dict):
+                    self._current_file_adc_group  = self._current_file.create_group(config_key)
+                    for key,val in config_val.items():
+                        if (isinstance(val, np.ndarray) and val.dtype.type is np.str_):
+                            dt = h5py.string_dtype()
+                            val = val.astype(dt)
+                        self._current_file_adc_group.attrs[key] = val
+                                
+
+ 
+            
+        
+                   
+    def _close_file(self):
+
+        if self._current_file is not None:
+            self._current_file.close()
+  
+        # initialize
+        self._current_file = None
+        self._current_file_name = None
+        self._current_file_nb_events = 0
+        self._current_file_adc_group = None
+        self._current_file_detconfig_group = None
+        self._current_file_event_counter = 0
+             
+    
