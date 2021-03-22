@@ -212,6 +212,7 @@ class ContinuousData:
                               
                 # dataset metadata
                 dataset_metadata = dict()
+                dataset_metadata['data_mode'] = 'rand'
                 dataset_metadata['event_time'] = float(info['event_time']) + bin_start/self._sample_rate
 
 
@@ -272,7 +273,8 @@ class ContinuousData:
             self._filter_dict['f_fold'] = f_fold
             self._filter_dict['psd_fold'] = psd_fold
             
-
+        # cleanup
+        self._randoms_buffer = None
                 
     def acquire_trigger(self, template=None, noise_psd=None, verbose=True):
         """
@@ -344,6 +346,7 @@ class ContinuousData:
                              
                 # dataset metadata
                 dataset_metadata = dict()
+                dataset_metadata['data_mode'] = 'threshtrig'
                 dataset_metadata['event_time'] = filt.pulsetimes[itrig]
                 dataset_metadata['trigger_time'] = filt.pulsetimes[itrig]
                 dataset_metadata['trigger_amplitude'] = filt.pulseamps[itrig]
