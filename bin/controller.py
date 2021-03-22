@@ -39,11 +39,14 @@ if __name__ == "__main__":
     parser.add_argument('--signal_gen_off', action="store_true", help = 'Turn off signal gen')
     parser.add_argument('--signal_gen_voltage', nargs='?', type=float, const=nan, default=None,
                         help = 'Signal generator voltage amplitude [mV]')
+    parser.add_argument('--signal_gen_offset', nargs='?', type=float, const=nan, default=None,
+                        help = 'Signal generator DC offset [mV]')
     parser.add_argument('--signal_gen_frequency', nargs='?', type=float, const=nan, default=None,
                         help = 'Signal generator frequency [Hz]')
-
+    parser.add_argument('--signal_gen_shape', nargs='?', type=str, default=None,
+                        help = 'Signal generator shape [sine, square, triangle, ramp, dc]')
     
-
+ 
     # verbose
     parser.add_argument('--verbose',action="store_true",help='Screen output')
     
@@ -271,4 +274,9 @@ if __name__ == "__main__":
     if args.signal_gen_frequency is not None:
         myinstrument.set_signal_gen_params(frequency=args.signal_gen_frequency)
         
-    
+    if args.signal_gen_offset is not None:
+        myinstrument.set_signal_gen_params(offset=args.signal_gen_offset)
+        
+    if args.signal_gen_shape is not None:
+        myinstrument.set_signal_gen_params(shape=args.signal_gen_shape)
+     
