@@ -172,7 +172,7 @@ class IV_dIdV(Sequencer):
                     
 
                 # sleep
-                sleeptime_s = 10
+                sleeptime_s = 15
                 #if tes_bias_change_sleep_time in sweep_config:
                 #    sleeptime_s = sweep_config['tes_bias_change_sleep_time']
                 #print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
@@ -580,20 +580,20 @@ class IV_dIdV(Sequencer):
                         raise ValueError('IV/dIdV measurement require ' + str(key) +
                                          ' if "iv_didv_use_vect" = false! Please check configuration')
                 
-                tes_bias_vect_n = np.arange(int(self._sequencer_config['tes_bias_max']),
-                                            int(self._sequencer_config['tes_bias_t']),
-                                            -int(self._sequencer_config['tes_bias_step_n']))
-                tes_bias_vect_t = np.arange(int(self._sequencer_config['tes_bias_t']),
-                                            int(self._sequencer_config['tes_bias_sc']),
-                                            -int(self._sequencer_config['tes_bias_step_t']))
-                tes_bias_vect_sc = np.arange(int(self._sequencer_config['tes_bias_sc']),
-                                             int(self._sequencer_config['tes_bias_min']),
-                                             -int(self._sequencer_config['tes_bias_step_sc']))
+                tes_bias_vect_n = np.arange(float(self._sequencer_config['tes_bias_max']),
+                                            float(self._sequencer_config['tes_bias_t']),
+                                            -float(self._sequencer_config['tes_bias_step_n']))
+                tes_bias_vect_t = np.arange(float(self._sequencer_config['tes_bias_t']),
+                                            float(self._sequencer_config['tes_bias_sc']),
+                                            -float(self._sequencer_config['tes_bias_step_t']))
+                tes_bias_vect_sc = np.arange(float(self._sequencer_config['tes_bias_sc']),
+                                             float(self._sequencer_config['tes_bias_min']),
+                                             -float(self._sequencer_config['tes_bias_step_sc']))
                 
                 tes_bias_vect = np.unique(np.concatenate((tes_bias_vect_n,
                                                           tes_bias_vect_t,
                                                           tes_bias_vect_sc,
-                                                          np.array([int(self._sequencer_config['tes_bias_min'])])),
+                                                          np.array([float(self._sequencer_config['tes_bias_min'])])),
                                                          axis=0))
 
                 tes_bias_vect = tes_bias_vect[::-1]
@@ -602,7 +602,7 @@ class IV_dIdV(Sequencer):
              
                 
             config_dict['tes_bias_vect'] =  tes_bias_vect 
-
+           
 
             # Build temperature vector
             if self._enable_temperature_sweep:
