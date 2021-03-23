@@ -234,6 +234,15 @@ class Config:
         
         return data_path
 
+    
+    def get_fig_data_path(self):
+        data_path = './'
+        try:
+            data_path =  str(self._get_setting('setup','fig_data_path'))
+        except:
+            pass
+        
+        return data_path
 
     def get_fridge_run(self):
         fridge_run = []

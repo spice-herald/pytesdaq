@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser(description='Launch Processing')
-    parser.add_argument('--series_dir', type = str, help='Continuous data directory name')
+    parser.add_argument('-s','--series', dest="series", type = str, help='Continuous data directory name')
     parser.add_argument('--raw_path', type = str, help='Raw data path')
     parser.add_argument('--nb_randoms', type=float, help='Number random events (default=500)')
     parser.add_argument('--nb_triggers', type=float, help='Number trigger events (default=all)')
@@ -29,9 +29,6 @@ if __name__ == "__main__":
 
     
     # check arguments
-    if not args.series_dir:
-        print('ERROR: Continuous data directory name needs to be provided')
-        exit(0)
     if not args.raw_path:
         print('ERROR: Data path needs to be provided')
         exit(0)
@@ -59,7 +56,9 @@ if __name__ == "__main__":
     
 
     # input
-    series_dir = args.series_dir
+    series = None
+    if args.series:
+        series = args.series
     raw_path = args.raw_path
     if args.nb_randoms:
         nb_randoms = int(args.nb_randoms)
@@ -83,26 +82,56 @@ if __name__ == "__main__":
         is_negative_pulse = True
 
 
-    # File list 
-    data_dir = raw_path + '/' + series_dir
-    file_list = []
-    if os.path.isdir(data_dir):
-        file_list = glob(data_dir+'/*.hdf5')
-    else:
-        print('ERROR: No continuous data found in "' + data_dir +'". Check input path!')
+    # input directory
+    input_data_dir = raw_path
+    input_data_dir_split = input_data_dir.split('/')
+    if series is not None and input_data_dir_split[-1]!=series:
+        input_data_dir_temp = input_data_dir + '/' + series
+        if os.path.isdir(input_data_dir_temp):
+            input_data_dir = input_data_dir_temp
+
+    if not os.path.isdir(input_data_dir):
+        print('ERROR: No directory found for "' + input_data_dir +'". Check input path!')
         exit(0)
 
+    if input_data_dir.find('continuous_')==-1:
+        print('ERROR: Directory "' + input_data_dir + '" does not appear to be continuous data')
+        exit(0)
+
+    
+        
+              
+    # file list
+    file_list = []
+    file_name_wildcard = '*.hdf5'
+    if series is not None:
+        file_name_wildcard = '*'+series+'_*.hdf5'
+        
+    file_list = glob(input_data_dir + '/' + file_name_wildcard)
+    if not file_list:
+        
+        print('ERROR: No raw data found in "' + input_data_dir + '"')
+        if series:
+            print('with series name "' + series +'"!')
+        exit(0)
+
+
+            
     # output name
     now = datetime.now()
     series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
     series_time = now.strftime('%H') + now.strftime('%M')
-
-    directory_path = raw_path + '/trigger_' +  series_day + '_' + series_time
     series = 'I' + str(facility) +'_D' + series_day + '_T' +  series_time + now.strftime('%S')
 
-
-    if not os.path.isdir(directory_path ):
-        os.mkdir(directory_path)
+    # output directory
+    output_dir = raw_path
+    pos_cont = input_data_dir_split[-1].find('continuous_')
+    if pos_cont!=-1:
+        series_dir = input_data_dir_split[-1][11:]
+        output_dir = raw_path[0:-len(input_data_dir_split[-1])] + 'trigger_' + series_dir 
+           
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
 
     
     data_inst = ContinuousData(file_list,
@@ -113,7 +142,7 @@ if __name__ == "__main__":
                                nb_samples=nb_samples,
                                nb_samples_pretrigger=nb_samples_pretrigger,
                                series_name=series,
-                               data_path=directory_path,
+                               data_path=output_dir,
                                negative_pulse=is_negative_pulse,
                                save_filter=save_filter)
     

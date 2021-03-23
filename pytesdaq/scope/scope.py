@@ -7,11 +7,12 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  as NavigationToolbar
 from matplotlib.figure import Figure
-from pytesdaq.scope import readout
 from glob import glob
 import os
 import time
 from datetime import datetime
+from pytesdaq.config import settings
+from pytesdaq.scope import readout
 
 class MainWindow(QtWidgets.QMainWindow):
     
@@ -23,8 +24,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._data_source = 'niadc'
         self._file_list = list()
         self._select_hdf5_dir = False
-        self._default_data_dir = './'
 
+        # raw data path
+        self._default_raw_data_dir = './'
+        self._default_fig_data_dir = './'
+        if setup_file is not None:
+            config = settings.Config(setup_file=setup_file)
+            self._default_raw_data_dir = config.get_data_path()
+            self._default_fig_data_dir  = config.get_fig_data_path()
+        
 
         # initalize main window
         self.setWindowModality(QtCore.Qt.NonModal)
@@ -323,12 +331,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         files = list()
         if not self._select_hdf5_dir:
-            files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,'Select File (s)',self._default_data_dir,
+            files, _ = QtWidgets.QFileDialog.getOpenFileNames(self,'Select File (s)',self._default_raw_data_dir,
                                                               'HDF5 Files (*.hdf5)', options=options)
         else:
             options |= QtWidgets.QFileDialog.ShowDirsOnly  | QtWidgets.QFileDialog.DontResolveSymlinks
             dir = QtWidgets.QFileDialog.getExistingDirectory(self,'Select Directory',
-                                                             self._default_data_dir,options=options)
+                                                             self._default_raw_data_dir,options=options)
                                  
 
             if os.path.isdir(dir):
@@ -357,7 +365,7 @@ class MainWindow(QtWidgets.QMainWindow):
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(self,'Choose file name to save to',
-                                                            self._default_data_dir+default_name,
+                                                            self._default_fig_data_dir +'/' + default_name,
                                                             'Fig (*.png) + Numpy File (*.npy)',
                                                             options=options)
         

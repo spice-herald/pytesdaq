@@ -977,7 +977,7 @@ class H5Writer:
      
         
     def write_event(self, data_array, prefix=None, dataset_metadata=None,
-                    adc_name='adc1'):
+                    data_mode=None, adc_name='adc1'):
         """
         write pulse data in files
         """
@@ -1011,6 +1011,8 @@ class H5Writer:
                 
         # update number of events
         self._current_file_adc_group.attrs['nb_events'] = self._current_file_event_counter
+        if data_mode is not None:
+            self._current_file_adc_group.attrs['data_mode'] = str(data_mode)
 
 
         # flush

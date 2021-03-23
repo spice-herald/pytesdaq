@@ -127,8 +127,9 @@ class ContinuousData:
         """
         Function for acquiring random traces from continuous data
         """
+        
         if verbose:
-            print('INFO: Acquiring randoms!')
+            print('INFO: Checking continuous data files')
 
             
         # get number of possible randoms in each continuous data file
@@ -147,6 +148,10 @@ class ContinuousData:
         
 
         # shuffle
+        if verbose:
+            print('INFO: Randomly selecting ' + str(self._nb_events_randoms) + ' traces out of '
+                  + str(len(choice_events)) + ' possible choices')
+
         np.random.shuffle(choice_events)
 
         # take only the number of events needed
@@ -171,6 +176,9 @@ class ContinuousData:
                 
         # loop file, get/save traces
         # FIXME: IOReader not able to read specific events currently
+        if verbose:
+            print('INFO: Acquiring randoms!')
+
         event_counter = 0
         for ifile, chunk_indices in event_dict.items():
                    
@@ -207,20 +215,14 @@ class ContinuousData:
                 pt_trace = traces.sum(axis=0)
                 if pt_trace.shape[0] != self._nb_samples:
                     continue
-
-                
                               
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['data_mode'] = 'rand'
                 dataset_metadata['event_time'] = float(info['event_time']) + bin_start/self._sample_rate
-
-
-                
 
                 
                 # write new file
-                self._h5writer.write_event(traces, prefix='noise',
+                self._h5writer.write_event(traces, prefix='noise', data_mode = 'rand',
                                            dataset_metadata=dataset_metadata)
 
 
@@ -275,7 +277,11 @@ class ContinuousData:
             
         # cleanup
         self._randoms_buffer = None
-                
+
+
+
+
+        
     def acquire_trigger(self, template=None, noise_psd=None, verbose=True):
         """
         Function to acquire trigger from continuous data
@@ -346,13 +352,13 @@ class ContinuousData:
                              
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['data_mode'] = 'threshtrig'
                 dataset_metadata['event_time'] = filt.pulsetimes[itrig]
                 dataset_metadata['trigger_time'] = filt.pulsetimes[itrig]
                 dataset_metadata['trigger_amplitude'] = filt.pulseamps[itrig]
                               
                 # write new file
                 self._h5writer.write_event(filt.evttraces[itrig], prefix='trigger',
+                                           data_mode = 'threshold',
                                            dataset_metadata=dataset_metadata)
 
                 
