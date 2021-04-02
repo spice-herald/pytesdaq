@@ -407,12 +407,12 @@ class Readout:
             elif self._data_source == 'hdf5':
 
                 data_array, self._adc_config = self._hdf5.read_event(include_metadata=True,
-                                                                      adc_name=self._adc_name)
+                                                                     adc_name=self._adc_name)
                 
                 # if error -> output is a string
-                if isinstance(data_array,str):
+                if self._adc_config['read_flag'] != 0:
                     if self._is_qt_ui:
-                        self._status_bar.showMessage('INFO: ' + data_array)
+                        self._status_bar.showMessage('INFO: ' + self._adc_config['error_msg'])
                     break
 
                 # add channel list
