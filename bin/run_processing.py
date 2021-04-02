@@ -72,6 +72,8 @@ if __name__ == "__main__":
         nb_samples = int(args.nb_samples)
     if args.nb_samples_pretrigger:
         nb_samples_pretrigger = int(args.nb_samples_pretrigger)
+    if args.threshold:
+        threshold = args.threshold
     if args.rise_time:
         rise_time = float(args.rise_time) * 1e-6
     if args.fall_time:
@@ -141,6 +143,7 @@ if __name__ == "__main__":
                                pretrigger_length_ms=pretrigger_length_ms,
                                nb_samples=nb_samples,
                                nb_samples_pretrigger=nb_samples_pretrigger,
+                               threshold=threshold,
                                series_name=series,
                                data_path=output_dir,
                                negative_pulse=is_negative_pulse,
