@@ -10,7 +10,7 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser(description='Launch Processing')
-    parser.add_argument('-s','--series', dest="series", type = str, help='Continuous data directory name')
+    parser.add_argument('-s','--series', dest="series", type = str, help='Series name (format string Ix_Dyyyymmdd_Thhmmss)')
     parser.add_argument('--raw_path', type = str, help='Raw data path')
     parser.add_argument('--nb_randoms', type=float, help='Number random events (default=500)')
     parser.add_argument('--nb_triggers', type=float, help='Number trigger events (default=all)')
@@ -25,6 +25,7 @@ if __name__ == "__main__":
     parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
     parser.add_argument('--is_negative_pulse', action='store_true', help='Nagative pulse')
     parser.add_argument('--save_filter', action='store_true', help='Save PSD/Template in a pickle file')
+    parser.add_argument('--facility', type = int, help='Facility number [default=2]')
     args = parser.parse_args()
 
     
@@ -82,6 +83,8 @@ if __name__ == "__main__":
         save_filter = True
     if args.is_negative_pulse:
         is_negative_pulse = True
+    if args.facility:
+        facility = args.facility
 
 
     # input directory
@@ -123,7 +126,7 @@ if __name__ == "__main__":
     now = datetime.now()
     series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
     series_time = now.strftime('%H') + now.strftime('%M')
-    series = 'I' + str(facility) +'_D' + series_day + '_T' +  series_time + now.strftime('%S')
+    series_name= 'I' + str(facility) +'_D' + series_day + '_T' +  series_time + now.strftime('%S')
 
     # output directory
     output_dir = raw_path
@@ -144,7 +147,7 @@ if __name__ == "__main__":
                                nb_samples=nb_samples,
                                nb_samples_pretrigger=nb_samples_pretrigger,
                                threshold=threshold,
-                               series_name=series,
+                               series_name=series_name,
                                data_path=output_dir,
                                negative_pulse=is_negative_pulse,
                                save_filter=save_filter)

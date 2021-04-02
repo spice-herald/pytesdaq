@@ -108,11 +108,15 @@ class H5Reader:
         """
         Function to read next event
         """
+
+        info = dict()
+        array = []
         
         # check if files available
         if not self._file_list or len(self._file_list)==0:
-            error_msg = 'No file available!'
-            return error_msg, error_msg
+            info['read_flag'] = 1
+            info['error_msg'] = 'No file available!'
+            return array, info
           
         # open file if needed
         if self._current_file is None:
@@ -127,8 +131,9 @@ class H5Reader:
             
             # check if there are more files
             if  self._file_counter>=len(self._file_list):
-                error_msg = 'No more events in the file!'
-                return error_msg, error_msg
+                info['read_flag'] = 1
+                info['error_msg'] = 'No more files available'
+                return array, info
             else:
                 self._open_file(self._file_list[self._file_counter])
 
@@ -137,9 +142,10 @@ class H5Reader:
 
         # check if file open (shouldn't happen)
         if self._current_file is None:
-            error_msg = 'Problem reading next event. File closed!'
-            return error_msg, error_msg
-
+            info['read_flag'] = 1
+            info['error_msg'] = 'Problem reading next event. File closed!'
+            return array, info
+         
 
         # get dataset
         self._current_file_event_counter+=1
@@ -155,11 +161,14 @@ class H5Reader:
         # include info
         if include_metadata:
             info = self._extract_metadata(dataset.attrs)
+            info.update(self._extract_metadata(self._current_file.attrs))
             info.update(self._extract_metadata(self._current_file[adc_name].attrs))
-            return array, info
-              
-        return array
+                    
+        info['read_flag'] = 0
+        info['error_msg'] = ''
 
+        return array, info
+              
 
 
     def read_single_event(self, event_index, filepath=None, include_metadata=False,
@@ -236,6 +245,12 @@ class H5Reader:
 
           adctovolt: Bool
                Convert  from ADC to volt (Default=False) 
+        
+          adctoamps: Bool
+               Convert  from ADC to close loop/FLL amps (Default=False) 
+
+          baselinesub: Bool
+               Apply baseline subtraction
           
           memory_limit: Float
                Pulse data memory limit in GB
@@ -1070,7 +1085,7 @@ class H5Writer:
                     dt = h5py.string_dtype()
                     val = val.astype(dt)
                 self._current_file.attrs[key] = val
-                
+            self._current_file.attrs['prefix'] = prefix
             
         # detector config
         if self._detector_config is not None:

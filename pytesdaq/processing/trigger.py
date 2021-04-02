@@ -31,8 +31,11 @@ class ContinuousData:
 
         # path
         self._data_path = data_path
-        self._series_name = series_name
 
+        # series name/num
+        self._series_name = series_name
+        self._series_num = self._extract_series_num(series_name)
+       
         # number of  events
         self._nb_events_randoms = nb_events_randoms
         self._nb_events_trigger = nb_events_trigger
@@ -320,7 +323,12 @@ class ContinuousData:
             traces, info = self._h5reader.read_event(include_metadata=True,
                                                      adc_name=self._adc_name)
 
+            # check if successful
+            if info['read_flag'] != 0:
+                do_continue_loop = False
+                break
 
+            
             # invert if negative pulse
             if self._is_negative_pulse:
                 traces *= -1
@@ -453,6 +461,11 @@ class ContinuousData:
             if 'nb_datasets' in adc_config[key]:
                 adc_config[key].pop('nb_datasets')
 
+
+        # series number 
+        file_metadata['series_num'] = self._series_num
+        
+
         # set to h5 writer
         self._h5writer.set_metadata(file_metadata=file_metadata,
                                     detector_config=detector_config,
@@ -461,3 +474,39 @@ class ContinuousData:
 
         
     
+    def _extract_series_num(self, series_name):
+        """
+        Extact series number for series name
+        Assume series name has the following 
+        naming convention:  Ix_Dyyyymmdd_Thhmmss
+        
+        Return:
+
+        serie_num  with format xyyyymmddhhmmss 
+        """
+
+        if not isinstance(series_name,str):
+            raise ValueError('ERROR in extract_series_num: series name should be a string')
+
+
+        # split series name
+        series_split = series_name.split('_')
+
+        # check string
+        if (len(series_split) != 3 or
+            series_split[0][0]!= 'I' or
+            series_split[1][0]!= 'D' or
+            series_split[2][0]!= 'T'):
+            raise ValueError('ERROR in extract_series_num: unknown series name format!')
+
+
+        
+        # extract series num
+        series_num = series_split[0][1:] + series_split[1][1:] + series_split[2][1:]
+        series_num = np.uint64(float(series_num))
+        return series_num
+        
+        
+        
+        
+        
