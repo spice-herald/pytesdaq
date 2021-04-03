@@ -8,6 +8,86 @@ from pytesdaq.utils import connection_utils
 import stat
 
 
+
+
+def extract_series_num(series_name):
+    """
+    Extract series number for file name or series name
+    Assume series name has the following 
+    naming convention:  Ix_Dyyyymmdd_Thhmmss
+        
+    Return:
+
+    serie_num [np.uint64] 
+    (format xyyyymmddhhmmss)
+    """
+
+    if not isinstance(series_name, str):
+        raise ValueError('ERROR in extract_series_num: series name should be a string')
+
+    # check if full path
+    if series_name.find('/')!=-1:
+        series_name = series_name.split('/')[-1]
+        
+
+    # split series name 
+    series_split = series_name.split('_')
+
+    # index facility (different if file or series name)
+    index_facility = 0
+    if series_split[1][0] == 'I':
+        index_facility = 1
+
+
+    # check format
+    if (len(series_split)< 3  or
+        series_split[index_facility][0]!= 'I' or
+        series_split[index_facility+1][0]!= 'D' or
+        series_split[index_facility+2][0]!= 'T'):
+        raise ValueError('ERROR in extract_series_num: unknown series name format!')
+
+  
+    
+    # extract series num
+    series_num = series_split[index_facility][1:] + series_split[index_facility+1][1:]
+    series_num += series_split[index_facility+2][1:]
+    series_num = np.uint64(float(series_num))
+
+    return series_num
+        
+        
+
+def extract_dump_num(file_name):
+    """
+    Extract dump number for file name
+    Assume file name format: series_name_Fxxxx.hdf5
+        
+    Return:
+
+    dump_num: int 
+    (return None if not dump number found)
+    """
+
+    # remove poth
+    if file_name.find('/')!=-1:
+        file_name = file_name.split('/')[-1]
+
+
+    # find  dump string
+    dump_num = None
+    pos = file_name.find('_F')
+    if pos>0:
+        dump_num = int(file_name[pos+2:pos+6])
+          
+    return dump_num
+    
+
+
+
+
+
+
+
 class H5Reader:
     
     def __init__(self, raise_errors=True, verbose=True):
@@ -47,8 +127,6 @@ class H5Reader:
         self._file_list = list()
         
         if isinstance(filepaths, str):
-            if filepaths.find('.hdf5')==-1:
-                filepaths = filepaths + '.hdf5'
             filepaths = [filepaths]
 
         # loop file/path list
@@ -56,8 +134,11 @@ class H5Reader:
             
             if os.path.isdir(filepath):
                 self._file_list.extend(glob(filepath+'/*.hdf5'))
-            elif os.path.isfile(filepath):
-                self._file_list.append(filepath)
+            else:
+                if filepath[-4:]!='hdf5':
+                    filepath += '.hdf5'
+                if os.path.isfile(filepath):
+                    self._file_list.append(filepath)
             
         if not self._file_list:
             if self._raise_errors:
@@ -197,6 +278,7 @@ class H5Reader:
         # metadata
         if include_metadata:
             info = self._extract_metadata(dataset.attrs)
+            info.update(self._extract_metadata(self._current_file.attrs))
             info.update(self._extract_metadata(self._current_file[adc_name].attrs))
             return array, info
               
@@ -208,13 +290,18 @@ class H5Reader:
 
     
     
-    def read_many_events(self, filepath=None, nevents=0,
+    def read_many_events(self, filepath=None,
+                         nevents=0,
                          output_format=1,
-                         event_indices=None,
+                         event_nums=None,
+                         series_nums=None,
                          include_metadata=False,
                          adc_name='adc1',
                          detector_chans=None,
                          adctovolt=False,
+                         adctoamp=False,
+                         baselinesub=False,
+                         baselineinds=None,
                          memory_limit=2):
         """
         Read multiple events (default read all events in dump)
@@ -234,11 +321,6 @@ class H5Reader:
           include_metadata: bool 
                include file/group/dataset metadata (default = False)
 
-
-          adc_name: string
-              ADC id (default: 'adc1')
-          
-
           detector_chans: string/int or list of string/int
                detector channel name (example 'Z1PAS1', 'PD2', or 1) following format in setup.ini file
                If none, all channels available 
@@ -246,53 +328,157 @@ class H5Reader:
           adctovolt: Bool
                Convert  from ADC to volt (Default=False) 
         
-          adctoamps: Bool
+          adctoamp: Bool
                Convert  from ADC to close loop/FLL amps (Default=False) 
 
           baselinesub: Bool
                Apply baseline subtraction
+
+          baselineinds: tuple (int, int)
+               start/stop baseline calculation (default: (10, 0.8*pretrigger))
           
           memory_limit: Float
                Pulse data memory limit in GB
 
  
+          adc_name: string
+              ADC id (default: 'adc1')
+          
 
 
         Return:
          
         """
         
-        # ---------------------
+        # ===============================
         # Check arguments
-        # Set file lists
-        # --------------------
+        # ===============================
 
         #  set file list
         if filepath is not None:
             self.set_files(filepath)
-
+        elif self._current_file is None:
+            raise ValueError('ERROR: No file selected!')
+        
 
         # detector/channel
         if detector_chans is not None and not isinstance(detector_chans, list):
             detector_chans = [detector_chans]
-        
+    
 
-                 
-        # ---------------------
-        # Check data, output
-        # dimension
-        # --------------------
+        # series nums
+        if series_nums is not None:
+            if not isinstance(series_nums, list):
+                series_nums = [series_nums]
+
+        # event nums: create dump number list, convert event_nums to list of tuple
+        dump_nums = None
+        if event_nums is not None:
+            if not isinstance(event_nums, list):
+                event_nums = [event_nums]
+                
+            if series_nums is not None and  len(event_nums) != len(series_nums):
+                raise ValueError('ERROR: series_nums and event_nums need to be same length!')
+
+            dump_nums = list()
+            for ievent in range(len(event_nums)):
+                event_num = event_nums[ievent]
+                dump_num = int(event_num/100000)
+                dump_nums.append(dump_num)
+                event_nums[ievent] = (event_num,)
+
+                
+        # ===============================
+        # Preliminary raw data checks
+        # using metadata
+        # ===============================
         nb_events_tot = 0
         nb_channels = 0
         nb_samples = 0
         array_indices = list()
-
+        selected_file_list = list()
+              
         # loop files
-        for file in self._file_list:
+        for file_name in self._file_list:
 
-            
-            metadata = self.get_metadata(file)
+                      
+            # get metadata
+            metadata = self.get_metadata(file_name)
             adc_metadata = metadata['groups'][adc_name]
+
+            # extract series number
+            file_series_num = None
+            if 'series_num' in metadata:
+                file_series_num = metadata['series_num']
+            else:
+                file_series_num = extract_series_num(file_name)
+
+            if series_nums is not None and file_series_num is None:
+                raise ValueError('ERROR: unable to get series number!')
+            
+            # extract dump number
+            file_dump_num = None
+          
+            if 'dump_num' in metadata:
+                file_dump_num = int(metadata['dump_num'])
+            else:
+                file_dump_num = extract_dump_num(file_name)
+
+            if dump_nums is not None and file_dump_num is None:
+                raise ValueError('ERROR: unable to get dump number!')
+            
+            
+            # skip files that are not needed
+            if series_nums is not None and file_series_num not in series_nums:
+                continue
+            if dump_nums is not None and file_dump_num not in dump_nums:
+                continue
+
+        
+            # if event_nums:  check file if available and store it
+            if event_nums is not None:
+
+                keep_file = False
+                for ievent in range(len(event_nums)):
+
+                    # check if dump number match current file
+                    dump_num =  dump_nums[ievent]
+                    if dump_num != file_dump_num:
+                        continue
+
+                    # check series match current file
+                    if series_nums is not None:
+                        series_num = series_nums[ievent]
+                        if series_num != file_series_num:
+                            continue
+                        
+                    # Found file!
+                    keep_file  = True
+
+                    # check index available
+                    event_num = event_nums[ievent][0]
+                    even_index = int(event_num % 100000)
+                    if even_index>int(adc_metadata['nb_events']):
+                        raise ValueError('ERROR: Find file for event number '
+                                         + str(event_num) + ' however, event does not exist!')
+                    
+                    # store in list as a tuple
+                    event_nums[ievent] = event_nums[ievent] + (file_name,)
+                    if len(event_nums[ievent])>2:
+                        raise ValueError('ERROR: Multiple files found for event number '
+                                         + str(event_num) + '! You may need to add "series_nums" argument!')
+                    
+                    nb_events_tot += 1
+                    
+
+                # continue file loop if not needed
+                if not keep_file :
+                    continue
+
+            else:
+                nb_events_tot += adc_metadata['nb_events']
+                selected_file_list.append(file_name)
+
             
             # channels
             array_indices_file = list()
@@ -358,9 +544,6 @@ class H5Reader:
                     else:
                         return []
 
-            
-            # nb events
-            nb_events_tot += adc_metadata['nb_events']
 
             # number of samples
             nb_samples_file = adc_metadata['nb_samples']   
@@ -378,23 +561,50 @@ class H5Reader:
                     else:
                         return []
 
+
             # check max events
             if nevents>0  and nb_events_tot>=nevents:
-                nb_events_tot = nevents
                 break
-
-
+            
+                    
         # clear
         self.clear()
 
+
+        # check bumber of events
+        if nb_events_tot == 0:
+            raise ValueError('ERROR: No events found!')
         
-        # ---------------------
-        # Memory check
-        # --------------------
 
         
+
+        # selected events
+        selected_event_nums = None
+        if event_nums is not None:
+
+            selected_event_nums = list()
+            for event in event_nums:
+                if len(event)==2:
+                    selected_event_nums.append(event)
+                    
+            if len(selected_event_nums)!=nb_events_tot:
+                raise ValueError('ERROR: inconsistent number of events! Possible bug in the code...')
+                
+            if nb_events_tot<len(event_nums):
+                print('WARNING: Only ' + str(nb_events_tot) + ' events out of '
+                      + str(len(event_nums)) + ' have been found!')
+            
+        else:
+            # refresh file list
+            self.set_files(selected_file_list)
+            
+        
+        # ===============================
+        # Memory check
+        # ===============================
+                
         sample_bytes = 2
-        if adctovolt:
+        if adctovolt or adctoamp or baselinesub:
             sample_bytes = 8
             
         output_memory_per_event = sample_bytes*nb_samples*nb_channels/1e9
@@ -405,30 +615,42 @@ class H5Reader:
                   str(nb_events_tot_temp) + ' out of ' + str(nb_events_tot) +'!')
             nb_events_tot = nb_events_tot_temp
 
-    
-        # ---------------------
-        # Initialize output
-        # --------------------
-              
+
+
+
+            
+        # ===============================
+        #  Initialize output
+        # ===============================
+                   
         output_data = list()
         info_list = list()
      
         if output_format==2:
-            if adctovolt:
-                output_data = np.zeros((nb_events_tot,nb_channels,nb_samples),dtype=np.float64)
+            if adctovolt or adctoamp or baselinesub:
+                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples),dtype=np.float64)
             else:
-                output_data = np.zeros((nb_events_tot,nb_channels,nb_samples),dtype=np.int16)
-            
-        
+                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples),dtype=np.int16)
 
-        # ---------------------
-        # Loop and read events
-        # --------------------
+
+                
+        # ===============================
+        #  Loop and read events
+        # ===============================
+        
         for ievent in range(nb_events_tot):
             
             # read event
-            array_int, info = self.read_event(include_metadata=True)
+            array_int = []
+            info = dict()
 
+            if selected_event_nums is None:
+                array_int, info = self.read_event(include_metadata=True)
+            else:
+                event_index = int(selected_event_nums[ievent][0] % 100000)
+                file_name = selected_event_nums[ievent][1]
+                array_int, info = self.read_single_event(event_index, filepath=file_name,
+                                                         include_metadata=True)
                        
             # add connections to metadata
             connections = self.get_connection_dict(adc_name=adc_name, metadata=info)
@@ -453,7 +675,7 @@ class H5Reader:
             
             # convert to volt
             array = []
-            if adctovolt:
+            if adctovolt or adctoamp:
                 array = np.zeros_like(array_int, dtype=np.float64)
                 for ichan in range(array_int.shape[0]):
                     icoeff = ichan
@@ -465,6 +687,7 @@ class H5Reader:
             else:
                 array = array_int 
                     
+            # convert to amps
             
             
             # store
@@ -885,10 +1108,13 @@ class H5Writer:
         self._raise_errors = raise_errors
         self._verbose = verbose
         
-        # list of files
-        self._series_name = None
+        # file path
         self._series_path = None
 
+        # series
+        self._series_name = None
+        self._series_num = None
+        
         # current file info
         self._current_file = None
         self._current_file_name = None
@@ -918,11 +1144,15 @@ class H5Writer:
         """
         Initialize new writing
         """
-
-        self._series_name = series_name
-              
+        
         # clear everything
         self.clear()
+        
+        # series name 
+        self._series_name = series_name
+        self._series_num = extract_series_num(series_name)
+        
+
 
         # create new directory
         self._series_path = data_path + '/' + series_name
@@ -1085,8 +1315,10 @@ class H5Writer:
                     dt = h5py.string_dtype()
                     val = val.astype(dt)
                 self._current_file.attrs[key] = val
-            self._current_file.attrs['prefix'] = prefix
-            
+        self._current_file.attrs['prefix'] = prefix
+        self._current_file.attrs['series_num'] = self._series_num
+        self._current_file.attrs['dump_num'] = int(dump)
+        
         # detector config
         if self._detector_config is not None:
             for config_key,config_val in self._detector_config.items():
@@ -1127,4 +1359,6 @@ class H5Writer:
         self._current_file_detconfig_group = None
         self._current_file_event_counter = 0
              
-    
+
+
+  
