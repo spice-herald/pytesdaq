@@ -201,7 +201,7 @@ class ContinuousData:
                 
                 # get traces for all channels
                 traces, info = self._h5reader.read_single_event(event_index,
-                                                                filepath=file_name,
+                                                                file_name=file_name,
                                                                 include_metadata=True)
 
 
@@ -323,7 +323,7 @@ class ContinuousData:
                                                      adc_name=self._adc_name)
 
             # check if successful
-            if info['read_flag'] != 0:
+            if info['read_status'] != 0:
                 do_continue_loop = False
                 break
 
