@@ -135,26 +135,39 @@ class H5Reader:
         if isinstance(filepaths, str):
             filepaths = [filepaths]
 
-        # loop file/path list
+        # loop file/path list to get list of files
+        file_list_temp  = list()
         for filepath in filepaths:
             
             if os.path.isdir(filepath):
-                self._file_list.extend(glob(filepath+'/*.hdf5'))
+                file_list_temp.extend(glob(filepath+'/*.hdf5'))
             else:
                 if filepath[-4:]!='hdf5':
                     filepath += '.hdf5'
                 if os.path.isfile(filepath):
-                    self._file_list.append(filepath)
+                    file_list_temp.append(filepath)
             
-        if not self._file_list:
+        if not file_list_temp:
             if self._raise_errors:
                 raise ValueError('No files found!')
             else:
                 print('ERROR: No files found!')
                 return
-        else:
-            self._file_list = sorted(self._file_list)
-            
+
+
+        # loop again to check for duplicate
+        self._file_list = list()
+        file_name_list = list()
+        for file_name in file_list_temp:
+            file_name_split = file_name
+            if file_name.find('/')!=-1:
+                file_name_split = file_name.split('/')[-1]
+            if file_name_split not in file_name_list:
+                file_name_list.append(file_name_split)
+                self._file_list.append(file_name)
+        # sort
+        self._file_list = sorted(self._file_list)
+        
             
   
     def close(self):
@@ -397,7 +410,8 @@ class H5Reader:
                 event_num = event_nums[ievent]
                 dump_num = int(event_num/100000)
                 if dump_num == 0:
-                    raise ValueError('ERROR: Unexpected event number format! Expected "dump_num*100000+event_index"')
+                    raise ValueError('ERROR: Unexpected event number format!' +
+                                     ' Required format = "dump_num*100000+event_index"')
                 dump_nums.append(dump_num)
                 event_tuple_nums.append((event_num,))
             event_nums = event_tuple_nums
