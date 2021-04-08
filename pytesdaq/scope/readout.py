@@ -410,7 +410,7 @@ class Readout:
                                                                      adc_name=self._adc_name)
                 
                 # if error -> output is a string
-                if self._adc_config['read_flag'] != 0:
+                if self._adc_config['read_status'] != 0:
                     if self._is_qt_ui:
                         self._status_bar.showMessage('INFO: ' + self._adc_config['error_msg'])
                     break
