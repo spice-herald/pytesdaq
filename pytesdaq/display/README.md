@@ -26,6 +26,8 @@ Getting Started – Installation of tools and packages for Pyramid
 
 - Run the project on localhost.
 
+    `cd ~/pytesdaq/display/`
+
     `env/bin/pserve development.ini`
 
 

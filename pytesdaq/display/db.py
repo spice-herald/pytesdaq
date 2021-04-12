@@ -1,5 +1,5 @@
 from __future__ import print_function
-import mysql.connector
+import mariadb
 from mysql.connector import errorcode
 import time
 
@@ -27,10 +27,10 @@ class MySQLCore:
 
         if self._cnx is None:
             try:
-                self._cnx = mysql.connector.connect(user=self._user, password=self._password,
+                self._cnx = mariadb.connect(user=self._user, password=self._password,
                                                     host=self._host, port=self._port,
                                                     database=self._dbname)
-            except mysql.connector.Error as err:
+            except mariadb.Error as err:
                 if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
                     print('Something is wrong with your user name or password')
                 elif err.errno == errorcode.ER_BAD_DB_ERROR:
@@ -42,8 +42,8 @@ class MySQLCore:
         return True
 
     def connect_test(self): # localhost database for now, update with actual database later
-        self.connect_manual(host="192.168.1.177", port=3306, user="daqtest", password="password123")
-
+        self.connect_manual(host="localhost", port=3306, user="daqtest", password="password123")
+#192.168.1.177
 
     def disconnect(self):
         if self._cnx is None:
@@ -79,7 +79,7 @@ class MySQLCore:
                 print('Creating table {}: '.format(name), end = '')
                 #cursor.execute('DROP TABLE test_db;')
                 cursor.execute(ddl)
-            except mysql.connector.Error as err:
+            except mariadb.Error as err:
                 if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
                     print ('already exists.')
                 else:
@@ -138,7 +138,7 @@ class MySQLCore:
         try:
             cursor.execute(insert_cmd)
             self._cnx.commit()
-        except mysql.connector.Error as err:
+        except mariadb.Error as err:
             print (err.msg)
 
         cursor.close()
@@ -165,7 +165,7 @@ class MySQLCore:
             cursor.execute(select_stmt)
             for x in cursor:
                 print(x)
-        except mysql.connector.Error as err:
+        except mariadb.Error as err:
             print (err.msg)
 
         cursor.close()
@@ -193,7 +193,7 @@ class MySQLCore:
                 column_names = [col[0] for col in desc]
                 result = [dict(zip(column_names, row))  
                     for row in cursor]
-        except mysql.connector.Error as err:
+        except mariadb.Error as err:
             print (err.msg)
                        
         cursor.close()
