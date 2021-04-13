@@ -384,12 +384,12 @@ class Config:
         return adc_list
     
  
-    def get_adc_setup(self,adc_id):
+    def get_adc_setup(self, adc_id):
         """
         get ADC set
         
         Returns:
-            pandas frame
+            dictionary with adc setup
         """
 
         setup = dict()
@@ -417,7 +417,9 @@ class Config:
                 val_list  = [adc_id,adc_chan] + val_list
                 adc_connections.append(val_list)
                 column_list = ['adc_id','adc_channel'] + name_list
-             
+
+            elif 'detector_config' in item[0]:
+                continue
             else:
                 setup[item[0]] = item[1]       
                     
@@ -430,7 +432,7 @@ class Config:
         return setup
 
      
-    def get_adc_connections(self, adc_id=''):
+    def get_adc_connections(self, adc_id=None):
         """
         get ADC connections
             
@@ -439,7 +441,7 @@ class Config:
         """
    
         connection_table = []
-        if adc_id:
+        if adc_id is not None:
             adc_setup = self.get_adc_setup(adc_id)
             if 'connection_table' in adc_setup:
                 connection_table = adc_setup['connection_table']
@@ -456,6 +458,90 @@ class Config:
         return connection_table 
 
 
+    
+    def get_detector_config(self, adc_id=None, adc_channel_list=None):
+        """
+        get detector config from setup.ini file 
+            
+        Returns:
+           dictionary with config
+        """
+
+
+        # check arguments
+        if  adc_id is None or adc_channel_list is None:
+            raise ValueError('ERROR in get_detector_config: "adc_id" and "adc_channel_list" required!')
+
+        adc_list = self.get_adc_list()
+        if adc_id not in adc_list:
+            raise ValueError('ERROR in get_detector_config: No information in setup file for "'
+                             + str(acd_id) + '"!')
+
+
+
+
+
+        
+        # intialize
+        param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
+                      'output_gain','preamp_gain','feedback_polarity','feedback_mode',
+                      'signal_source','signal_gen_current','signal_gen_frequency',
+                      'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
+                      'signal_gen_tes_resistance','close_loop_norm']
+        detector_config = dict()
+        for param in param_list:
+            detector_config[param] = list()
+            
+
+        # store channel lost
+        
+        detector_config['adc_name'] = adc_id
+        detector_config['channel_type'] = 'adc'
+        detector_config['channel_list'] = adc_channel_list
+
+
+            
+        # loop channel list
+        for adc_chan in adc_channel_list:
+            item = 'detector_config' + str(adc_chan)
+            if not self._has_setting(adc_id, item):
+                raise ValueError('ERROR in get_detector_config: No detector settings found for channel '
+                                 + str(adc_chan) + '!')
+
+            settings = self._get_comma_separated_setting(adc_id, item)
+            for param in settings:
+                param_split = param.split(':')
+                param_name = param_split[0]
+                param_val = float(param_split[1])
+
+                # some conversion needed
+                if param_name=='tes_bias' or param_name=='squid_bias' or param_name=='signal_gen_current':
+                    param_val = param_val/1000000.0
+                if param_name=='lock_point_voltage':
+                    param_val = param_val/1000.0
+
+                # add in config
+                detector_config[param_name].append(param_val)
+
+            # add some parameters
+            if self._has_setting('setup', 'shunt_resistance'):
+                detector_config['shunt_resistance'].append(float(self._get_setting('setup', 'shunt_resistance')))
+            else:
+                raise ValueError('ERROR in get_detector_config: Shunt resistance not available')
+            
+            if self._has_setting('setup', 'squid_turn_ratio'):
+                detector_config['squid_turn_ratio'].append(float(self._get_setting('setup', 'squid_turn_ratio')))
+
+            if self._has_setting('setup', 'feedback_resistance'):
+                detector_config['feedback_resistance'].append(float(self._get_setting('setup', 'feedback_resistance')))
+                
+                            
+            
+        return detector_config 
+
+
+
+    
     def get_feb_address(self):
         """
         get FEB GPIB address
@@ -662,7 +748,7 @@ class Config:
         return has_section
 
 
-    def _get_setting(self,section, name):
+    def _get_setting(self, section, name):
         """
         Get a particular setting from setup.ini. 
         

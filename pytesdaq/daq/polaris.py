@@ -16,7 +16,7 @@ class PolarisTask:
         self._lock_file = '/tmp/nidaq.lock'
         self._overwrite_config_allowed = True
         self._polaris_exe = 'polaris'
-        self._config_file_name = 'nidaq.cfg'
+        self._config_file_name = '.nidaq.cfg'
         self._log_file = str()
         self._verbose = True
         self._quiet = False

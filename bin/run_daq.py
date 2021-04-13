@@ -1,10 +1,12 @@
 import argparse
 import pytesdaq.daq as daq
-import pytesdaq.config.settings as settings
-import pytesdaq.instruments.control as instrument
-from pytesdaq.utils import  arg_utils
+from pytesdaq.config import settings
+from pytesdaq.instruments import control as instrument
+from pytesdaq.utils import arg_utils
 import numpy as np
 import os
+from datetime import datetime
+import stat
 
 if __name__ == "__main__":
 
@@ -14,14 +16,13 @@ if __name__ == "__main__":
     # ========================
     parser = argparse.ArgumentParser(description="Launch DAQ")
 
-    parser.add_argument('--run_time', type = str,help = 'Run time in minutes [default = 1 min]')
-    parser.add_argument('--run_type', type = str,help = 'Run type [default: 1 = "Test"]')
-    parser.add_argument('--run_comment', type = str, help = 'Run comment [default: "No comment"]')
-    parser.add_argument('--duration',  type = str,
+    parser.add_argument('--run_time', type = str, help = 'Run time in minutes [default = 1 min]')
+    parser.add_argument('--run_type', type = str, help = 'Run type [default: 1 = "Test"]')
+    parser.add_argument('--run_comment', type = str, help = 'Run comment (use quotes "")  [default: "No comment"]')
+    parser.add_argument('--total_duration', '--duration', dest='duration', type = str,
                         help = 'Total duration of data taking in hours (nb runs = duration/run time)  [default = run time]')
     parser.add_argument('--daq_driver',help='DAQ driver ("polaris","pydaqmx", "tektronix","midas") [default "polaris"]')
-    parser.add_argument('--log_file',help='Log file name [default: no log file]')
-    parser.add_argument('--disable-lock',dest="disable_lock",action="store_true",help='Disable daq process lock')
+    parser.add_argument('--log_file', help='Log file name [default: no log file]')
     parser.add_argument('--verbose', action="store_true", help='Screen output')
     parser.add_argument('--setup_file', type = str,
                         help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
@@ -33,18 +34,22 @@ if __name__ == "__main__":
     parser.add_argument('--nb_samples',help='Number of samples [default from configuration setup file] ')
     parser.add_argument('--voltage_min',help='Minimum ADC voltage [default from configuration setup file] ')
     parser.add_argument('--voltage_max',help='Maximum ADC voltage [default from configuration setup file] ')
-    parser.add_argument('--channels', type = str,
-                        help='Channels number (same all devices!):  string "a,b,c-d" [default from configuration setup file] ')
-    parser.add_argument('--devices',help='ADC Devices number: string "a,b,c-d" [default from configuration setup file] ')
- 
+    parser.add_argument('--adc_channels', '--channels', dest='adc_channels', type = str,
+                        help='ADC channels number/index (same all devices!), format="a,b,c-d" [default from configuration setup file] ')
+    parser.add_argument('--devices', help='ADC Devices number. Format="a,b,c-d" [default from configuration setup file] ')
+    parser.add_argument('--disable-lock', dest="disable_lock",action="store_true",help='Disable daq process lock')
+    parser.add_argument('--disable-control', dest="disable_control", action="store_true",
+                        help='Disable instrument control. Require "detector_config" field in setup.ini!')
+    
+    
     args = parser.parse_args()
 
 
     # ------------------
     # Default 
     # ------------------
+  
     
-
     # hardcoded default
     run_time_seconds = 60
     run_comment = 'No comment'
@@ -52,10 +57,9 @@ if __name__ == "__main__":
     daq_driver = 'polaris'
     log_file = str()
     disable_lock = False
+    disable_control = False
     verbose = False
- 
-    
-    
+       
     # Setup file:
     setup_file = None
     if args.setup_file:
@@ -94,7 +98,9 @@ if __name__ == "__main__":
         disable_lock = True
     if args.verbose:
         verbose = True
-  
+    if args.disable_control:
+        disable_control = True
+    
     # nb of runs
     nb_runs = 1
     if args.duration:
@@ -121,32 +127,79 @@ if __name__ == "__main__":
 
 
     # replace with user parameters
+    trigger_type = list()
     for adc_name in adc_list:
-        config = adc_config[adc_name]
+        config_dict = adc_config[adc_name]
         if args.sample_rate:
-            config['sample_rate'] = int(args.sample_rate)
+            config_dict['sample_rate'] = int(args.sample_rate)
         if args.nb_samples:
-            config['nb_samples'] = int(args.nb_samples)
+            config_dict['nb_samples'] = int(args.nb_samples)
         if args.voltage_min:
-            config['voltage_min'] = float(args.voltage_min)
+            config_dict['voltage_min'] = float(args.voltage_min)
         if args.voltage_max:
-            config['voltage_max'] = float(args.voltage_max)
-        if args.channels:
-            config['channel_list'] = args.channels
+            config_dict['voltage_max'] = float(args.voltage_max)
+        if args.adc_channels:
+            config_dict['channel_list'] = args.adc_channels
         if args.trigger_type:
-            config['trigger_type'] = int(args.trigger_type)
+            config_dict['trigger_type'] = int(args.trigger_type)
 
-        config['channel_list'] =  arg_utils.hyphen_range(config['channel_list'])
-        adc_config[adc_name] = config
+        config_dict['channel_list'] =  arg_utils.hyphen_range(config_dict['channel_list'])
+        adc_config[adc_name] = config_dict
+        trigger_type.append(int(config_dict['trigger_type']))
+        
+        
 
     # ========================
-    # Detector config
+    # Get detector config
     # ======================== 
-    det_config = dict()
-    myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
-    for adc_name in adc_list:
-        config = adc_config[adc_name]
-        det_config[adc_name] = myinstrument.read_all(adc_id=adc_name, adc_channel_list=config['channel_list'])
+    detector_config = dict()
+    if not disable_control:
+        myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
+        for adc_name in adc_list:
+            config_dict = adc_config[adc_name]
+            detector_config[adc_name] = myinstrument.read_all(adc_id=adc_name,
+                                                              adc_channel_list=config_dict['channel_list'])
+    else:
+        for adc_name in adc_list:
+            config_dict = adc_config[adc_name]
+            detector_config[adc_name] = config.get_detector_config(adc_id=adc_name,
+                                                                   adc_channel_list=config_dict['channel_list'])
+            
+        
+
+    # ========================
+    # Data path
+    # ======================== 
+    data_path = config.get_data_path()
+    fridge_run = 'run' + str(config.get_fridge_run())
+    if data_path.find(fridge_run)==-1:
+        data_path += '/' + fridge_run
+
+    dir_prefix = 'continuous'  
+    if trigger_type[0]==2 or trigger_type[0]==4:
+        dir_prefix = 'trigger'
+
+
+    now = datetime.now()
+    series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+    series_time = now.strftime('%H') + now.strftime('%M')
+    data_path += '/' + dir_prefix + '_' + series_day + '_' + series_time
+
+    try:
+        os.makedirs(data_path)
+        os.chmod(data_path, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+    except OSError:
+        print('\nERROR: Unable to create directory "'+ data_path  + '"!\n')
+        exit()
+    
+    # ========================
+    # Data prefix
+    # ========================
+    data_prefix = 'cont'
+    if trigger_type[0]==2:
+        data_prefix = 'exttrig'
+    elif trigger_type[0]==4:
+        data_prefix = 'threshtrig'
         
     
     # ========================
@@ -166,12 +219,16 @@ if __name__ == "__main__":
         
     # configuration
     mydaq.set_adc_config_from_dict(adc_config)
-    if det_config:
-        mydaq.set_detector_config(det_config)
+    if detector_config:
+        mydaq.set_detector_config(detector_config)
 
     # run
     for irun in range(nb_runs):
-        success = mydaq.run(run_time_seconds, run_type, run_comment)
+        success = mydaq.run(run_time=run_time_seconds,
+                            run_type=run_type,
+                            run_comment=run_comment,
+                            data_prefix=data_prefix,
+                            data_path=data_path)
         if not success:
             print('ERROR: Data taking error. Exiting!')
             mydaq.clear()

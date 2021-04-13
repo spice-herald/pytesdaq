@@ -1,7 +1,7 @@
 import numpy as np
 import time
 import struct
-import pytesdaq.config.settings as settings
+from pytesdaq.config import settings
 from pytesdaq.daq import polaris
 from pytesdaq.daq import nidaqtask
 
@@ -30,9 +30,7 @@ class DAQ:
         # instantiate driver 
         self._instantiate_driver()
 
-        
-
-    
+          
             
     @property
     def driver_name(self):
@@ -87,7 +85,7 @@ class DAQ:
             self._driver = polaris.PolarisTask()
             self._driver.overwrite_config_allowed = True
             self._driver.polaris_exe = 'polaris'
-            self._driver.config_file_name = 'nidaq.cfg'
+            self._driver.config_file_name = '.nidaq.cfg'
 
         elif self._driver_name=='pydaqmx':
             self._driver = nidaqtask.NITask()
@@ -172,10 +170,12 @@ class DAQ:
         # facilty
         facility_num = self._config.get_facility_num()
         
+        
         # data path
         if data_path is None:
             data_path = self._config.get_data_path()
-                        
+
+            
 
         # run polaris
         if self._driver_name=='polaris':
