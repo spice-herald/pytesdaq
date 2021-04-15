@@ -19,6 +19,7 @@ class ContinuousData:
                  pretrigger_length_ms=None,
                  nb_samples=None,
                  nb_samples_pretrigger=None,
+                 chan_to_trigger='all',
                  threshold=10,
                  series_name = None,
                  data_path = '/sdata/raw',
@@ -91,6 +92,10 @@ class ContinuousData:
         self._set_metadata()
 
 
+        # channels to trigger on (same implementation as RQpy)
+        self._chan = chan_to_trigger
+        
+        
         # threshold
         self._threshold = threshold
         
@@ -213,11 +218,24 @@ class ContinuousData:
                 # truncate
                 traces = traces[:,bin_start:bin_start+self._nb_samples]
 
-                # pt trace
-                pt_trace = traces.sum(axis=0)
+                # pt trace (channel sum determined by self._chan)
+                if self._chan == "all":
+                    pt_trace = traces.sum(axis=0)
+                elif np.any(np.atleast_1d(self._chan) > traces.shape[0]):
+                    raise ValueError(
+                        '`chan_to_trigger` was set to a value greater than the number of channels.',
+                    )
+                elif np.isscalar(self._chan):
+                    pt_trace = traces[self._chan]
+                else:
+                    pt_trace = np.sum(traces[self._chan],axis=0)
+                
                 if pt_trace.shape[0] != self._nb_samples:
                     continue
-                              
+
+                pt_trace = np.expand_dims(pt_trace, axis=0)
+
+                
                 # dataset metadata
                 dataset_metadata = dict()
                 dataset_metadata['event_time'] = float(info['event_time']) + bin_start/self._sample_rate
@@ -229,9 +247,7 @@ class ContinuousData:
 
 
 
-                # Fill noise buffer
-                pt_trace = traces.sum(axis=0)
-                pt_trace = np.expand_dims(pt_trace, axis=0)
+                
                 if self._randoms_buffer is None:
                     self._randoms_buffer =  pt_trace
                 else:
@@ -339,13 +355,13 @@ class ContinuousData:
             
             # expand dimension traces
             traces = np.expand_dims(traces, axis=0)
-        
             
             # find triggers
             filt = rq.process.OptimumFilt(self._sample_rate,
                                           self._template,
                                           self._noise_psd,
                                           self._nb_samples,
+                                          chan_to_trigger=self._chan,
                                           lgcoverlap=True)
 
             filt.filtertraces(traces, time_array)
@@ -354,7 +370,6 @@ class ContinuousData:
             
             # loop triggers
             for itrig in range(len(filt.pulsetimes)):
-
 
                              
                 # dataset metadata

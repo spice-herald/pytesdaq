@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 from glob import glob
 from pytesdaq.processing.trigger import ContinuousData
+import pytesdaq.config.settings as settings
+
 
 if __name__ == "__main__":
 
@@ -20,6 +22,7 @@ if __name__ == "__main__":
     parser.add_argument('--nb_samples', type=float, help='Trace length [# samples]')
     parser.add_argument('--nb_samples_pretrigger', type=float,
                         help='Pretrigger length [# samples]  (default: 1/2 trace lenght)')
+    parser.add_argument('--chan_to_trigger', type=str, help='Name(s) or Number(s) of channel(s) to trigger on, separated by commas without spaces. (e.g. 0,1 or PD2,G124_PAS2)')
     parser.add_argument('--threshold', type=float, help='Trigger sigma threshold (default=10)')
     parser.add_argument('--rise_time', type=float, help='Template rise time in usec [20 usec]')
     parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
@@ -43,6 +46,7 @@ if __name__ == "__main__":
 
     # default
     facility = 2
+    chan_to_trigger='all'
     threshold = 10
     nb_randoms = 500
     nb_triggers = -1
@@ -73,6 +77,8 @@ if __name__ == "__main__":
         nb_samples = int(args.nb_samples)
     if args.nb_samples_pretrigger:
         nb_samples_pretrigger = int(args.nb_samples_pretrigger)
+    if args.chan_to_trigger:
+        chan_to_trigger = args.chan_to_trigger
     if args.threshold:
         threshold = args.threshold
     if args.rise_time:
@@ -104,7 +110,6 @@ if __name__ == "__main__":
         exit(0)
 
     
-        
               
     # file list
     file_list = []
@@ -138,6 +143,24 @@ if __name__ == "__main__":
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
 
+        
+    # set chan_to_trigger
+    if (chan_to_trigger is not 'all'):
+        chanlist = chan_to_trigger.replace(" ", "").split(",")
+        if (sum([chan.isdigit() for chan in chanlist]) == len(chanlist)):
+            chan_to_trigger = [int(chan) for chan in chanlist]
+            print("adc_channel input: trigger set on sum of adc channels: ", chan_to_trigger)
+        else:
+            config = settings.Config()
+            con_df = config.get_adc_connections()
+            adc_array = con_df.query('detector_channel == @chanlist')["adc_channel"].values
+            if(len(adc_array)==0):
+                print("chan_to_trigger input does not match any channel names. Check input or config/setup file")
+            chan_to_trigger = list(adc_array.astype(np.int))
+            print("detector_channel input: trigger set on sum of adc channels: ", chan_to_trigger)
+    else:
+        print("no trigger input: trigger set on sum of all channels")
+        
     
     data_inst = ContinuousData(file_list,
                                nb_events_randoms=nb_randoms,
@@ -146,6 +169,7 @@ if __name__ == "__main__":
                                pretrigger_length_ms=pretrigger_length_ms,
                                nb_samples=nb_samples,
                                nb_samples_pretrigger=nb_samples_pretrigger,
+                               chan_to_trigger=chan_to_trigger,
                                threshold=threshold,
                                series_name=series_name,
                                data_path=output_dir,
