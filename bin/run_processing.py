@@ -6,7 +6,7 @@ from datetime import datetime
 from glob import glob
 from pytesdaq.processing.trigger import ContinuousData
 import pytesdaq.config.settings as settings
-
+from pytesdaq.utils import arg_utils
 
 if __name__ == "__main__":
 
@@ -146,21 +146,23 @@ if __name__ == "__main__":
         
     # set chan_to_trigger
     if (chan_to_trigger is not 'all'):
-        chanlist = chan_to_trigger.replace(" ", "").split(",")
-        if (sum([chan.isdigit() for chan in chanlist]) == len(chanlist)):
-            chan_to_trigger = [int(chan) for chan in chanlist]
-            print("adc_channel input: trigger set on sum of adc channels: ", chan_to_trigger)
+        chan_trigger_check = "".join([chan for chan in chan_to_trigger if chan not in [" ",  "," , "-"]])
+        if ("-" in chan_to_trigger and chan_trigger_check.isdigit()):
+            chan_to_trigger_list =  arg_utils.hyphen_range(chan_to_trigger)
+        elif chan_trigger_check.isdigit():
+            chan_to_trigger_list = chan_to_trigger.replace(" ", "").split(",")
+            chan_to_trigger_list = [int(chan) for chan in chan_to_trigger_list]
         else:
             config = settings.Config()
             con_df = config.get_adc_connections()
             adc_array = con_df.query('detector_channel == @chanlist')["adc_channel"].values
             if(len(adc_array)==0):
                 print("chan_to_trigger input does not match any channel names. Check input or config/setup file")
-            chan_to_trigger = list(adc_array.astype(np.int))
-            print("detector_channel input: trigger set on sum of adc channels: ", chan_to_trigger)
+            chan_to_trigger_list = list(adc_array.astype(np.int))
     else:
-        print("no trigger input: trigger set on sum of all channels")
-        
+        chan_to_trigger_list = 'all'
+
+    print('chan_to_trigger_list = ', chan_to_trigger_list)    
     
     data_inst = ContinuousData(file_list,
                                nb_events_randoms=nb_randoms,
@@ -169,7 +171,7 @@ if __name__ == "__main__":
                                pretrigger_length_ms=pretrigger_length_ms,
                                nb_samples=nb_samples,
                                nb_samples_pretrigger=nb_samples_pretrigger,
-                               chan_to_trigger=chan_to_trigger,
+                               chan_to_trigger=chan_to_trigger_list,
                                threshold=threshold,
                                series_name=series_name,
                                data_path=output_dir,
