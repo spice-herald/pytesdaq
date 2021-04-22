@@ -1,17 +1,22 @@
 import time
 from enum import Enum
-from pytesdaq.instruments.visa_instruments import VisaInstrument
+from pytesdaq.instruments.communication import InstrumentComm
 
 
-
-class KeysightFuncGenerator(VisaInstrument):
+class KeysightFuncGenerator(InstrumentComm):
     """
     Keysight function generators management
     """
 
-    def __init__(self,resource_address, raise_errors=True, verbose=True):
-        super().__init__(resource_address, termination='\n', raise_errors=raise_errors,
-                         verbose=verbose)
+    def __init__(self, visa_address, raise_errors=True, verbose=True):
+        super().__init__(visa_address=visa_address, termination='\n',
+                         raise_errors=raise_errors, verbose=verbose)
+        """
+        Keysight
+        """
+
+        # connect to instrument
+        self.connect()
         
         
     def set_shape(self, shape,source=1):
@@ -58,7 +63,7 @@ class KeysightFuncGenerator(VisaInstrument):
 
         # write to device
         command = 'SOUR' + str(source) + ':FUNC ' + shape
-        self._write(command)
+        self.write(command)
         
 
         
@@ -78,7 +83,7 @@ class KeysightFuncGenerator(VisaInstrument):
 
         # query from device
         command = 'SOUR' + str(source) + ':FUNC?'
-        shape = self._query(command)
+        shape = self.query(command)
         shape = shape.lower()
 
         if shape == 'squ':
@@ -138,12 +143,12 @@ class KeysightFuncGenerator(VisaInstrument):
             
         # set unit
         command = 'SOUR' + str(source) + ':VOLT:UNIT ' + unit
-        self._write(command)
+        self.write(command)
 
 
         # set amplitude
         command = 'SOUR' + str(source) + ':VOLT ' + str(amplitude)
-        self._write(command)
+        self.write(command)
         
 
         
@@ -187,12 +192,12 @@ class KeysightFuncGenerator(VisaInstrument):
             
          # set unit
         command = 'SOUR' + str(source) + ':VOLT:UNIT ' + unit
-        self._write(command)
+        self.write(command)
 
 
         # get amplitude
         command = 'SOUR' + str(source) + ':VOLT?'
-        amplitude = float(self._query(command))
+        amplitude = float(self.query(command))
 
         if convert_mVpp:
             amplitude *= 1000
@@ -235,7 +240,7 @@ class KeysightFuncGenerator(VisaInstrument):
      
         # set offset
         command = 'SOUR' + str(source) + ':VOLT:OFFS ' + str(offset)
-        self._write(command)
+        self.write(command)
 
 
 
@@ -276,7 +281,7 @@ class KeysightFuncGenerator(VisaInstrument):
          
         # query offset
         command = 'SOUR' + str(source) + ':VOLT:OFFS?'
-        offset = float(self._query(command))
+        offset = float(self.query(command))
 
         if unit=='mV':
             offset *= 1000
@@ -324,7 +329,7 @@ class KeysightFuncGenerator(VisaInstrument):
             
         # set frequency
         command = 'SOUR' + str(source) + ':FREQ ' + str(frequency)
-        self._write(command)
+        self.write(command)
         
 
         
@@ -361,7 +366,7 @@ class KeysightFuncGenerator(VisaInstrument):
 
         # get frequency
         command = 'SOUR' + str(source) + ':FREQ?'
-        frequency = float(self._query(command))
+        frequency = float(self.query(command))
         
 
         if unit == 'kHz':
@@ -406,7 +411,7 @@ class KeysightFuncGenerator(VisaInstrument):
 
         
         command = 'OUTP' + str(source) + ' ' + output_onoff
-        self._write(command)
+        self.write(command)
 
 
         
@@ -428,7 +433,7 @@ class KeysightFuncGenerator(VisaInstrument):
         """
 
         command = 'OUTP' + str(source) + '?'
-        result = int(self._query(command))
+        result = int(self.query(command))
         
         on_off = None
         if result == 0:
