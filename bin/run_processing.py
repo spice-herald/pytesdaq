@@ -7,13 +7,17 @@ from glob import glob
 from pytesdaq.processing.trigger import ContinuousData
 import pytesdaq.config.settings as settings
 from pytesdaq.utils import arg_utils
+import stat
 
 if __name__ == "__main__":
 
-
-    parser = argparse.ArgumentParser(description='Launch Processing')
-    parser.add_argument('-s','--series', dest="series", type = str, help='Series name (format string Ix_Dyyyymmdd_Thhmmss)')
+    # ------------------
+    # Input arguments
+    # ------------------
+    parser = argparse.ArgumentParser(description='Launch Trigger Processing')
     parser.add_argument('--raw_path', type = str, help='Raw data path')
+    parser.add_argument('-s','--series', dest="series", type = str,
+                        help='Series name (format string Ix_Dyyyymmdd_Thhmmss), Default: all data in raw_path')
     parser.add_argument('--nb_randoms', type=float, help='Number random events (default=500)')
     parser.add_argument('--nb_triggers', type=float, help='Number trigger events (default=all)')
     parser.add_argument('--trace_length_ms', type=float, help='Trace length [ms] [default: ')
@@ -22,13 +26,16 @@ if __name__ == "__main__":
     parser.add_argument('--nb_samples', type=float, help='Trace length [# samples]')
     parser.add_argument('--nb_samples_pretrigger', type=float,
                         help='Pretrigger length [# samples]  (default: 1/2 trace lenght)')
-    parser.add_argument('--chan_to_trigger', type=str, help='Name(s) or Number(s) of channel(s) to trigger on, separated by commas without spaces. (e.g. 0,1 or PD2,G124_PAS2)')
+    parser.add_argument('--chan_to_trigger', type=str,
+                        help='Name(s) or Number(s) of channel(s) to trigger on, separated by commas without spaces. (e.g. 0,1 or PD2,G124_PAS2)')
     parser.add_argument('--threshold', type=float, help='Trigger sigma threshold (default=10)')
     parser.add_argument('--rise_time', type=float, help='Template rise time in usec [20 usec]')
     parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
     parser.add_argument('--is_negative_pulse', action='store_true', help='Nagative pulse')
     parser.add_argument('--save_filter', action='store_true', help='Save PSD/Template in a pickle file')
-    parser.add_argument('--facility', type = int, help='Facility number [default=2]')
+    parser.add_argument('--setup_file', type = str,
+                        help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
+    
     args = parser.parse_args()
 
     
@@ -43,9 +50,9 @@ if __name__ == "__main__":
         print('ERROR: Either "pretrigger_length_ms" or "nb_samples" needs to be provided, not both!')
         exit(0)
 
-
-    # default
-    facility = 2
+    # ------------------
+    # Default 
+    # ------------------
     chan_to_trigger='all'
     threshold = 10
     nb_randoms = 500
@@ -59,8 +66,9 @@ if __name__ == "__main__":
     save_filter = False
     is_negative_pulse = False
     
-
-    # input
+    # ------------------
+    # Parse arguments 
+    # ------------------
     series = None
     if args.series:
         series = args.series
@@ -89,11 +97,38 @@ if __name__ == "__main__":
         save_filter = True
     if args.is_negative_pulse:
         is_negative_pulse = True
-    if args.facility:
-        facility = args.facility
+        
 
 
-    # input directory
+    # ------------------
+    # config file
+    # ------------------
+    setup_file = None
+    if args.setup_file:
+        setup_file = args.setup_file
+    else:
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        setup_file = this_dir + '/../pytesdaq/config/setup.ini'
+
+    if not os.path.isfile(setup_file):
+        print('ERROR: Setup file "' + setup_file + '" not found!')
+        exit()
+
+    
+    config = settings.Config(setup_file=setup_file)
+
+
+    # facility
+    facility = config.get_facility_num()
+
+    if not facility or facility is None:
+        print('ERROR: No facility available in setup file!')
+        exit(0)
+
+    
+    # ------------------
+    # input path
+    # ------------------
     input_data_dir = raw_path
     input_data_dir_split = input_data_dir.split('/')
     if series is not None and input_data_dir_split[-1]!=series:
@@ -110,8 +145,10 @@ if __name__ == "__main__":
         exit(0)
 
     
-              
+    # ------------------
     # file list
+    # ------------------
+    
     file_list = []
     file_name_wildcard = '*.hdf5'
     if series is not None:
@@ -126,6 +163,9 @@ if __name__ == "__main__":
         exit(0)
 
 
+    # ------------------
+    # output directory
+    # ------------------
             
     # output name
     now = datetime.now()
@@ -141,10 +181,18 @@ if __name__ == "__main__":
         output_dir = raw_path[0:-len(input_data_dir_split[-1])] + 'trigger_' + series_dir 
            
     if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
+        try:
+            os.makedirs(output_dir)
+            os.chmod(output_dir, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+        except OSError:
+            print('\nERROR: Unable to create directory "'+ data_path  + '"!\n')
+            exit()
+            
 
-        
-    # set chan_to_trigger
+    # ------------------
+    # trigger channels
+    # ------------------   
+  
     if (chan_to_trigger is not 'all'):
         chan_trigger_check = "".join([chan for chan in chan_to_trigger if chan not in [" ",  "," , "-"]])
         if ("-" in chan_to_trigger and chan_trigger_check.isdigit()):
@@ -153,7 +201,6 @@ if __name__ == "__main__":
             chan_to_trigger_list = chan_to_trigger.replace(" ", "").split(",")
             chan_to_trigger_list = [int(chan) for chan in chan_to_trigger_list]
         else:
-            config = settings.Config()
             con_df = config.get_adc_connections()
             adc_array = con_df.query('detector_channel == @chanlist')["adc_channel"].values
             if(len(adc_array)==0):
@@ -163,6 +210,14 @@ if __name__ == "__main__":
         chan_to_trigger_list = 'all'
 
     print('chan_to_trigger_list = ', chan_to_trigger_list)    
+
+
+
+    # ------------------
+    # Launch
+    # ------------------ 
+
+
     
     data_inst = ContinuousData(file_list,
                                nb_events_randoms=nb_randoms,
