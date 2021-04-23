@@ -31,8 +31,8 @@ def get_controller_info(connection_table,
                 
         
 def get_adc_channel_info(connection_table,
-                         tes_channel=str(),
-                         detector_channel= str()):
+                         tes_channel=None,
+                         detector_channel=None):
     
     return _get_info(connection_table,'adc',
                      tes_channel=tes_channel,
@@ -74,6 +74,7 @@ def get_adc_channel_list(connection_table,
             
     
     return  adc_dict
+
 
     
 

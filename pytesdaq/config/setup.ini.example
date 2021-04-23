@@ -3,29 +3,20 @@
 # Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge, 3 = UMass
 facility = 1
 
-# raw data path 
+
+# fridge run
+fridge_run = 10
+
+# raw data path
+# (run# with #=fridge_run appended to path automatically)
 data_path = ./
 
 # directory to save figures from pulse display (.png, .npy)
 #fig_data_path = /data/operation
 
 
-# fridge run
-fridge_run = 10
-
-# electronics constants (inside the fridge)
-# required: 
-#    -Magnicon: "shunt_resistance"  and  "squid_turn_ratio"
-#    -CDMS FEB: "shunt_resistance", "squid_turn_ratio", and "feedback_resistance"
-
-# shunt resistance [Ohms]
-shunt_resistance = 0.02
-
-# SQUID Loop turn ratio
-squid_turn_ratio = 2.4
-
-
-# type of instruments used 
+# Intruments
+# (comma separated if multiple devices used, default: 1st in the list)
 squid_controller = magnicon
 signal_generator = magnicon
 temperature_controller = lakeshore
@@ -44,45 +35,60 @@ enable_readback = false
 
 
 [adc1]
+
+# device name
 device_name  = Dev1
+
+# default configuration (may be changed with run_daq.py arguments!)
 trigger_channel = pfi0
+sample_rate = 1250000 
+nb_samples = 8192
+voltage_min = -5
+voltage_max = 5
+channel_list = 0-7
+trigger_type = 3
+
+
 
 # NI ADC connection information
-
-# Format: string array for each ADC channel used [0:7]
+#
+#  There may be multiple channel names:
+#  Readout board channels ->  tes/wiring channels ->  detector/device channels 
+# 
+# Format for each ADC channels (0-7):
 #   Controller ->  "controller:[name]_[channel]" (REQUIRED)
 #   TES wiring ->  "tes:[channel]  (OPTIONAL if same as controller channel)
 #   Detector   ->  "detector:[name]_[channel]" (REQUIRED)
+
 connection0 = controller:magnicon_1, detector:PD2
 connection1 = controller:magnicon_2, detector:G124_PAS2
 connection2 = controller:magnicon_3, detector:G124_PBS1
 
 
-# default adc settings 
-sample_rate = 1250000 
-nb_samples = 8192
-voltage_min = -5
-voltage_max = 5
-channel_list = 0-7 
-trigger_type = 3
-
-
-
-
-# detector config  for each ADC connection
-# (ONLY IF DETECTOR CONTROL DISABLED!)
-# List of most useful parameters for pytesdaq scope and RQpy processing
+# Electronics and detector readout configuration
+# 
+# shunt_resistance [Ohms]
+# squid_turn_ratio 
+# feedback_resistance [Ohms] (for FEB ONLY, magnicon->read from board)
+# 
+# Other parameters useful for processing/analysis  (ONLY IF DETECTOR CONTROL DISABLED!)
 #     tes_bias: [uAmps]
 #     close_loop_norm: Output gain * feedback resistance [Ohms] * squid_turn_ratio
 #     open_loop_norm:  Output gain * Preamp gain
 #     signal_gen_current:  [uAmps]
 #     signal_gen_frequency: [Hz]
 
-# EXAMPLE
-#detector_config0 = tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
-#detector_config1 = tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
-#detector_config2 = tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
-		 
+detector_config0 = shunt_resistance: 0.005, squid_turn_ratio:2.4
+detector_config1 = shunt_resistance: 0.005, squid_turn_ratio:2.4
+detector_config2 = shunt_resistance: 0.005, squid_turn_ratio:2.4
+
+
+# EXAMPLE 
+#detector_config0 = shunt_resistance: 0.005, squid_turn_ratio:2.4, tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
+#detector_config1 = shunt_resistance: 0.005, squid_turn_ratio:2.4, tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
+#detector_config2 = shunt_resistance: 0.005, squid_turn_ratio:2.4, tes_bias:30, close_loop_norm:124000, signal_gen_current:10, signal_gen_frequency:40
+
+ 
 
 
 

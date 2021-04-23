@@ -17,6 +17,10 @@ class KeysightFuncGenerator(InstrumentComm):
 
         # connect to instrument
         self.connect()
+
+
+        # get idn
+        self._device_idn = self.get_idn()
         
         
     def set_shape(self, shape,source=1):
@@ -393,6 +397,14 @@ class KeysightFuncGenerator(InstrumentComm):
 
         """
 
+
+        # check if keysight 33120A
+        # no output on/off
+        if '3312' in self._device_idn:
+            return
+
+
+        
         if isinstance(output_onoff,int):
             if output_onoff==0:
                 output_onoff = 'off'
@@ -432,6 +444,12 @@ class KeysightFuncGenerator(InstrumentComm):
         
         """
 
+
+        if '3312' in self._device_idn:
+            return 'unknown'
+
+
+        
         command = 'OUTP' + str(source) + '?'
         result = int(self.query(command))
         

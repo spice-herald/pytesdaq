@@ -40,7 +40,7 @@ class Control:
         self._enable_readback = self._config.enable_redis()
 
         # signal connection map
-        self._connection_table= self._config.get_adc_connections()
+        self._connection_table = self._config.get_adc_connections()
        
         
         # controllers
@@ -56,8 +56,6 @@ class Control:
         
         if not self._dummy_mode:
             self._connect_instruments()
-
-           
 
                         
     @property
@@ -478,7 +476,7 @@ class Control:
 
                 
             # source
-            if source is not None:
+            if source is not None and self._squid_controller_name == 'feb':
 
                 
                 # get readout controller ID and Channel
@@ -955,17 +953,8 @@ class Control:
            dictionary
         """
                 
-      
-        # get readout controller ID and Channel
-        controller_id, controller_channel = (
-            connection_utils.get_controller_info(self._connection_table,
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id,
-                                                 adc_channel=adc_channel)
-        )
         
-        # initialize dictionay
+        # initialize dictionary
         output_dict = dict()
         output_dict['source'] = nan
         output_dict['amplitude'] = nan
@@ -984,8 +973,19 @@ class Control:
 
 
         # magnicon
-        if self._signal_generator_name == 'magnicon' and self._squid_controller_name == 'magnicon':
+        if self._signal_generator_name == 'magnicon':
 
+
+            # get readout controller ID and Channel
+            controller_id, controller_channel = (
+                connection_utils.get_controller_info(self._connection_table,
+                                                     tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id,
+                                                     adc_channel=adc_channel)
+            )
+        
+            
             # convert some parameters
             source_magnicon = 'I'
            
@@ -993,7 +993,6 @@ class Control:
                 self._magnicon_inst.get_generator_params(controller_channel,
                                                          signal_gen_num)
             )
-
             
             # fill dictionary
             if source=='I':
@@ -1022,10 +1021,21 @@ class Control:
             output_dict['current']  = float(output_dict['voltage']/resistance)
             output_dict['frequency'] = float(self._signal_generator_inst.get_frequency(source=signal_gen_num))
             output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
-            
+
             # source
             if self._squid_controller_name == 'feb':
-                
+
+
+                # get readout controller ID and Channel
+                controller_id, controller_channel = (
+                    connection_utils.get_controller_info(self._connection_table,
+                                                         tes_channel=tes_channel,
+                                                         detector_channel=detector_channel,
+                                                         adc_id=adc_id,
+                                                         adc_channel=adc_channel)
+                )
+
+                                
                 is_connected_to_tes = (
                     self.is_signal_gen_connected_to_tes(tes_channel=tes_channel,
                                                         detector_channel=detector_channel,
@@ -1046,7 +1056,10 @@ class Control:
 
                 if is_connected_to_feedback:
                     output_dict['source'] = 'feedback'
-                    
+
+            else:
+                # FIXME: default to tes if not FEB
+                output_dict['source'] = 'tes'
                 
         return output_dict
 
@@ -1105,13 +1118,86 @@ class Control:
             feedback_resistance = feedback_resistance *1000
                 
         else:
-            feedback_resistance = self._config.get_feedback_resistance()
+
+            if (tes_channel is not None or  detector_channel is not None):
+                adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                    self._connection_table,
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel
+                )
+            
+            detector_config = self._config.get_detector_config(adc_id=adc_id,
+                                                               adc_channel_list=[adc_channel])
+
+            if ('feedback_resistance' in  detector_config and
+                len(detector_config['feedback_resistance'])==1):
+                feedback_resistance = float(detector_config['feedback_resistance'][0])
+                
         
             
         return feedback_resistance
 
 
+    def get_shunt_resistance(self, tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
+        """
+        Get shunt resistance [Ohm]
+        (from setup file)
+        """
+        
+        shunt_resistance = nan
 
+        # get ADC id/number
+        if (tes_channel is not None or  detector_channel is not None):
+            adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                self._connection_table,
+                tes_channel=tes_channel,
+                detector_channel=detector_channel
+            )
+
+        # get detector config
+        detector_config = self._config.get_detector_config(adc_id=adc_id,
+                                                           adc_channel_list=[adc_channel])
+
+        # extract shunt resistance
+        if ('shunt_resistance' in  detector_config and
+            len(detector_config['shunt_resistance'])==1):
+            shunt_resistance = detector_config['shunt_resistance'][0]
+                
+        return shunt_resistance
+
+
+
+    def get_squid_turn_ratio(self, tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
+        """
+        Get SQUID loop ratio (from setup file)
+        """
+        
+        squid_turn_ratio = nan
+
+        # get ADC id/number
+        if (tes_channel is not None or  detector_channel is not None):
+            adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                self._connection_table,
+                tes_channel=tes_channel,
+                detector_channel=detector_channel
+            )
+
+        # get detector config
+        detector_config = self._config.get_detector_config(adc_id=adc_id,
+                                                           adc_channel_list=[adc_channel])
+
+        # extract shunt resistance
+        if ('squid_turn_ratio' in  detector_config and
+            len(detector_config['squid_turn_ratio'])==1):
+            squid_turn_ratio = detector_config['squid_turn_ratio'][0]
+                
+        return squid_turn_ratio
+
+    
 
 
     def get_volts_to_amps_close_loop_norm(self, tes_channel=None,
@@ -1132,15 +1218,18 @@ class Control:
         feedback_resistance = self.get_feedback_resistance(tes_channel=tes_channel,
                                                            detector_channel=detector_channel,
                                                            adc_id=adc_id, adc_channel=adc_channel)
-      
+
         if feedback_resistance == nan or feedback_resistance is None:
             print('ERROR: unable to find feedback resistance. It needs to be added in setup.ini file!')
             return None
         
         
         # squid loop turn ratio
-        squid_turn_ratio = self._config.get_squid_turn_ratio()
-        if squid_turn_ratio is None:
+        squid_turn_ratio = self.get_squid_turn_ratio(tes_channel=tes_channel,
+                                                     detector_channel=detector_channel,
+                                                     adc_id=adc_id, adc_channel=adc_channel)
+     
+        if squid_turn_ratio == nan or squid_turn_ratio is None:
             print('ERROR: unable to find SQUID turn ratio. It needs to be added in setup.ini file!')
             return None
 
@@ -1209,7 +1298,7 @@ class Control:
     
 
     def read_all(self, tes_channel_list=None, detector_channel_list=None,
-                 adc_id=None,adc_channel_list=None):
+                 adc_id=None, adc_channel_list=None):
         """
         Read from board all parameters
         Output in a dictionary: dict['param'] = array values (index based
@@ -1227,33 +1316,13 @@ class Control:
         # ====================
         
         output_dict = dict()
+
         
-        # TES parameter list
+        # intialize output
         param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source']
-                      
-
-        # channel list 
-        nb_channels = 0
-        if tes_channel_list is not None:
-            nb_channels = len(tes_channel_list)
-            output_dict['channel_type'] = 'tes'
-            output_dict['channel_list'] = tes_channel_list
-        elif detector_channel_list is not None:
-            nb_channels = len(detector_channel_list)
-            output_dict['channel_type'] = 'detector_channel'
-            output_dict['channel_list'] = detector_channel_list
-        elif (adc_id is not None and adc_channel_list is not None):
-            nb_channels = len(adc_channel_list)
-            output_dict['adc_name'] = adc_id
-            output_dict['channel_type'] = 'adc'
-            output_dict['channel_list'] = adc_channel_list
-        else:
-            raise ValueError('ERROR in control::read_all: No argument given!')
-
-       
-        # intialize output
+        
         for param in param_list:
             output_dict[param] = list()
      
@@ -1273,6 +1342,36 @@ class Control:
         output_dict['open_loop_full_norm'] = list()
 
 
+        # ====================
+        # channels
+        # ====================
+
+        # channel list 
+        nb_channels = 0
+        if tes_channel_list is not None:
+            nb_channels = len(tes_channel_list)
+            output_dict['channel_type'] = 'tes'
+            output_dict['channel_list'] = tes_channel_list
+        elif detector_channel_list is not None:
+            nb_channels = len(detector_channel_list)
+            output_dict['channel_type'] = 'detector_channel'
+            output_dict['channel_list'] = detector_channel_list
+        elif (adc_id is not None and adc_channel_list is not None):
+            nb_channels = len(adc_channel_list)
+            output_dict['adc_name'] = adc_id
+            output_dict['channel_type'] = 'adc'
+            output_dict['channel_list'] = adc_channel_list
+        else:
+            raise ValueError('ERROR in control::read_all: No argument given!')
+
+
+
+        
+        # ====================
+        # Loop channels and
+        # get parameters
+        # ====================
+        
         # loop channels
         for ichan in range(nb_channels):
 
@@ -1367,9 +1466,21 @@ class Control:
             )
             
 
-            output_dict['squid_turn_ratio'].append(self._config.get_squid_turn_ratio())
-            output_dict['shunt_resistance'].append(self._config.get_shunt_resistance())
+            output_dict['squid_turn_ratio'].append(
+                self.get_squid_turn_ratio(tes_channel=tes_chan, 
+                                          detector_channel=detector_chan, 
+                                          adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
+
+            
+            output_dict['shunt_resistance'].append(
+                self.get_shunt_resistance(tes_channel=tes_chan, 
+                                          detector_channel=detector_chan, 
+                                          adc_id=adc_chan_id, adc_channel=adc_chan)
+            )
+            
             output_dict['signal_gen_tes_resistance'].append(self._config.get_signal_gen_tes_resistance())
+            
         return output_dict
         
         

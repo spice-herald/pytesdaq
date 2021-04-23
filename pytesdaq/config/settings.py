@@ -255,40 +255,6 @@ class Config:
 
 
 
-    def get_shunt_resistance(self):
-        """
-        Read shunt resistance from setup.ini file
-        """
-        
-        resistance = nan
-        try:
-            resistance =  float(self._get_setting('setup','shunt_resistance'))
-        except:
-            raise ValueError('ERROR: "shunt_resistance" parameter required!')
-            
-    
-        return resistance
-
-
-
-    def get_squid_turn_ratio(self):
-        """
-        Read SQUID Turn ratio from setup.ini file
-        """
-        
-        squid_turn_ratio = nan
-
-        try:
-            squid_turn_ratio =  float(self._get_setting('setup','squid_turn_ratio'))
-        except:
-            raise ValueError('ERROR: "shunt_resistance" parameter required!')
-         
-         
-    
-        return squid_turn_ratio 
-
-
-
     def get_preamp_fix_gain(self, controller_name=None):
         """
         Get SQUID readout preamp fix gain
@@ -307,6 +273,8 @@ class Config:
             
         return preamp_fix_gain
 
+
+    
     
     def get_feedback_fix_gain(self, controller_name=None):
         """
@@ -327,6 +295,9 @@ class Config:
         return feedback_fix_gain
 
 
+
+
+    
     def get_output_fix_gain(self, controller_name=None):
         """
         Get SQUID readout output driver fix gain
@@ -343,19 +314,7 @@ class Config:
         return output_fix_gain
 
 
-
-    def get_feedback_resistance(self):
-        """
-        Get feedback resistance
-        Magnicon: variable feedback resistance can be read directly from electronics
-        """
-
-        resistance = nan
-        if self._has_setting('setup','feedback_resistance'):
-            resistance =  float(self._get_setting('setup','feedback_resistance'))
-        return resistance
-        
-
+    
 
     def get_signal_gen_tes_resistance(self, controller_name=None):
         """
@@ -488,13 +447,13 @@ class Config:
                       'signal_source','signal_gen_current','signal_gen_frequency',
                       'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
                       'signal_gen_tes_resistance','close_loop_norm']
+        
         detector_config = dict()
         for param in param_list:
             detector_config[param] = list()
             
 
         # store channel lost
-        
         detector_config['adc_name'] = adc_id
         detector_config['channel_type'] = 'adc'
         detector_config['channel_list'] = adc_channel_list
@@ -523,20 +482,7 @@ class Config:
                 # add in config
                 detector_config[param_name].append(param_val)
 
-            # add some parameters
-            if self._has_setting('setup', 'shunt_resistance'):
-                detector_config['shunt_resistance'].append(float(self._get_setting('setup', 'shunt_resistance')))
-            else:
-                raise ValueError('ERROR in get_detector_config: Shunt resistance not available')
-            
-            if self._has_setting('setup', 'squid_turn_ratio'):
-                detector_config['squid_turn_ratio'].append(float(self._get_setting('setup', 'squid_turn_ratio')))
-
-            if self._has_setting('setup', 'feedback_resistance'):
-                detector_config['feedback_resistance'].append(float(self._get_setting('setup', 'feedback_resistance')))
-                
-                            
-            
+                       
         return detector_config 
 
 

@@ -30,7 +30,7 @@ class InstrumentComm:
         self._inst = None
 
         # debug
-        self._debug = True
+        self._debug = False
         
         
     def set_address(self, ip_address=None, visa_address=None,
