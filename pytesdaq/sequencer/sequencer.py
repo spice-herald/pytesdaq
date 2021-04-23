@@ -6,7 +6,7 @@ import shutil
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import connection_utils
-
+import stat
 
 class Sequencer:
      """
@@ -118,7 +118,7 @@ class Sequencer:
           self._data_path = self._config.get_data_path()
 
           # append run#
-          fridge_run = 'run' + str(config.get_fridge_run())
+          fridge_run = 'run' + str(self._config.get_fridge_run())
           if self._data_path.find(fridge_run)==-1:
                self._data_path += '/' + fridge_run
        
@@ -236,4 +236,9 @@ class Sequencer:
           
           
           if not os.path.isdir(self._data_path):
-               os.mkdir(self._data_path)
+               try:
+                    os.makedirs(self._data_path)
+                    os.chmod(self._data_path, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+               except OSError:
+                    raise ValueError('\nERROR: Unable to create directory "'+ self._data_path  + '"!\n')
+              
