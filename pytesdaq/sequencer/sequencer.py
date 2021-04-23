@@ -116,6 +116,11 @@ class Sequencer:
 
           # data path
           self._data_path = self._config.get_data_path()
+
+          # append run#
+          fridge_run = 'run' + str(config.get_fridge_run())
+          if self._data_path.find(fridge_run)==-1:
+               self._data_path += '/' + fridge_run
        
 
 
