@@ -153,20 +153,22 @@ class Config:
 
 
 
-    def get_temperature_controller(self):
+    def get_temperature_controllers(self):
         """
-        get temperature controller device name
+        get temperature controller device names
+        (comma separated)
             
         Returns:
-            str - no type conversion happens here!
+            list of strings - no type conversion happens here!
         """
-        controller=str()
+        controllers=list()
+        
         try:
-            controller =  self._get_setting('setup','temperature_controller')
+            controller =  self._get_comma_separated_setting('setup','temperature_controllers')
         except:
             pass
         
-        return controller
+        return controllers
 
 
 
@@ -621,27 +623,60 @@ class Config:
         return address
 
 
-    def get_temperature_controller_address(self, device_name):
+    def get_temperature_controller_setup(self, device_name):
         """
         get function generators
-        
+    
+        Args:
+            devic_name = "lakeshore" or "macrt"
+
         Returns:
             str - no type conversion happens here!
         """
 
-        key = device_name + '_address'
-        
-        address=str()
+        # get all items in sectiob
+        items = None
+
         try:
-            address =  self._get_setting('temperature_controllers',key)
+            items = self._get_section('temperature_controllers')
         except:
-            pass
-    
-        return address
+            return items
+
+
+        # initialize dictionary
+        output_dict = dict()
+
+        try:
+            
+            for item in items:
+            
+                # extract device name
+                device = item[0][0:item[0].find('_')]
+                device = device.strip()
+                device_param = item[0][item[0].find('_')+1:]
+                device_param = device_param.strip()
+
+                # check if selected device
+                if device  != device_name:
+                    continue
+                output_dict[device_param] = dict()
+
+                # get parameters
+                params = item[1].split(',')
+                for param in params:
+                    param_name = str(param.split(':')[0]).strip()
+                    param_val = str(param.split(':')[1]).strip()
+                    output_dict[device_param][param_name] = param_val
+            
+        except:
+            raise ValueError('ERROR: Unknown temperature_controllers format!')
+                
+        
+        return output_dict
     
 
     
-    def _get_ini_path(self,ini_filename):
+    def _get_ini_path(self, ini_filename):
         """
         Get the path where the ini files live. ini files
         should be placed in the same directory as the settings.py module.
@@ -658,7 +693,7 @@ class Config:
         return os.path.abspath(os.path.join(this_dir, ini_filename))
 
 
-    def _get_section(self,section):
+    def _get_section(self, section):
         """
         Get all items from section
         

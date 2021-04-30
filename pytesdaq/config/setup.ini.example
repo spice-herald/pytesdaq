@@ -16,10 +16,10 @@ data_path = ./
 
 
 # Intruments
-# (comma separated if multiple devices used, default: 1st in the list)
+# (Temperature controller: comma separated if multiple devices used, default: 1st in the list)
 squid_controller = magnicon
 signal_generator = magnicon
-temperature_controller = lakeshore
+temperature_controllers = lakeshore
 
 
 # ADC list
@@ -146,9 +146,55 @@ feb2 = 1,7
 [signal_generators]
 keysight_address = TCPIP::192.168.0.4::5025::SOCKET
 
-
 [temperature_controllers]
-lakeshore_address =  TCPIP::192.168.0.3::7777::SOCKET
+# Lakeshore
+
+# TCP or USB information
+lakeshore_setup  =  ip:192.168.0.3, port:7777
+
+# channel setup
+# Format:
+#    lakeshore_chan[1-16] = name:[unique name], type:[RuO2, CX, or FR], serial:[...]
+#    "type" and "serial" are optional is resistance only measurement or temperature
+#    curve loaded in lakeshore
+
+lakeshore_chan1 = name:TES1
+lakeshore_chan2 = name:MF3 
 
 
+
+# MARCT
+
+# Module names
+#
+# Format:
+#   macrt_modules = module1:[module name], module2:...
+# (no specific format for module name, need to be unique)
+macrt_modules = module1:mmr3-174, module2:mmr3-184, module3:mgc3-66
+
+
+# Individual module setup
+# Format:
+#   macrt_[module name] = type:[mmr3 or mgc3], ip:[X.X.X.X], protocol:[udp or tcp]
+#   macrt_[module_name]_chan[0,1, or 2] = name:[unique name], number:[unique number],
+#                                         type:[RX, CX, or FR], serial:[...]
+#
+#  "type" and "serial" are optional is resistance only measurement or temperature
+#  curve loaded in module
+
+# MMR3-174
+macrt_mmr3-174_setup = type:mmr3, ip:192.168.0.31
+macrt_mmr3-174_chan1 = name:CP, number:17, type:RX, serial:R654
+macrt_mmr3-174_chan2 = name:Still, number:18, type:CX, serial:121325
+
+# MMR3-184
+macrt_mmr3-184_setup = type:mmr3, ip:192.168.0.32
+macrt_mmr3-184_chan0 = name:MC, number:19, type:FR, serial:105D
+macrt_mmr3-184_chan1 = name:2nde, number:20, type:CX, serial:121324
+macrt_mmr3-184_chan2 = name:1st, number:21, type:CX, serial:121322
+
+# MGC3-66
+macrt_mgc3-66_setup = type:mgc3, ip:192.168.0.34
+macrt_mgc3-66_chan1 = name:heaterMC, number:22
+macrt_mgc3-66_chan2 = name:heaterStil, number:23
 
