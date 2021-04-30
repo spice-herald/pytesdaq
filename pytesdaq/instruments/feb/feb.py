@@ -1,7 +1,7 @@
 import math
 import time
 from enum import Enum
-from pytesdaq.instruments.visa_instruments import VisaInstrument
+from pytesdaq.instruments.communication import InstrumentComm
 from math import nan
 
 
@@ -26,16 +26,16 @@ class FEBChannels(Enum):
 
 
 
-class FEB(VisaInstrument):
+class FEB(InstrumentComm):
     """
     FEB control
     """
 
-    def __init__(self,gpib_address, verbose=False, raise_errors=True):
-        super().__init__(gpib_address,verbose=verbose, raise_errors=raise_errors)
-        
-        
+    def __init__(self, gpib_address, verbose=False, raise_errors=True):
+        super().__init__(visa_address=gpib_address, verbose=verbose,
+                         raise_errors=raise_errors)
 
+        
     def set_phonon_qet_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
         """
         Set Phonon QET bias
@@ -151,7 +151,7 @@ class FEB(VisaInstrument):
 
         # write
         time.sleep(millisec_delay)
-        self._write_feb(subrack, address, data)
+        self.write_feb(subrack, address, data)
 
         
     def set_phonon_feedback_loop(self, subrack, slot, channel, closed):
@@ -194,7 +194,7 @@ class FEB(VisaInstrument):
                     data += int(squid_CSR[i]) << i
                     
         time.sleep(0.16)
-        self._write_feb(subrack, address, data)
+        self.write_feb(subrack, address, data)
 
 
     def set_phonon_feedback_polarity(self,subrack, slot, channel, inverted):
@@ -236,7 +236,7 @@ class FEB(VisaInstrument):
                 if i != 7:
                     data += int(squid_CSR[i]) << i
         time.sleep(0.16)
-        self._write_feb(subrack, address, data)
+        self.write_feb(subrack, address, data)
        
 
 
@@ -273,7 +273,7 @@ class FEB(VisaInstrument):
                     if i != 15:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write_feb(subrack, address, data)
+            self.write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified to set signal source: " + str(channel))
 
@@ -311,7 +311,7 @@ class FEB(VisaInstrument):
                     if i != 11:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self._write_feb(subrack, address, data)
+            self.write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setting SG to FB line:: " + str(channel))
 
@@ -351,7 +351,7 @@ class FEB(VisaInstrument):
                     if i != 3:
                         data += int(sense_bias_CSR[i]) << i
             time.sleep(0.16)
-            self._write_feb(subrack, address, data)
+            self.write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setting SG to TES line: " + str(channel))
 
@@ -582,7 +582,8 @@ class FEB(VisaInstrument):
         elif channel == FEBChannels.D.value:
             return not sense_bias_CSR[3]
         else:
-            raise Exception("FEB: Invalid channel value specified for getExternalEnable() " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for getExternalEnable() "
+                            + str(channel))
 
 
 
@@ -593,10 +594,11 @@ class FEB(VisaInstrument):
         """
         
         subrack_with_address_bit = subrack | 8
-        address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
+        address_str = _HEADER + self._fourdigit(format(address, "x"))
+        address_str += "0" + format(subrack_with_address_bit, "x") + _FOOTER
         data_str = _HEADER + format(data, "x") + "0" + format(subrack, "x") + _FOOTER
-        self._write(address_str)
-        self._write(data_str)
+        self.write(address_str)
+        self.write(data_str)
         time.sleep(0.16)
 	
 
@@ -605,10 +607,10 @@ class FEB(VisaInstrument):
         Read from FEB
         """
         subrack_with_address_bit = subrack | 8
-        address_str = _HEADER + self._fourdigit(format(address, "x")) + "0" + format(subrack_with_address_bit, "x") + _FOOTER
-        self._write(address_str)
-        self._write(_READ_COMMAND)
-        data = self._read()
+        address_str = _HEADER + self._fourdigit(format(address, "x"))
+        address_str += "0" + format(subrack_with_address_bit, "x") + _FOOTER
+        self.write(address_str)
+        data = self.query(_READ_COMMAND)
         return data[:4]
 
 
@@ -639,7 +641,7 @@ class FEB(VisaInstrument):
         # data number
         data = 0
         if setting == FEBSettings.SENSORBIAS.value:
-            data = int(round(4095.0 * (2000.0 + value) / 4000.0))
+            data = int(round(4095.0 * (500.0 + value) / 1000.0))
         if setting == FEBSettings.SQUIDBIAS.value:
             data = int(round(4095.0 * (200.0 + value) / 400.0))
         if setting == FEBSettings.SQUIDLOCK.value:
@@ -650,7 +652,7 @@ class FEB(VisaInstrument):
             data = int(round(4095.0 * (5.0 - value) / 10.0))
         
         time.sleep(millisec_delay)
-        self._write_feb(subrack, address, data)
+        self.write_feb(subrack, address, data)
         
 
     def _get_param(self, subrack, slot, setting, channel, millisec_delay = 0.160):
@@ -672,7 +674,7 @@ class FEB(VisaInstrument):
         decimal_result = int(bias_val_hex, 16) & 4095
 
         if setting == FEBSettings.SENSORBIAS.value:
-            output_val = 4000.0 * float(decimal_result) / 4095.0 - 2000.0
+            output_val = 1000.0 * float(decimal_result) / 4095.0 - 500.0
         elif setting == FEBSettings.SQUIDBIAS.value:
             output_val = 400.0 * float(decimal_result) / 4095.0 - 200.0
         elif setting == FEBSettings.SQUIDLOCK.value:

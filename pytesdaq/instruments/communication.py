@@ -34,7 +34,7 @@ class InstrumentComm:
         
         
     def set_address(self, ip_address=None, visa_address=None,
-                        port=None, recv_port=None):
+                    port=None, recv_port=None):
         """
         Address
         """
@@ -135,6 +135,14 @@ class InstrumentComm:
 
         self._inst = None
 
+
+        
+    def disconnect(self):
+        """
+        Close connection to instrument
+        """
+        self.close()
+        
         
             
     def connect(self):
@@ -178,7 +186,7 @@ class InstrumentComm:
             
                 if self._verbose:
                     print('ERROR opening VISA resource "{}"'.format(self._visa_address))
-                if raise_errors:
+                if self._raise_errors:
                     raise
                 else:
                     return None

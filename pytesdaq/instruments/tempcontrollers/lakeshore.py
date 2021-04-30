@@ -1,8 +1,9 @@
 import time
-from enum import Enum
-from pytesdaq.instruments.visa_instruments import VisaInstrument
+from lakeshore import Model372
 
 
+
+# lakeshore constants
 _MAX_NB_CHANNELS = 16
 _DWELL_MIN = 1
 _DWELL_MAX = 200
@@ -12,66 +13,181 @@ _PAUSE_MAX = 200
 
 
 
-class LakeshoreTempController(VisaInstrument):
+class Lakeshore():
     """
     Lakeshore Temperature Controller 
     """
 
-    def __init__(self,resource_address, raise_errors=True, verbose=True):
-        super().__init__(resource_address, termination='\n', raise_errors=raise_errors,
-                         verbose=verbose)
+    def __init__(self, model_number=372, ip_address=None, port=None, baud_rate=57600,
+                 raise_errors=True, verbose=True):
+
+
+        # verbose
+        self._debug = False
+        self._verbose = verbose
+        self._raise_errors = raise_errors
+
         
+        # Initialize instrument
+        self._inst = None
+        self._model_number = model_number
+        self._serial_number = None
+        self._firmware_version = None
+        
+        # Connection setup
+        self._ip_address =  ip_address
+        self._connection_type = None
+        self._baud_rate = baud_rate
+        self._tcp_port = None
+        self._com_port = None
+
+        if self._ip_address is None:
+            self._connection_type = 'usb'
+            self._com_port = port
+        else:
+            self._connection_type = 'tcp'
+            self._tcp_port = port
+        
+
+        # channel maps
+        self._channel_map = None
+    
+        
+         
+    @property
+    def model_number(self):
+        return self._model_number
+
+    @property
+    def serial_number(self):
+        return self._serial_number
+      
+    @property
+    def ip_address(self):
+        return self._ip_address
+
+    @property
+    def port(self):
+        if self._connection_type == 'usb':
+            return self._com_port
+        elif self._connection_type == 'tcp':
+            return self._tcp_port
+        else:
+            return None
 
 
         
-    def get_channel_setup(self, chan_nums):
+    def connect(self):
+        """
+        Open connection
+        """
+
+        
+        try:
+            if self._model_number==372:
+                self._inst = Model372(baud_rate=self._baud_rate,
+                                      ip_address=self._ip_address,
+                                      tcp_port=self._tcp_port,
+                                      com_port=self._com_port)
+
+        except:
+            print('ERROR: Unable to connect to lakeshore!')
+            if self._raise_errors:
+                raise
+            else:
+                return 
+
+
+        # properties
+        self._serial_number = self._inst.serial_number
+        self._firmware_version = self._inst.firmware_version
+
+            
+        if self._verbose:
+            connection_info = 
+            print('Lakeshore ' + str(self._model_number) + ' connected!')
+
+            
+    def disconnect(self):
+        """
+        Close connection
+        """
+
+        if self._inst  is not None:
+            if self._connection_type == 'usb':
+                self._inst.disconnect_usb()
+            else:
+                self._inst.disconnect_tcp()
+    
+        if self._verbose:
+            print('Lakeshore ' + str(self._model_number) + ' disconnected!')
+                
+
+    def set_channel_names(self, channel_numbers, channel_names):
+        """
+        Channel name map
+        """
+
+        # convert to list if needed
+        if not isinstance(channel_numbers):
+            channel_numbers = [channel_numbers]
+            
+        if not isinstance(channel_names):
+            channel_names = [channel_names]
+
+            
+        if len(channel_numbers) != len(channel_names):
+            raise ValueError('ERROR: channel number and names should be same length!')
+
+
+        if self._channel_map is None:
+            self._channel_map = dict()
+
+        for ichan in range(len(channel_numbers)):
+            self._channel_map[channel_names[ichan]] = channel_numbers[ichan]
+            
+
+            
+        
+    def get_channel_setup(self, channel_numbers=None, channel_names=None):
         """
         Get current channel setup
 
         
         Parameters
         ----------
-        chan_nums: int or list
-           0 = all channels
-           1-16 = specific channel
+        channel_numbers: int or list
+            1-16 = specific channel
         
-
         Return
         ----------
 
         setup: dictionary       
         """
 
-        # initialize
+
+        if channel_names is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names)
+            
+        if not isinstance(channel_numbers, list):
+            channel_numbers  = [channel_numbers]
+            
+            
+
+        
+        # initialize output
         output = dict()
 
-        
-        # check input
-        if chan_num not in list(range(0,17)):
-            print('ERROR: Channel number should be 1-16')
-            if self._raise_errors:
-                raise
-            else:
-                return output
 
-        
-
-        #  list of channels
-        chan_list = list()
-        if chan_num == 0:
-            chan_list = list(range(1,17))
-        else:
-            chan_list.append(chan_num)
-
-
-        for chan in chan_list:
+        # loop channels and get setup
+        for chan in channel_numbers:
 
             # intialize
             output_chan = dict()
 
             # input_channel parameter (INSET)
             command = 'INSET? ' + str(chan)
-            data = self._query(command)
+            data = self._inst.query(command)
             data_list = self._get_comma_separated_list(data)
             output_chan['enabled'] = bool(int(data_list[0]))
             output_chan['dwell_time'] = int(data_list[1])
@@ -81,7 +197,7 @@ class LakeshoreTempController(VisaInstrument):
 
             # input channel setup (INTYPE)
             command = 'INTYPE? ' + str(chan)
-            data = self._query(command)
+            data = self._inst.query(command)
             data_list = self._get_comma_separated_list(data)
 
             if int(data_list[0]) == 0:
@@ -106,9 +222,66 @@ class LakeshoreTempController(VisaInstrument):
         return output
 
 
+
+
     
+    def get_temperature(self, channel_number=None, channel_name=None,
+                        manual_conversion=False):
+        
+        """
+        Get temperature
+        """
+        
+
+        # get channel number if channel names provided
+        if channel_name is not None:
+            channel_number = self._extract_channel_number(channel_name)
+
+        # query temperature
+        query_command = 'RDGK? ' + str(channel_number)
+        temperature = float(self._inst.query(query_command))
+
+        return temperature
+        
+
+    def get_resistance(self, channel_number=None, channel_name=None,
+                       manual_conversion=False):
+        
+        """
+        Get resistance
+        """
+        
+
+        # get channel number if channel names provided
+        if channel_name is not None:
+            channel_number = self._extract_channel_number(channel_name)
+
+        # query resistance
+        query_command = 'RDGR? ' + str(channel_number)
+        resistance = float(self._inst.query(query_command))
+
+        return resistance
+        
+
+
     
-    def set_channel(self, chan_nums, enable=True, disable_other=False,
+    def set_temperature(self, channel_number=None, channel_name=None,
+                        heater_channel_number=None, heater_channel_name=None):
+        """
+        Set temperature
+        """
+
+        
+        return
+
+
+    
+
+    
+
+    
+    def set_channel(self, channel_numbers=None, channel_names=None,
+                    enable=True, disable_other=False,
                     dwell_time=None, pause_time=None, curve_number=None,
                     tempco=None, excitation_mode=None, excitation_range=None,
                     autorange=None, resistance_range=None, cs_shunt_enabled=None,
@@ -119,7 +292,7 @@ class LakeshoreTempController(VisaInstrument):
         
         Parameters
         ----------
-        chan_nums: int  or list
+        channel_numbers: int  or list
            0 = all channels 
            1-16 = specific channel
         enable: bool
@@ -154,20 +327,21 @@ class LakeshoreTempController(VisaInstrument):
            Preferred units parameter for sensor readings: 'kelvin' or 'ohms'
        
         """
-        
-        # check channels  
-        if isinstance(chan_nums, int):
-            chan_nums = [chan_nums]
-
-        if 0 in chan_nums:
-            chan_nums = list(range(1,_MAX_NB_CHANNELS+1))
 
 
+        # extract channel numbers if names provided
+        if channel_names is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names)
+            
+        if not isinstance(channel_numbers, list):
+            channel_numbers  = [channel_numbers]
+            
+          
         # loop all channels
         for chan in range(1, _MAX_NB_CHANNELS+1):
        
             # selected channel
-            if chan in chan_nums:
+            if chan in channel_numbers:
 
                 current_setup = self.get_channel_setup(chan)[chan]
                 
@@ -214,7 +388,7 @@ class LakeshoreTempController(VisaInstrument):
                 command = 'INTYPE ' + str(chan)
                 for param in command_list:
                     command += ',' + str(param)
-                self._write(command)
+                self._inst.command(command)
 
 
                 # input channel parameter
@@ -222,7 +396,7 @@ class LakeshoreTempController(VisaInstrument):
                 command = 'INSET ' + str(chan)
                 for param in command_list:
                     command += ',' + str(param)
-                self._write(command)
+                self._inst.command(command)
 
             elif disable_other:
 
@@ -237,11 +411,11 @@ class LakeshoreTempController(VisaInstrument):
                     command += ',' + str(param)
 
                 # write
-                self._write(command)
+                self._inst.command(command)
                                 
             
  
-    def enable_channel(self, chan_nums,  disable_other=False):
+    def enable_channel(self, channel_numbers=None, channel_names=None, disable_other=False):
         
         """
         Enable input channel (s) and (optionally) disable all other channels.
@@ -249,41 +423,60 @@ class LakeshoreTempController(VisaInstrument):
          
         Parameters
         ----------
-        chan_nums: int or list
+        channel_numbers: int or list
            channel number(s) 1-16
         disable_other: bool
            False (Default): No change other channels
            True: disable all other channels
         """
 
-
-        # check input
-        if isinstance(chan_nums, int):
-            chan_nums = [chan_nums]
-
+        # extract channel numbers if names provided
+        if channel_names is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names)
+            
+        if not isinstance(channel_numbers, list):
+            channel_numbers  = [channel_numbers]
+            
+          
 
         # enable channels
-        self.set_channel(chan_nums, enable=True, disable_other=disable_other)
+        self.set_channel(channel_numbers, enable=True, disable_other=disable_other)
 
      
                          
-    def disable_channel(self, chan_nums):    
+    def disable_channel(self, channel_numbers=None, channel_names=None):    
         """
         Disable input channel
         
         Parameters
         ----------
-        chan_nums: int or list
+        channel_numbers: int or list
            channel number (s)  (1-16)
 
         """
-        
-        # check channel input
-        if isinstance(chan_nums, int):
-            chan_nums = [chan_nums]
+
+        # extract channel numbers if names provided
+        if channel_names is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names)
+            
+        if not isinstance(channel_numbers, list):
+            channel_numbers  = [channel_numbers]
+            
+          
 
         # enable channels
-        self.set_channel(chan_nums, enable=False)
+        self.set_channel(channel_numbers, enable=False, disable_other=disable_other)
+
+     
+
+
+        
+        # check channel input
+        if isinstance(channel_numbers, int):
+            channel_numbers = [channel_numbers]
+
+        # enable channels
+        self.set_channel(channel_numbers, enable=False)
 
 
 
@@ -321,35 +514,39 @@ class LakeshoreTempController(VisaInstrument):
     
 
             
-    def select_channel(self, chan_num, autoscan=True):
+    def select_channel(self, channel_number=None, channel_name=None, autoscan=True):
         """
         Specified which channel to switch the scanner to
 
         Arguments:
         ----------
-        chan_num: int
+        channel_number: int
            Channel number (1-16)
         autoscan: bool (optional)
            False: Autoscan feature off
            True: Autoscan feature on (Default)
         """
+        
+        # get channel number if channel names provided
+        if channel_name is not None:
+            channel_number = self._extract_channel_number(channel_name)
 
         # check channel
-        if chan_num not in list(range(1,17)):
+        if channel_number not in list(range(1,17)):
             print('ERROR: channel number should be between 1-16')
             if self._raise_errors:
                 raise
             else:
                 return
         
-        command = 'SCAN ' + str(chan) + ',' + str(int(autoscan))
-        self._write(command)
+        command = 'SCAN ' + str(channe_number) + ',' + str(int(autoscan))
+        self._inst.command(command)
         
 
 
         
         
-    def start_scan(self, chan_num=None):
+    def start_scan(self, channel_number=None, channel_name=None):
         """
         Start scanning by selecting first channel. At least one channel 
         should be enabled!
@@ -361,11 +558,12 @@ class LakeshoreTempController(VisaInstrument):
            Default: first channel
         """
 
-        self._scan_start_stop(True, chan_num=chan_num)
+        self._scan_start_stop(True, channel_number=channel_number,
+                              channel_name=channel_name)
 
 
         
-    def stop_scan(self, chan_num=None):
+    def stop_scan(self, channel_number=None, channel_name=None):
         """
         Stop scanning, keeping channels enabled
          
@@ -375,15 +573,17 @@ class LakeshoreTempController(VisaInstrument):
            Selected channel  number (1-16)
            Default: first channel
         """
+        
+        self._scan_start_stop(False, channel_number=channel_number,
+                              channel_name=channel_name)
 
-        self._scan_start_stop(False, chan_num=chan_num)
         
         
 
         
         
         
-    def _scan_start_stop(self, enabled, chan_num=None):
+    def _scan_start_stop(self, enabled, channel_number=None, channel_name=None):
         """
         Start/Stop scanning and select channel
         
@@ -395,28 +595,36 @@ class LakeshoreTempController(VisaInstrument):
         """
 
 
+        # get channel number if channel names provided
+        if channel_name is not None:
+            channel_number = self._extract_channel_number(channel_name)
+
+
+            
+
+        
         # find channel enabled
-        chan_list = self.get_channel_enabled_list()
+        channel_list = self.get_channel_enabled_list()
 
 
-        if not chan_list:
+        if not channel_list:
             if self._verbose:
                 print('WARNING: No channel has been enabled!')
             return
-        elif chan_num is not None and chan_num not in chan_list:
+        elif channel_number is not None and channel_number not in chan_list:
             if self._verbose:
-                print('ERROR: Selected channel (' + str(chan_num) + ') not enabled!')
+                print('ERROR: Selected channel (' + str(channel_number) + ') not enabled!')
                 if self._raise_errors:
                     raise
                 else:
                     return
 
         first_chan = chan_list[0]
-        if chan_num is not None:
-            first_chan = chan_num
+        if channel_number is not None:
+            first_chan = channel_number
 
         # select first channel and enable scanning
-        self.select_channel(first_chan,autoscan=enabled)
+        self.select_channel(channel_number=first_chan, autoscan=enabled)
         
         
     
@@ -449,3 +657,25 @@ class LakeshoreTempController(VisaInstrument):
 
 
 
+    def _extract_channel_numbers(self, channel_names):
+        """ 
+        Get channel numbers
+        """
+
+
+        if not isinstance(channel_names, list):
+            channel_names = [channel_names]
+
+        
+        channel_numbers = list()
+        for chan in channel_names:
+            if chan in self._channel_map:
+                channel_numbers.append(self._channel_map[chan])
+            else:
+                raise ValueError('ERROR: no channel "' + chan + '" found!')
+
+        if len(channel_numbers)==1:
+            channel_numbers = channel_numbers[0]
+
+        return channel_numbers
+                    
