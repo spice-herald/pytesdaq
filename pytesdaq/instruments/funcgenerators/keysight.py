@@ -446,7 +446,7 @@ class KeysightFuncGenerator(InstrumentComm):
 
 
         if '3312' in self._device_idn:
-            return 'unknown'
+            return None
 
 
         
