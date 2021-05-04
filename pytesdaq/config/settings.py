@@ -164,7 +164,7 @@ class Config:
         controllers=list()
         
         try:
-            controller =  self._get_comma_separated_setting('setup','temperature_controllers')
+            controllers =  self._get_comma_separated_setting('setup','temperature_controllers')
         except:
             pass
         

@@ -1,10 +1,14 @@
 import time
 from lakeshore import Model372
-
+import pandas as pd
+import os
+import stat
+from pytesdaq.config import settings
 
 
 # lakeshore constants
 _MAX_NB_CHANNELS = 16
+_MAX_NB_HEATER_CHANNELS = 3
 _DWELL_MIN = 1
 _DWELL_MAX = 200
 _PAUSE_MIN = 3
@@ -18,11 +22,20 @@ class Lakeshore():
     Lakeshore Temperature Controller 
     """
 
-    def __init__(self, model_number=372, ip_address=None, port=None, baud_rate=57600,
-                 raise_errors=True, verbose=True):
+    def __init__(self, instrument_name='lakeshore', model_number=None,
+                 ip_address=None, tcp_port=None, com_port=None,
+                 baud_rate=57600, raise_errors=True, verbose=True):
 
+      
+        # instrument name and number
+        self._instrument_name = instrument_name
+        self._instrument_number = None
+        if self._instrument_name[9:]:
+            self._instrument_number = int(self._instrument_name[9:])
 
+        
         # verbose
+
         self._debug = False
         self._verbose = verbose
         self._raise_errors = raise_errors
@@ -33,27 +46,32 @@ class Lakeshore():
         self._model_number = model_number
         self._serial_number = None
         self._firmware_version = None
-        
-        # Connection setup
+             
+        # Initialize connection setup
         self._ip_address =  ip_address
-        self._connection_type = None
         self._baud_rate = baud_rate
-        self._tcp_port = None
-        self._com_port = None
+        self._tcp_port = tcp_port
+        self._com_port = com_port
+              
 
-        if self._ip_address is None:
-            self._connection_type = 'usb'
-            self._com_port = port
-        else:
-            self._connection_type = 'tcp'
-            self._tcp_port = port
-        
+        # channel properties
+        self._channel_properties = ['instrument_name', 'module_name', 'module_type', 'module_number',
+                                    'module_address', 'channel_number', 'global_channel_number',
+                                    'channel_name', 'device_type', 'device_serial']
+        # resistance channels
+        self._resistance_channel_table = None
+        self._resistance_channel_property_list = None
+        self._resistance_channel_names = None
+        self._resistance_global_channel_numbers = None
 
-        # channel maps
-        self._channel_map = None
-    
+        # heater channels
+        self._heater_channel_table = None
+        self._heater_channel_property_list = None
+        self._heater_channel_names = None
+        self._heater_global_channel_numbers = None
+
         
-         
+        
     @property
     def model_number(self):
         return self._model_number
@@ -67,15 +85,129 @@ class Lakeshore():
         return self._ip_address
 
     @property
-    def port(self):
-        if self._connection_type == 'usb':
-            return self._com_port
-        elif self._connection_type == 'tcp':
-            return self._tcp_port
+    def tcp_port(self):
+        return self._tcp_port
+        
+    @property
+    def com_port(self):
+        return self._com_port
+    
+
+    @property
+    def resistance_channel_names(self):
+        return self._resistance_channel_names
+
+    @property
+    def resistance_global_channel_numbers(self):
+        return self._resistance_global_channel_numbers
+
+    @property
+    def heater_channel_names(self):
+        return self._heater_channel_names
+
+    @property
+    def heater_global_channel_numbers(self):
+        return self._heater_global_channel_numbers
+
+
+
+
+
+    def get_channel_table(self, channel_type=None):
+        """
+        Return pandas table
+        """
+
+        if channel_type=='resistance':
+            return self._resistance_channel_table
+        elif channel_type=='heater':
+            return self._heater_channel_table
+        elif channel_type is None:
+            tables = list()
+            if self._resistance_channel_table is not None:
+                tables.append(self._resistance_channel_table)
+            if self._heater_channel_table is not None:
+                tables.append(self._heater_channel_table)
+            return pd.concat(tables)
         else:
-            return None
+            raise ValueError('ERROR: channel type should be "resistance", "heater" or None!')
+        
+    
+
+    def setup_instrument_from_config(self, setup_file):
+        """
+        Setup lakeshore
+        """
+
+        if setup_file is None or not os.path.isfile(setup_file):
+            raise ValueError('ERROR: Setup file not found!')
+        
+        # get configuration
+        config = settings.Config(setup_file=setup_file)
+        lakeshore_setup = config.get_temperature_controller_setup(self._instrument_name)
+     
+        # loop modules and extract information
+        try:
+
+            # connection setup
+            setup_dict = lakeshore_setup['setup']
+         
+            for key,item in setup_dict.items():
+
+                # module information
+                if 'model' in setup_dict:
+                    self._model_number = int(setup_dict['model'])
+                else:
+                    raise ValueError('ERROR: Missing lakeshore model number in setup file!')
+                if 'ip' in setup_dict:
+                    self._ip_address = setup_dict['ip']
+                    if 'tcp_port' in setup_dict:
+                        self._tcp_port = int(setup_dict['tcp_port'])
+                    else:
+                        raise ValueError('ERROR: Missing lakeshore TCP port in setup file!')
+                if 'com_port' in setup_dict:
+                    self._com_port = setup_dict['com_port']
+        
+                if 'baud_rate' in setup_dict:
+                    self._baud_rate = setup_dict['baud_rate']
+
+                    
+            # channel setup
+            for chan_type in ['resistance', 'heater']:
+                for chan in range(0,_MAX_NB_CHANNELS+1):
+                    # parameter name
+                    item_name = 'chan' + str(chan)
+                    if chan_type=='heater':
+                        item_name = 'heater' + str(chan)
+
+                    # check if available
+                    if item_name in lakeshore_setup:
+                        chan_dict = lakeshore_setup[item_name]
+                        
+                        chan_name = None
+                        if 'name' in chan_dict:
+                            chan_name = chan_dict['name']
+                        chan_number = None
+                        if 'global_number' in chan_dict:
+                            chan_number = int(chan_dict['global_number'])
+                        device_type = None
+                        if 'type' in chan_dict:
+                            device_type = chan_dict['type']
+                        device_serial = None
+                        if 'serial' in chan_dict:
+                            device_serial = chan_dict['serial']
+                            
+                        self.set_channel_names(channel_numbers=chan,
+                                               channel_names=chan_name,
+                                               global_channel_numbers=chan_number,
+                                               device_types=device_type,
+                                               device_serials=device_serial,
+                                               channel_type=chan_type)
+        except:
+            raise ValueError('ERROR: Lakeshore setup file has unknown format!')
 
 
+        
         
     def connect(self):
         """
@@ -104,52 +236,170 @@ class Lakeshore():
 
             
         if self._verbose:
-            connection_info = 
-            print('Lakeshore ' + str(self._model_number) + ' connected!')
+            print('INFO: Lakeshore ' + str(self._model_number) + ' connected!')
+
+
 
             
+    
     def disconnect(self):
         """
         Close connection
         """
 
         if self._inst  is not None:
-            if self._connection_type == 'usb':
+            if self._ip_address is None:
                 self._inst.disconnect_usb()
             else:
                 self._inst.disconnect_tcp()
     
         if self._verbose:
-            print('Lakeshore ' + str(self._model_number) + ' disconnected!')
+            print('INFO: Lakeshore ' + str(self._model_number) + ' disconnected!')
                 
 
-    def set_channel_names(self, channel_numbers, channel_names):
+
+
+            
+    def set_channel_names(self, channel_numbers, channel_names,
+                          global_channel_numbers=None, channel_type='resistance',
+                          device_types=None, device_serials=None,
+                          replace=False):
         """
         Channel name map
         """
 
         # convert to list if needed
-        if not isinstance(channel_numbers):
+        if not isinstance(channel_numbers, list):
             channel_numbers = [channel_numbers]
+        nb_channels = len(channel_numbers)
+        
+        if global_channel_numbers is None:
+            global_channel_numbers = channel_numbers  
+        elif not isinstance(global_channel_numbers, list):
+            global_channel_numbers = [global_channel_numbers]
             
-        if not isinstance(channel_names):
+        if not isinstance(channel_names, list):
             channel_names = [channel_names]
 
-            
-        if len(channel_numbers) != len(channel_names):
-            raise ValueError('ERROR: channel number and names should be same length!')
 
+        if device_types is None:
+            device_types = [None]*nb_channels
+        elif not isinstance(device_types, list):
+            device_types = [device_types]
 
-        if self._channel_map is None:
-            self._channel_map = dict()
-
-        for ichan in range(len(channel_numbers)):
-            self._channel_map[channel_names[ichan]] = channel_numbers[ichan]
-            
-
-            
+        if device_serials is None:
+            device_serials = [None]*nb_channels
+        elif not isinstance(device_serials, list):
+            device_serials = [device_serials]
         
-    def get_channel_setup(self, channel_numbers=None, channel_names=None):
+
+            
+        if (len(channel_numbers) != len(channel_names) or
+            len(global_channel_numbers) != len(channel_names)):
+            raise ValueError('ERROR: channel numbers and names should be same length!')
+
+
+
+        # Resistance/thermometer channels
+        if channel_type=='resistance':
+
+            # initialize if needed
+            if self._resistance_channel_property_list is None:
+                self._resistance_channel_property_list = list()
+                self._resistance_channel_names = list()
+                self._resistance_global_channel_numbers = list()
+
+                
+            # loop channels and add to list
+            for ichan in range(len(channel_numbers)):
+
+                # build property value list
+                channel_property_values = [self._instrument_name,
+                                           'ls-'+str(self._model_number), None, self._instrument_number, 
+                                           self._ip_address, channel_numbers[ichan],
+                                           global_channel_numbers[ichan], channel_names[ichan],
+                                           device_types[ichan], device_serials[ichan]]
+
+
+                
+                # check if channel exist
+                channel_index = None
+                for ind in range(len(self._resistance_channel_property_list)):
+                    if self._resistance_channel_property_list[ind][4]==channel_numbers[ichan]:
+                        channel_index = ind
+
+                if channel_index is None:
+                    self._resistance_channel_property_list.append(channel_property_values)
+                    self._resistance_channel_names.append(channel_names[ichan])
+                    self._resistance_global_channel_numbers.append(global_channel_numbers[ichan])
+                else:
+                    if replace:
+                        self._resistance_channel_property_list[channel_index] = channel_property_values
+                        self._resistance_channel_names[channel_index] = channel_names[ichan]
+                        self._resistance_global_channel_numbers[channel_index] = global_channel_numbers[ichan]
+                    else:
+                        raise ValueError('ERROR: Resistance channel ' + str(channel_numbers[ichan])
+                                         + ' already exists!')
+                
+
+            # rebuild table
+            self._resistance_channel_table = pd.DataFrame(self._resistance_channel_property_list,
+                                                          columns=self._channel_properties)
+            
+                
+        # heater channels
+        if channel_type=='heater':
+
+            # initialize if needed
+            if self._heater_channel_property_list is None:
+                self._heater_channel_property_list = list()
+                self._heater_channel_names = list()
+                self._heater_global_channel_numbers = list()
+
+                
+            # loop channels and add to list
+            for ichan in range(len(channel_numbers)):
+
+                # build property value list
+                channel_property_values = [self._instrument_name,
+                                           'ls-'+str(self._model_number), None, self._instrument_number, 
+                                           self._ip_address, channel_numbers[ichan],
+                                           global_channel_numbers[ichan], channel_names[ichan],
+                                           device_types[ichan], device_serials[ichan]]
+
+
+                
+                # check if channel exist
+                channel_index = None
+                for ind in range(len(self._heater_channel_property_list)):
+                    if self._heater_channel_property_list[ind][4]==channel_numbers[ichan]:
+                        channel_index = ind
+
+                if channel_index is None:
+                    self._heater_channel_property_list.append(channel_property_values)
+                    self._heater_channel_names.append(channel_names[ichan])
+                    self._heater_global_channel_numbers.append(global_channel_numbers[ichan])
+                else:
+                    if replace:
+                        self._heater_channel_property_list[channel_index] = channel_property_values
+                        self._heater_channel_names[channel_index] = channel_names[ichan]
+                        self._heater_global_channel_numbers[channel_index] = global_channel_numbers[ichan]
+                    else:
+                        raise ValueError('ERROR: Heater channel ' + str(channel_numbers[ichan])
+                                         + ' already exists!')
+                
+
+            # rebuild table
+            self._heater_channel_table = pd.DataFrame(self._heater_channel_property_list,
+                                                          columns=self._channel_properties)
+                
+
+          
+
+
+
+    def get_channel_parameters(self, channel_numbers=None, channel_names=None,
+                               global_channel_numbers=None):
         """
         Get current channel setup
 
@@ -166,15 +416,14 @@ class Lakeshore():
         """
 
 
-        if channel_names is not None:
-            channel_numbers = self._extract_channel_numbers(channel_names)
-            
+        if channel_names is not None or global_channel_numbers is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names=channel_names,
+                                                            global_channel_numbers=global_channel_numbers)
+
         if not isinstance(channel_numbers, list):
             channel_numbers  = [channel_numbers]
             
-            
-
-        
+                    
         # initialize output
         output = dict()
 
@@ -226,6 +475,7 @@ class Lakeshore():
 
     
     def get_temperature(self, channel_number=None, channel_name=None,
+                        global_channel_number=None,
                         manual_conversion=False):
         
         """
@@ -233,9 +483,15 @@ class Lakeshore():
         """
         
 
-        # get channel number if channel names provided
-        if channel_name is not None:
-            channel_number = self._extract_channel_number(channel_name)
+        # get channel number if channel name or global_channel_number provided
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self._extract_channel_numbers(channel_names=channel_name,
+                                                           global_channel_numbers=global_channel_number)
+            if len(channel_number)==1:
+                channel_number = channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
+                
 
         # query temperature
         query_command = 'RDGK? ' + str(channel_number)
@@ -245,16 +501,21 @@ class Lakeshore():
         
 
     def get_resistance(self, channel_number=None, channel_name=None,
-                       manual_conversion=False):
+                       global_channel_number=None):
         
         """
         Get resistance
         """
         
-
-        # get channel number if channel names provided
-        if channel_name is not None:
-            channel_number = self._extract_channel_number(channel_name)
+        # get channel number if channel name or global_channel_number provided
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self._extract_channel_numbers(channel_names=channel_name,
+                                                           global_channel_numbers=global_channel_number)
+            if len(channel_number)==1:
+                channel_number = channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
+            
 
         # query resistance
         query_command = 'RDGR? ' + str(channel_number)
@@ -266,6 +527,7 @@ class Lakeshore():
 
     
     def set_temperature(self, channel_number=None, channel_name=None,
+                        global_channel_number=None,
                         heater_channel_number=None, heater_channel_name=None):
         """
         Set temperature
@@ -280,12 +542,13 @@ class Lakeshore():
     
 
     
-    def set_channel(self, channel_numbers=None, channel_names=None,
-                    enable=True, disable_other=False,
-                    dwell_time=None, pause_time=None, curve_number=None,
-                    tempco=None, excitation_mode=None, excitation_range=None,
-                    autorange=None, resistance_range=None, cs_shunt_enabled=None,
-                    reading_units=None):
+    def set_channel_parameters(self, channel_numbers=None, channel_names=None,
+                               global_channel_numbers=None,
+                               enable=True, disable_other=False,
+                               dwell_time=None, pause_time=None, curve_number=None,
+                               tempco=None, excitation_mode=None, excitation_range=None,
+                               autorange=None, resistance_range=None, cs_shunt_enabled=None,
+                               reading_units=None):
         """
         Setup channel
 
@@ -328,13 +591,14 @@ class Lakeshore():
        
         """
 
+        # extract channel numbers if names or global numbers provided
+        if channel_names is not None or global_channel_numbers is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names=channel_names,
+                                                            global_channel_numbers=global_channel_numbers)
 
-        # extract channel numbers if names provided
-        if channel_names is not None:
-            channel_numbers = self._extract_channel_numbers(channel_names)
-            
         if not isinstance(channel_numbers, list):
             channel_numbers  = [channel_numbers]
+            
             
           
         # loop all channels
@@ -343,7 +607,7 @@ class Lakeshore():
             # selected channel
             if chan in channel_numbers:
 
-                current_setup = self.get_channel_setup(chan)[chan]
+                current_setup = self.get_channel_parameters(chan)[chan]
                 
                 # fill value if needed
                 if dwell_time is None:
@@ -415,7 +679,9 @@ class Lakeshore():
                                 
             
  
-    def enable_channel(self, channel_numbers=None, channel_names=None, disable_other=False):
+    def enable_channels(self, channel_numbers=None, channel_names=None,
+                        global_channel_numbers=None,
+                        disable_other=False):
         
         """
         Enable input channel (s) and (optionally) disable all other channels.
@@ -430,21 +696,26 @@ class Lakeshore():
            True: disable all other channels
         """
 
-        # extract channel numbers if names provided
-        if channel_names is not None:
-            channel_numbers = self._extract_channel_numbers(channel_names)
-            
+        
+        # extract channel numbers if names or global numbers provided
+        if channel_names is not None or global_channel_numbers is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names=channel_names,
+                                                            global_channel_numbers=global_channel_numbers)
+
         if not isinstance(channel_numbers, list):
             channel_numbers  = [channel_numbers]
-            
-          
+                   
 
         # enable channels
-        self.set_channel(channel_numbers, enable=True, disable_other=disable_other)
+        self.set_channel_parameters(channel_numbers=channel_numbers,
+                                    enable=True, disable_other=disable_other)
 
-     
+
+
+        
                          
-    def disable_channel(self, channel_numbers=None, channel_names=None):    
+    def disable_channels(self, channel_numbers=None, channel_names=None,
+                        global_channel_numbers=None):    
         """
         Disable input channel
         
@@ -455,29 +726,21 @@ class Lakeshore():
 
         """
 
-        # extract channel numbers if names provided
-        if channel_names is not None:
-            channel_numbers = self._extract_channel_numbers(channel_names)
-            
+        # extract channel numbers if names or global numbers provided
+        if channel_names is not None or global_channel_numbers is not None:
+            channel_numbers = self._extract_channel_numbers(channel_names=channel_names,
+                                                            global_channel_numbers=global_channel_numbers)
+
         if not isinstance(channel_numbers, list):
             channel_numbers  = [channel_numbers]
-            
-          
+                   
+
 
         # enable channels
-        self.set_channel(channel_numbers, enable=False, disable_other=disable_other)
+        self.set_channel_parameters(channel_numbers=channel_numbers,
+                                    enable=False)
 
      
-
-
-        
-        # check channel input
-        if isinstance(channel_numbers, int):
-            channel_numbers = [channel_numbers]
-
-        # enable channels
-        self.set_channel(channel_numbers, enable=False)
-
 
 
         
@@ -514,7 +777,8 @@ class Lakeshore():
     
 
             
-    def select_channel(self, channel_number=None, channel_name=None, autoscan=True):
+    def select_channel(self, channel_number=None, channel_name=None,
+                       global_channel_number=None, autoscan=True):
         """
         Specified which channel to switch the scanner to
 
@@ -526,10 +790,16 @@ class Lakeshore():
            False: Autoscan feature off
            True: Autoscan feature on (Default)
         """
+
+        # get channel number if channel name or global_channel_number provided
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self._extract_channel_numbers(channel_names=channel_name,
+                                                           global_channel_numbers=global_channel_number)
+            if len(channel_number)==1:
+                channel_number = channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
         
-        # get channel number if channel names provided
-        if channel_name is not None:
-            channel_number = self._extract_channel_number(channel_name)
 
         # check channel
         if channel_number not in list(range(1,17)):
@@ -546,7 +816,7 @@ class Lakeshore():
 
         
         
-    def start_scan(self, channel_number=None, channel_name=None):
+    def start_scan(self, channel_number=None, channel_name=None, global_channel_number=None):
         """
         Start scanning by selecting first channel. At least one channel 
         should be enabled!
@@ -559,11 +829,12 @@ class Lakeshore():
         """
 
         self._scan_start_stop(True, channel_number=channel_number,
-                              channel_name=channel_name)
+                              channel_name=channel_name,
+                              global_channel_number=global_channel_number)
 
 
         
-    def stop_scan(self, channel_number=None, channel_name=None):
+    def stop_scan(self, channel_number=None, channel_name=None, global_channel_number=None):
         """
         Stop scanning, keeping channels enabled
          
@@ -575,15 +846,14 @@ class Lakeshore():
         """
         
         self._scan_start_stop(False, channel_number=channel_number,
-                              channel_name=channel_name)
+                              channel_name=channel_name,
+                              global_channel_number=global_channel_number)
 
+                
         
         
-
-        
-        
-        
-    def _scan_start_stop(self, enabled, channel_number=None, channel_name=None):
+    def _scan_start_stop(self, enabled, channel_number=None, channel_name=None,
+                         global_channel_number=None):
         """
         Start/Stop scanning and select channel
         
@@ -594,13 +864,15 @@ class Lakeshore():
            Default: first channel
         """
 
-
-        # get channel number if channel names provided
-        if channel_name is not None:
-            channel_number = self._extract_channel_number(channel_name)
-
-
-            
+        # get channel number if channel name or global_channel_number provided
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self._extract_channel_numbers(channel_names=channel_name,
+                                                           global_channel_numbers=global_channel_number)
+            if len(channel_number)==1:
+                channel_number = channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
+        
 
         
         # find channel enabled
@@ -657,25 +929,62 @@ class Lakeshore():
 
 
 
-    def _extract_channel_numbers(self, channel_names):
+    def _extract_channel_numbers(self, channel_names=None,
+                                 global_channel_numbers=None,
+                                 channel_type='resistance'):
         """ 
         Get channel numbers
         """
 
+        
 
-        if not isinstance(channel_names, list):
-            channel_names = [channel_names]
-
+        # get table
+        channel_table = self._resistance_channel_table
+        if channel_type=='heater':
+            channel_table = self._heater_channel_table
+            
         
         channel_numbers = list()
-        for chan in channel_names:
-            if chan in self._channel_map:
-                channel_numbers.append(self._channel_map[chan])
-            else:
-                raise ValueError('ERROR: no channel "' + chan + '" found!')
+        if channel_names is not None:
 
-        if len(channel_numbers)==1:
-            channel_numbers = channel_numbers[0]
+            # convert to list
+            if not isinstance(channel_names, list):
+                channel_names = [channel_names]
 
+            # loop
+            for chan in channel_names:
+                channel_number = channel_table.query('channel_name == @chan')['channel_number'].values
+                if len(channel_number)>1:
+                    raise ValueError('ERROR: Multiple channel numbers found for "' + chan + '"!')
+                elif len(channel_number)==1:
+                    channel_number = channel_number[0]
+                else:
+                    raise ValueError('ERROR: No channel found for "' + chan + '"!')
+
+                # append to list
+                channel_numbers.append(channel_number)
+                
+
+        elif global_channel_numbers is not None:
+
+            # convert to list
+            if not isinstance(global_channel_numbers, list):
+                global_channel_numbers = [global_channel_numbers]
+
+            # loop
+            for chan in global_channel_numbers:
+                channel_number = channel_table.query('global_channel_number == @chan')['channel_number'].values
+                if len(channel_number)>1:
+                    raise ValueError('ERROR: Multiple channel numbers found for global channel number "'
+                                     + str(chan) + '"!')
+                elif len(channel_number)==1:
+                    channel_number = channel_number[0]
+                else:
+                    raise ValueError('ERROR: No channel found for global channel number "'
+                                     + str(chan) + '"!')
+                # append to list
+                channel_numbers.append(channel_number)
+     
         return channel_numbers
                     
+

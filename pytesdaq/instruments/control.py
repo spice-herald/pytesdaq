@@ -7,11 +7,13 @@ import pytesdaq.config.settings as settings
 import pytesdaq.instruments.feb  as feb
 import pytesdaq.instruments.magnicon as magnicon
 import pytesdaq.instruments.funcgenerators as funcgenerators
+import pytesdaq.instruments.tempcontrollers as tempcontrollers
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
 from math import nan
-
+import pandas as pd
+from IPython.display import display
 
 class Control:
     """
@@ -27,37 +29,51 @@ class Control:
         self._debug = False
         
         # config
+        self._setup_file = setup_file
         self._config = settings.Config(setup_file=setup_file)
+      
+        # signal connection map
+        self._connection_table = self._config.get_adc_connections()
+            
+        # TES/SQUID Controller
+        self._squid_controller_name = self._config.get_squid_controller()
+        self._readout_inst = None
+
+        # Signal Generator Controller
+        self._signal_generator_name = self._config.get_signal_generator()
+        self._signal_generator_inst = None
         
+        # Temperatuer controllers (multiple controller allowed)
+        self._temperature_controller_name_list = self._config.get_temperature_controllers()
+        self._temperature_controller_insts = None
+        self._resistance_channel_table = None
+        self._heater_channel_table = None
+        
+        if not self._dummy_mode:
+            self._connect_instruments()   
+ 
         # redis
         self._enable_redis = self._config.enable_redis()
         self._read_from_redis = False
         if self._enable_redis:
              self._redis_db = redis.RedisCore()
              self._redis_db.connect()
-              
-        # readback
+             
+        # readback 
         self._enable_readback = self._config.enable_redis()
 
-        # signal connection map
-        self._connection_table = self._config.get_adc_connections()
-       
-        
-        # controllers
-        self._squid_controller_name = self._config.get_squid_controller()
-        self._signal_generator_name = self._config.get_signal_generator()
-        self._temperature_controller_name = self._config.get_temperature_controller()
 
-        self._feb_inst = None
-        self._magnicon_inst = None
-        self._signal_generator_inst = None
-        self._tempcontroller_inst = None
+    def __del__(self):
+        """
+        """
+
+
+        # temperature controllers
+        if self._temperature_controller_insts  is not None:
+         for name, inst in self._temperature_controller_insts.items():
+             inst.disconnect()
 
         
-        if not self._dummy_mode:
-            self._connect_instruments()
-
-                        
     @property
     def verbose(self):
         return self._verbose
@@ -85,9 +101,11 @@ class Control:
     def signal_generator_name(self):
         return self._signal_generator_name
 
+    @property
+    def temperature_controller_names(self):
+        return self._temperature_controller_name_list
 
     
-
             
 
     def set_tes_bias(self, bias, 
@@ -361,8 +379,8 @@ class Control:
                 mon_onoff = 'ON'
 
             rb_onoff1, rb_onoff, rb_mon_onoff = (
-                self._magnicon_inst.set_generator_onoff(controller_channel, 
-                                                        gen1_onoff, gen2_onoff, mon_onoff)
+                self._readout_inst.set_generator_onoff(controller_channel, 
+                                                       gen1_onoff, gen2_onoff, mon_onoff)
             )
 
         else:
@@ -439,7 +457,7 @@ class Control:
 
 
             readback_amp, readback_freq = (
-                self._magnicon_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
+                self._readout_inst.set_generator_params(int(controller_channel), int(signal_gen_num), 
                                                          float(frequency), source_magnicon, shape, 
                                                          int(phase_shift), int(freq_div), half_pp_offset, 
                                                          float(current))
@@ -901,7 +919,7 @@ class Control:
 
         val = nan
         if self._signal_generator_name == 'magnicon':
-            gen1_onoff, gen2_onoff, mon_onoff = self._magnicon_inst.get_generator_onoff(controller_channel)
+            gen1_onoff, gen2_onoff, mon_onoff = self._readout_inst.get_generator_onoff(controller_channel)
             if signal_gen_num == 1:
                 val = gen1_onoff.lower()
             else:
@@ -990,7 +1008,7 @@ class Control:
             source_magnicon = 'I'
            
             source, shape, freq, freq_div, shift, amp, offset = (
-                self._magnicon_inst.get_generator_params(controller_channel,
+                self._readout_inst.get_generator_params(controller_channel,
                                                          signal_gen_num)
             )
             
@@ -1527,35 +1545,35 @@ class Control:
                 else:
 
                     if param_name == 'tes_bias':
-                        param_val = self._feb_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
+                        param_val = self._readout_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
 
                     elif param_name == 'squid_bias':
-                        param_val = self._feb_inst.get_phonon_squid_bias(
+                        param_val = self._readout_inst.get_phonon_squid_bias(
                             subrack, slot, controller_channel
                         )
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._feb_inst.get_phonon_lock_point(
+                        param_val = self._readout_inst.get_phonon_lock_point(
                             subrack, slot, controller_channel
                         )
 
                     elif param_name == 'preamp_gain':
-                        param_val = self._feb_inst.get_phonon_preamp_gain(
+                        param_val = self._readout_inst.get_phonon_preamp_gain(
                             subrack, slot, controller_channel
                         )
 
                     elif param_name == 'output_offset':
-                        param_val = self._feb_inst.get_phonon_offset(
+                        param_val = self._readout_inst.get_phonon_offset(
                             subrack, slot, controller_channel
                         )
 
                     elif param_name == 'output_gain':
-                        param_val = self._feb_inst.get_phonon_output_gain(
+                        param_val = self._readout_inst.get_phonon_output_gain(
                             subrack, slot, controller_channel
                         )
 
                     elif param_name == 'feedback_polarity':
-                        is_inverted = self._feb_inst.get_phonon_feedback_polarity(
+                        is_inverted = self._readout_inst.get_phonon_feedback_polarity(
                             subrack, slot, controller_channel
                         )
                         param_val = 1
@@ -1563,7 +1581,7 @@ class Control:
                             param_val = -1
 
                     elif param_name == 'feedback_mode':
-                        is_open = self._feb_inst.is_phonon_feedback_open(
+                        is_open = self._readout_inst.is_phonon_feedback_open(
                             subrack, slot,controller_channel
                         )
                         if is_open:
@@ -1572,7 +1590,7 @@ class Control:
                             param_val = 'close'
                             
                     elif param_name == 'signal_source':
-                        is_preamp = self._feb_inst.is_phonon_source_preamp(
+                        is_preamp = self._readout_inst.is_phonon_source_preamp(
                             subrack, slot,controller_channel
                         )
                         if is_preamp:
@@ -1581,12 +1599,12 @@ class Control:
                             param_val = 'feedback'
 
                     elif param_name == 'signal_gen_feedback_connection':
-                        param_val = self._feb_inst.is_signal_generator_feedback_connected(
+                        param_val = self._readout_inst.is_signal_generator_feedback_connected(
                             subrack, slot,controller_channel
                         )
 
                     elif param_name == 'signal_gen_tes_connection':
-                        param_val = self._feb_inst.is_signal_generator_tes_connected(
+                        param_val = self._readout_inst.is_signal_generator_tes_connected(
                             subrack, slot,controller_channel
                         )
 
@@ -1603,16 +1621,16 @@ class Control:
                 if not self._dummy_mode:
                     
                     if param_name == 'tes_bias':
-                        param_val = self._magnicon_inst.get_tes_current_bias(controller_channel)
+                        param_val = self._readout_inst.get_tes_current_bias(controller_channel)
 
                     elif param_name == 'squid_bias':
-                        param_val = self._magnicon_inst.get_squid_bias(controller_channel,'I')
+                        param_val = self._readout_inst.get_squid_bias(controller_channel,'I')
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._magnicon_inst.get_squid_bias(controller_channel,'V')
+                        param_val = self._readout_inst.get_squid_bias(controller_channel,'V')
 
                     elif param_name == 'feedback_gain':
-                        param_val = self._magnicon_inst.get_GBP(controller_channel)
+                        param_val = self._readout_inst.get_GBP(controller_channel)
 
                     elif param_name == 'output_offset':
                         # No offset setting magnicon
@@ -1623,18 +1641,18 @@ class Control:
                         param_val = 1
                         
                     elif param_name == 'preamp_gain':
-                        amp, bw = self._magnicon_inst.get_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._readout_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = amp
 
                     elif param_name == 'preamp_bandwidth':
-                        amp, bw = self._magnicon_inst.get_amp_gain_bandwidth(controller_channel)
+                        amp, bw = self._readout_inst.get_amp_gain_bandwidth(controller_channel)
                         param_val = bw
                         
                     elif param_name == 'feedback_polarity':
-                        param_val = self._magnicon_inst.get_squid_gain_sign(controller_channel)
+                        param_val = self._readout_inst.get_squid_gain_sign(controller_channel)
 
                     elif param_name == 'feedback_mode':
-                        val = self._magnicon_inst.get_amp_or_fll(controller_channel)
+                        val = self._readout_inst.get_amp_or_fll(controller_channel)
                         if val=='AMP':
                             param_val = 'open'
                         elif val=='FLL':
@@ -1643,7 +1661,7 @@ class Control:
                             param_val = val
 
                     elif param_name == 'signal_source':
-                        val = self._magnicon_inst.get_amp_or_fll(controller_channel)
+                        val = self._readout_inst.get_amp_or_fll(controller_channel)
                         if val=='AMP':
                             param_val = 'preamp'
                         elif val=='FLL':
@@ -1652,7 +1670,7 @@ class Control:
                             param_val = val
 
                     elif param_name == 'feedback_resistance':
-                        param_val = self._magnicon_inst.get_feedback_resistor(controller_channel)
+                        param_val = self._readout_inst.get_feedback_resistor(controller_channel)
 
                     else:
                         pass
@@ -1720,44 +1738,44 @@ class Control:
                  
             if not self._dummy_mode:
                 if param_name == 'tes_bias':
-                    self._feb_inst.set_phonon_qet_bias(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_qet_bias(subrack, slot, controller_channel, value)
             
                 elif param_name == 'squid_bias':
-                    self._feb_inst.set_phonon_squid_bias(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_squid_bias(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'lock_point_voltage':
-                    self._feb_inst.set_phonon_lock_point(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_lock_point(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'preamp_gain':
-                    self._feb_inst.set_phonon_preamp_gain(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_preamp_gain(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_offset':
-                    self._feb_inst.set_phonon_offset(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_offset(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_gain':
-                    self._feb_inst.set_phonon_output_gain(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_output_gain(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'feedback_polarity':
                     do_invert = False
                     if val==-1:
                         do_invert = True
-                    self._feb_inst.set_phonon_feedback_polarity(
+                    self._readout_inst.set_phonon_feedback_polarity(
                         subrack, slot, controller_channel, do_invert
                     )
             
                 elif param_name == 'feedback_mode':
-                    self._feb_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'preamp_source':
-                    self._feb_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
                 
                 elif param_name == 'signal_gen_feedback_connection':
-                    self._feb_inst.connect_signal_generator_feedback(
+                    self._readout_inst.connect_signal_generator_feedback(
                         subrack, slot, controller_channel, value
                     )
                 
                 elif param_name == 'signal_gen_tes_connection':
-                    self._feb_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
+                    self._readout_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
                            
 
         elif self._squid_controller_name == 'magnicon':
@@ -1769,25 +1787,25 @@ class Control:
             if not self._dummy_mode:
                 
                 if param_name == 'tes_bias':
-                    readback_val = self._magnicon_inst.set_tes_current_bias(
+                    readback_val = self._readout_inst.set_tes_current_bias(
                         controller_channel, value, mode=None
                     )
                 
                 elif param_name == 'squid_bias':
-                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'I', value)
+                    readback_val = self._readout_inst.set_squid_bias(controller_channel, 'I', value)
                 
                 elif param_name == 'lock_point_voltage':
-                    readback_val = self._magnicon_inst.set_squid_bias(controller_channel, 'V', value)
+                    readback_val = self._readout_inst.set_squid_bias(controller_channel, 'V', value)
                 
                 elif param_name == 'feedback_gain':
-                    readback_val = self._magnicon_inst.set_GBP(controller_channel, value)
+                    readback_val = self._readout_inst.set_GBP(controller_channel, value)
                     
                 elif param_name == 'feedback_polarity':
-                    readback_val = self._magnicon_inst.set_squid_gain_sign(controller_channel, value)
+                    readback_val = self._readout_inst.set_squid_gain_sign(controller_channel, value)
                 
                 elif param_name == 'preamp_gain':
                     if isinstance(value,tuple) and len(value)==2:
-                        amp, bw = self._magnicon_inst.set_amp_gain_bandwidth(
+                        amp, bw = self._readout_inst.set_amp_gain_bandwidth(
                             controller_channel, value[0], value[1]
                         )
                         readback_val = (amp,bw)
@@ -1798,7 +1816,7 @@ class Control:
                     mode = 'AMP'
                     if value=='close':
                         mode='FLL'
-                    readback_val = self._magnicon_inst.set_amp_or_fll(controller_channel, mode)
+                    readback_val = self._readout_inst.set_amp_or_fll(controller_channel, mode)
 
 
         else:
@@ -1846,29 +1864,7 @@ class Control:
             
 
 
-
-
-    def set_heater(self, percent):
-        
-        """
-        Set heater percent
-        
-        """
-        
-        print('Setting heater to  ' + str(percent) + '/%')
-        
-
     
-    def get_heater(self):
-        
-        """
-        Set heater percent
-        
-        """
-        return 0
-
-        
-
     
     def set_temperature(self, temperature):
         
@@ -1878,27 +1874,123 @@ class Control:
         """
         
         print('Setting heater to  ' + str(temperature) + 'mK')
+
+
+
         
+    def get_temperature_controllers_table(self, channel_type=None):
+        """
+        Get temperature controller channel table 
+        """
+        tables = list()
+        for name, inst in self._temperature_controller_insts.items():
+            instrument_table = inst.get_channel_table(channel_type=channel_type)
+            if instrument_table is not None:
+                tables.append(instrument_table)
+
+        channel_table = None
+        if tables:
+             channel_table = pd.concat(tables)
+
+
+        return channel_table
+
         
-    def get_temperature(self, channel=[]):
+
+    def get_temperature_controller(self, channel_name=None,
+                                   global_channel_number=None,
+                                   instrument_name=None,
+                                   channel_type=None):
+        """
+        Get temperature controller
+        """
+
+        # check input
+        if channel_name is None and global_channel_number is None:
+            raise ValueError('ERROR: Missing channel name or global number')
+    
+
+        # get instrument name
+        instrument = None
+        if instrument_name is None:
+
+            # get channel table
+            channel_table = self.get_temperature_controllers_table(channel_type=channel_type)
+
+            # query instrument name
+            if channel_name is not None:
+                query_string = 'channel_name == @channel_name'
+            else:
+                query_string = 'global_channel_number == @global_channel_number'
+            instrument_name = channel_table.query(query_string)['instrument_name'].values
+
+            # check if found unique name
+            if len(instrument_name)>1:
+                raise ValueError('ERROR: Multiple instruments found for same channel')
+            elif len(instrument_name)==1:
+                instrument_name = instrument_name[0]
+            else:
+                raise ValueError('ERROR: No instrument find for input channel!')
+            
+        # get instrument
+        if instrument_name in self._temperature_controller_insts:
+            instrument = self._temperature_controller_insts[instrument_name]
+        else:
+            raise ValueError('ERROR: Unknown temperature controller "' +
+                             instrument_name + '"!')
+ 
+        return instrument
+
+        
+    def get_temperature(self, channel_name=None,
+                        global_channel_number=None,
+                        instrument=None):
         
         """
         Get temperature from thermometer [mK]
         
         """
-        return 20
         
+        # find instrument
+        inst = self.get_temperature_controller(channel_name=channel_name,
+                                               global_channel_number=global_channel_number,
+                                               instrument_name=instrument_name,
+                                               channel_type='resistance')
         
+        # get temperature
+        temperature = inst.get_temperature(channel_name=channel_name,
+                                          global_channel_number=global_channel_number)
 
-    def get_temperature_resistance(self, channel=[]):
+       
+        return temperature
+         
+
+          
+
+    
+    def get_temperature_resistance(self, channel_name=None,
+                                   global_channel_number=None,
+                                   instrument_name=None):
         
         """
         Get resistance from thermometer [Ohms]
         """
-        return 99999
+
+        # find instrument
+        inst = self.get_temperature_controller(channel_name=channel_name,
+                                               global_channel_number=global_channel_number,
+                                               instrument_name=instrument_name,
+                                               channel_type='resistance')
+        
+        
+        resistance = inst.get_resistance(channel_name=channel_name,
+                                         global_channel_number=global_channel_number)
+
+       
+        return resistance
          
 
-
+    
 
 
     def _connect_instruments(self):
@@ -1914,7 +2006,7 @@ class Control:
             if address:
                 if self._verbose:
                     print('INFO: Instantiating FEB using address: ' + address)
-                self._feb_inst = feb.FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
+                self._readout_inst = feb.FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
             else:
                 raise ValueError('Unable to find GPIB address. It will not work!')
 
@@ -1924,14 +2016,15 @@ class Control:
         if (self._squid_controller_name == 'magnicon' or self._signal_generator_name == 'magnicon'):
             mag_control_info = self._config.get_magnicon_controller_info()
             mag_conn_info = self._config.get_magnicon_connection_info()
-            self._magnicon_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
-                                                    default_active=mag_control_info['default_active'],
-                                                    reset_active=mag_control_info['reset_active'],
-                                                    conn_info=mag_conn_info)
-            self._magnicon_inst.set_remote_inst()
-            self._magnicon_inst.connect()
-            self._magnicon_inst.chdir()
-            self._magnicon_inst.listen_for(None)
+            magnicon_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
+                                              default_active=mag_control_info['default_active'],
+                                              reset_active=mag_control_info['reset_active'],
+                                              conn_info=mag_conn_info)
+            
+            magnicon_inst.set_remote_inst()
+            magnicon_inst.connect()
+            magnicon_inst.chdir()
+            magnicon_inst.listen_for(None)
 
             # verbose
             if self._verbose:
@@ -1950,10 +2043,15 @@ class Control:
                     print('Reset active channel after every step:', str(mag_control_info['reset_active']))
    
 
+            if self._squid_controller_name == 'magnicon':
+                self._readout_inst = magnicon_inst
+
+            if self._signal_generator_name == 'magnicon':
+                self._signal_generator_inst = magnicon_inst
                     
-        # ----------
-        # Keysight 
-        # ----------
+        # ----------------
+        # Signal Generator
+        # ----------------
         if self._signal_generator_name == 'keysight':
             address = self._config.get_signal_generator_address('keysight')
             self._signal_generator_inst = (
@@ -1961,4 +2059,42 @@ class Control:
                                                      verbose=self._verbose,
                                                      raise_errors=self._raise_errors)
             )
+
+
             
+        # ----------------
+        # Temperature controllers
+        # ----------------
+        self._temperature_controller_insts = dict()
+        
+        # loop controllers
+        for controller_name in self._temperature_controller_name_list:
+
+            if self._verbose:
+                print('INFO: Connecting ' + controller_name)
+            
+            # lakeshore
+            inst = None
+            if controller_name.find('lakeshore')!=-1:
+                inst = tempcontrollers.Lakeshore(instrument_name=controller_name)
+            elif controller_name=='macrt':
+                inst = tempcontrollers.MACRT()
+
+            if inst == None:
+                raise ValueError('ERROR: Only lakeshore and MACRT available')
+    
+                
+            inst.setup_instrument_from_config(setup_file=self._setup_file)
+            self._temperature_controller_insts[controller_name] = inst
+
+            # connect (lakeshore only)
+            if controller_name.find('lakeshore')!=-1:
+                inst.connect()
+
+
+            
+    def _disconnect_instruments(self):
+        """
+        Disconnect instruments
+        """
+        
