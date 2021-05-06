@@ -173,7 +173,7 @@ class InstrumentComm:
 
         else:
         
-            rm = visa.ResourceManager('/usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0')        
+            rm = visa.ResourceManager()        
             try:
                 if self._verbose:
                     print('INFO: Opening VISA resource "{}"'.format(self._visa_address))
