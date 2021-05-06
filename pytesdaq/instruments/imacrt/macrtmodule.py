@@ -228,7 +228,7 @@ class MACRTModule(InstrumentComm):
     
     def get_channel_number(self, channel_name=None, global_channel_number=None):
         """
-        Get channel index (0,1, or 2) 
+        Get channel number: MMR3 = (1, 2, or 3), MGC3 = (0, 1, 2)
         """
 
         
@@ -352,10 +352,14 @@ class MACRTModule(InstrumentComm):
         # get channel number
         if channel_name is not None or global_channel_number is not None:
             channel_number = self.get_channel_number(channel_name=channel_name,
-                                                   global_channel_number=global_channel_number)
+                                                     global_channel_number=global_channel_number)
         elif channel_number is None:
             raise ValueError('ERROR: A channel number needs to be provided!')
 
+
+        # module type MMR3 are labeled 1-3, convert to index 0-2
+        if  self._module_type=='MMR3':
+            channel_number -= 1
        
              
         # get property index

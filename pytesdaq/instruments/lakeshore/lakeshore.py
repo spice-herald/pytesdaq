@@ -36,7 +36,7 @@ class Lakeshore():
         
         # verbose
 
-        self._debug = False
+        self._debug = True
         self._verbose = verbose
         self._raise_errors = raise_errors
 
@@ -522,16 +522,251 @@ class Lakeshore():
         resistance = float(self._inst.query(query_command))
 
         return resistance
-        
-
 
     
-    def set_temperature(self, channel_number=None, channel_name=None,
-                        global_channel_number=None,
-                        heater_channel_number=None, heater_channel_name=None):
+
+    def get_pid_control(self, heater_channel_number=None,
+                        heater_channel_name=None,
+                        heater_global_channel_number=None):
+        """
+        Get control setup
+        """
+
+
+        # get heater channel number
+        if heater_channel_name is not None or heater_global_channel_number is not None:
+            heater_channel_number = self._extract_channel_numbers(channel_names=heater_channel_name,
+                                                                  global_channel_numbers=heater_global_channel_number,
+                                                                  channel_type='heater')
+            
+            if len(heater_channel_number)==1:
+                heater_channel_number = heater_channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
+            
+
+        # initialize output 
+        output = dict()
+        output['heater_channel_number'] =  heater_channel_number
+        if heater_channel_name is not None:
+            output['heater_channel_name']  = heater_channel_name
+        if heater_global_channel_number is not None:
+            output['heater_global_channel_number'] = heater_global_channel_number 
+        
+        # Output mode
+        query_command = 'OUTMODE? ' + str(heater_channel_number)
+        result = self._inst.query(query_command)
+        result_split = result.split(',')
+
+        mode = int(result_split[0])
+        output['mode'] = mode
+        mode_string = 'off'
+        if mode==1:
+            mode_string = 'monitor_out'
+        elif mode==2:
+            mode_string = 'manual'
+        elif mode==3:
+            mode_string = 'zone'
+        elif mode==4:
+            mode_string = 'still'
+        elif mode==5:
+            mode_string = 'closed_loop'
+        elif mode==6:
+            mode_string = 'warm_up'
+         
+        output['mode_description'] = mode_string
+        output['input_channel_number'] =  result_split[1]
+        output['powerup_enable'] =  int(result_split[2])
+        output['polarity'] = int(result_split[3])
+        output['filter'] = int(result_split[4])
+        output['delay'] =int(result_split[5])
+        
+        # PID parameters
+        query_command = 'PID? ' + str(heater_channel_number)
+        result = self._inst.query(query_command)
+        result_split = result.split(',')
+        output['P'] = float(result_split[0])
+        output['I'] = float(result_split[1])
+        output['D'] = float(result_split[2])
+        
+                
+        # Setpoint
+        query_command = 'SETP? ' + str(heater_channel_number)
+        result = self._inst.query(query_command)
+        result_split = result.split(',')
+        output['setpoint'] =  result_split[0]
+
+
+
+        # done
+        return output
+
+        
+
+    
+
+    def set_pid_control(self, on=None,
+                        heater_channel_number=None, heater_channel_name=None,
+                        heater_global_channel_number=None,
+                        P=None, I=None, D=None,
+                        channel_number=None, channel_name=None, global_channel_number=None):
+        """
+        PID control
+        """
+
+        # get input and heater channel numbers
+        if (channel_number is None and
+            (channel_name is not None or global_channel_number is not None)):
+            channel_number = self._extract_channel_numbers(
+                channel_names=channel_name,
+                global_channel_numbers=global_channel_number,
+                channel_type='resistance')
+
+        if (heater_channel_number is None and
+            (heater_channel_name is not None or heater_global_channel_number is not None)):
+            heater_channel_number = self._extract_channel_numbers(
+                channel_names=heater_channel_name,
+                global_channel_numbers=heater_global_channel_number,
+                channel_type='heater')
+
+
+        if heater_channel_number is None:
+            raise ValueError('ERROR: heater channel number or name is required!')
+
+        
+
+        
+        # get current state
+        pid_control_params = self.get_pid_control(heater_channel_number=heater_channel_number)
+
+
+        
+        # Set PID parameter
+        if P is not None or I is not None or D is not None:
+            if P is None:
+                P = pid_control_params['P']
+            if I is None:
+                I = pid_control_params['I']
+            if D is None:
+                D = pid_control_params['D']
+                
+            write_command = 'PID ' + str(heater_channel_number)
+            write_command += ',' + str(P) + ',' + str(int(I)) + ',' + str(int(D))
+            if self._debug:
+                print('DEBUG: Write command to lakeshore =  ' + write_command)
+            self._inst.command(write_command)
+
+
+        # Set input channel and turn on
+        if on is not None or channel_number is not None:
+            
+            # mode 
+            mode = pid_control_params['mode']
+            if type(on)==bool:
+                if on:
+                    mode = 5
+                else:
+                    mode = 0
+
+            # input channel
+            input_channel_number = pid_control_params['input_channel_number']
+            if channel_number is not None:
+                input_channel_number = channel_number
+
+
+            # write
+            write_command = 'OUTMODE '  + str(heater_channel_number)
+            write_command += ',' + str(mode) + ',' + str(input_channel_number)
+            write_command += ',' + str(pid_control_params['powerup_enable'])
+            write_command += ',' + str(pid_control_params['polarity'])
+            write_command += ',' + str(pid_control_params['filter'])
+            write_command += ',' + str(pid_control_params['delay'])
+ 
+            
+            if self._debug:
+                print('DEBUG: Write command to lakeshore =  ' + write_command)
+
+            self._inst.command(write_command)
+
+            
+            
+        
+
+        
+    
+    
+    def set_temperature(self,  temperature,
+                        heater_channel_number=None,
+                        heater_channel_name=None,
+                        heater_global_channel_number=None,
+                        channel_number=None,
+                        channel_name=None,
+                        global_channel_number=None):
         """
         Set temperature
         """
+
+        # get  heater channel
+        if (heater_channel_number is None and
+            (heater_channel_name is not None or heater_global_channel_number is not None)):
+            heater_channel_number = self._extract_channel_numbers(
+                channel_names=heater_channel_name,
+                global_channel_numbers=heater_global_channel_number,
+                channel_type='heater')
+
+
+        if heater_channel_number is None:
+            raise ValueError('ERROR: heater channel number or name is required!')
+
+        # input channel number
+        if (channel_number is None and
+            (channel_name is not None or global_channel_number is not None)):
+            channel_number = self._extract_channel_numbers(
+                channel_names=channel_name,
+                global_channel_numbers=global_channel_number,
+                channel_type='resistance')
+
+        if channel_number is None:
+            raise ValueError('ERROR: thermometer channel number or name is required!')
+
+
+        # check PID control
+        pid_control_params = self.get_pid_control(heater_channel_number=heater_channel_number)
+        if pid_control_params['mode']!=5:
+            raise ValueError('ERROR: PID Control not enabled! Use "set_pid_control" function" to setup PID.')
+
+        if pid_control_params['input_channel_number'] != channel_number:
+            error_msg = 'ERROR: PID Control input channel not accurate. '
+            error_msg += 'Use "set_pid_control" function" to setup PID.'
+            raise ValueError(error_msg)
+
+        # check input parameters
+        channel_params = self.get_channel_parameters(channel_number=channel_number)
+        if not channel_params['enabled']:
+            error_msg = 'ERROR: Input thermometer channel not enabled! '
+            error_msg += 'Use "enable_channels" function" to enable channel.'
+            raise ValueError(error_msg)
+
+        
+        if channel_params['reading_units'] != 'kelvin':
+            error_msg = 'ERROR: Input thermometer reading unit is not "kelvin"! '
+            error_msg += 'Use "set_channel_parameters" function" to setup channel.'
+            raise ValueError(error_msg)
+
+        channel_enable_list = self.get_channel_enabled_list()
+        if len(channel_enable_list)>1:
+            error_msg = 'ERROR: Multiple channels enabled! This can affect PID. '
+            error_msg += 'Use "set_channel_parameters" function" to setup channel.'
+            raise ValueError(error_msg)
+        # set point
+        write_command = 'SETP ' + str(heater_channel_number)
+        write_command += ',' + str(temperature)
+        
+        if self._debug:
+            print('DEBUG: Write command to lakeshore =  ' + write_command)  
+        self._inst.command(write_command)
+
+            
 
         
         return
@@ -607,7 +842,7 @@ class Lakeshore():
             # selected channel
             if chan in channel_numbers:
 
-                current_setup = self.get_channel_parameters(chan)[chan]
+                current_setup = self.get_channel_parameters(channel_numbers=chan)[chan]
                 
                 # fill value if needed
                 if dwell_time is None:
@@ -665,7 +900,7 @@ class Lakeshore():
             elif disable_other:
 
                 # let's first read setting
-                current_setup = self.get_channel_setup(chan)[chan]
+                current_setup = self.get_channel_parameters(channel_numbers=chan)[chan]
 
                 # build command
                 command_list = [0, current_setup['dwell_time'], current_setup['pause_time'],
@@ -765,7 +1000,7 @@ class Lakeshore():
 
         
         # get channel info dictionary
-        data_dict = get_channel_setup(0)
+        data_dict = self.get_channel_parameters(channel_numbers=list(range(1,17)))
 
         # loop and check if channel enabled
         for chan,info in data_dict.items():
@@ -778,7 +1013,7 @@ class Lakeshore():
 
             
     def select_channel(self, channel_number=None, channel_name=None,
-                       global_channel_number=None, autoscan=True):
+                       global_channel_number=None, autoscan=False):
         """
         Specified which channel to switch the scanner to
 

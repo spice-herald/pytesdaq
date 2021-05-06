@@ -72,7 +72,7 @@ class MACRT(InstrumentComm):
 
 
                 # add channels
-                for chan in range(0,3):
+                for chan in range(1,4):
                     item_name = module_name + '_chan' + str(chan)
                     if item_name in macrt_setup:
                         chan_dict = macrt_setup[item_name]
@@ -315,7 +315,7 @@ class MACRT(InstrumentComm):
         """
         
         # set PID
-        self.set_PID(on=True,
+        self.set_pid_control(on=True,
                      channel_name=channel_name,
                      global_channel_number=global_channel_number,
                      heater_channel_name=heater_channel_name,
@@ -340,9 +340,9 @@ class MACRT(InstrumentComm):
 
 
         
-    def set_PID(self, on=False, P=None, I=None, D=None,
-                channel_name=None, global_channel_number=None,
-                heater_channel_name=None, heater_global_channel_number=None):
+    def set_pid_control(self, on=False, P=None, I=None, D=None,
+                        channel_name=None, global_channel_number=None,
+                        heater_channel_name=None, heater_global_channel_number=None):
         """
         Set PID 
         """
@@ -383,12 +383,18 @@ class MACRT(InstrumentComm):
             channel_number = resistance_module.get_channel_number(channel_name=channel_name,
                                                                   global_channel_number=global_channel_number)
 
+            # convert channel number to index 
+            channel_number -= 1
+
+            # module identity
             module_identity = resistance_module.identity
 
+            # set MMR3 module name
             heater_module.set('name', module_identity,
                               channel_name=heater_channel_name,
                               global_channel_number=heater_global_channel_number)
 
+            # set channel number/index (Note: channel number from 0-2)
             heater_module.set('channel', channel_number,
                               channel_name=heater_channel_name,
                               global_channel_number=heater_global_channel_number)

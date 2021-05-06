@@ -4,10 +4,14 @@ Main instrumentation control class
 import time
 import numpy
 import pytesdaq.config.settings as settings
-import pytesdaq.instruments.feb  as feb
-import pytesdaq.instruments.magnicon as magnicon
-import pytesdaq.instruments.funcgenerators as funcgenerators
-import pytesdaq.instruments.tempcontrollers as tempcontrollers
+import pytesdaq.io.redis as redis
+from pytesdaq.utils import connection_utils
+import pytesdaq.utils.remote as remote
+from  pytesdaq.instruments.feb  import FEB
+from pytesdaq.instruments.magnicon import Magnicon
+from pytesdaq.instruments.lakeshore import Lakeshore
+from pytesdaq.instruments.imacrt import MACRT
+from  pytesdaq.instruments.keysight import KeysightFuncGenerator
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
@@ -1906,8 +1910,8 @@ class Control:
         """
 
         # check input
-        if channel_name is None and global_channel_number is None:
-            raise ValueError('ERROR: Missing channel name or global number')
+        if instrument_name is None and channel_name is None and global_channel_number is None:
+            raise ValueError('ERROR: Missing channel name, global number, or instrument name')
     
 
         # get instrument name
@@ -1941,6 +1945,7 @@ class Control:
  
         return instrument
 
+    
         
     def get_temperature(self, channel_name=None,
                         global_channel_number=None,
@@ -2006,7 +2011,7 @@ class Control:
             if address:
                 if self._verbose:
                     print('INFO: Instantiating FEB using address: ' + address)
-                self._readout_inst = feb.FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
+                self._readout_inst = FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
             else:
                 raise ValueError('Unable to find GPIB address. It will not work!')
 
@@ -2016,10 +2021,10 @@ class Control:
         if (self._squid_controller_name == 'magnicon' or self._signal_generator_name == 'magnicon'):
             mag_control_info = self._config.get_magnicon_controller_info()
             mag_conn_info = self._config.get_magnicon_connection_info()
-            magnicon_inst = magnicon.Magnicon(channel_list=mag_control_info['channel_list'],
-                                              default_active=mag_control_info['default_active'],
-                                              reset_active=mag_control_info['reset_active'],
-                                              conn_info=mag_conn_info)
+            magnicon_inst = Magnicon(channel_list=mag_control_info['channel_list'],
+                                     default_active=mag_control_info['default_active'],
+                                     reset_active=mag_control_info['reset_active'],
+                                     conn_info=mag_conn_info)
             
             magnicon_inst.set_remote_inst()
             magnicon_inst.connect()
@@ -2055,9 +2060,9 @@ class Control:
         if self._signal_generator_name == 'keysight':
             address = self._config.get_signal_generator_address('keysight')
             self._signal_generator_inst = (
-                funcgenerators.KeysightFuncGenerator(address,
-                                                     verbose=self._verbose,
-                                                     raise_errors=self._raise_errors)
+                KeysightFuncGenerator(address,
+                                      verbose=self._verbose,
+                                      raise_errors=self._raise_errors)
             )
 
 
@@ -2076,9 +2081,9 @@ class Control:
             # lakeshore
             inst = None
             if controller_name.find('lakeshore')!=-1:
-                inst = tempcontrollers.Lakeshore(instrument_name=controller_name)
+                inst = Lakeshore(instrument_name=controller_name)
             elif controller_name=='macrt':
-                inst = tempcontrollers.MACRT()
+                inst = MACRT()
 
             if inst == None:
                 raise ValueError('ERROR: Only lakeshore and MACRT available')
