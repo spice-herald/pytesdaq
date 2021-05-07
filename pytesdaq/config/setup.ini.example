@@ -16,10 +16,11 @@ data_path = ./
 
 
 # Intruments
-# (Temperature controller: comma separated if multiple devices used, default: 1st in the list)
+# Temperature controllers: comma separated name if multiple devices used
+# If multiple lakeshore, use lakeshore1, lakeshore2, etc.
 squid_controller = magnicon
 signal_generator = magnicon
-temperature_controllers = lakeshore
+temperature_controllers = lakeshore, macrt
 
 
 # ADC list
@@ -144,23 +145,26 @@ feb2 = 1,7
 
 
 [signal_generators]
-keysight_address = TCPIP::192.168.0.4::5025::SOCKET
+keysight_visa_address = TCPIP::192.168.0.4::5025::SOCKET
+
+
 
 [temperature_controllers]
 # Lakeshore
 
 # TCP or USB information
-lakeshore_setup  =  ip:192.168.0.3, port:7777
+lakeshore_setup  =  model:372, ip:192.168.0.3, tcp_port:7777
 
 # channel setup
 # Format:
-#    lakeshore_chan[1-16] = name:[unique name], type:[RuO2, CX, or FR], serial:[...]
+#    lakeshore_chan[1-16] = name:[unique name], type:[RX, CX, or FR], serial:[...]
 #    "type" and "serial" are optional is resistance only measurement or temperature
 #    curve loaded in lakeshore
 
-lakeshore_chan1 = name:TES1
-lakeshore_chan2 = name:MF3 
-
+lakeshore_chan1 = name:TES1, global_number:1
+lakeshore_chan2 = name:MF3, global_number:2
+lakeshore_chan3 = name:MF2, global_number:3
+lakeshore_heater0 = name:heaterMCls, global_number:30
 
 
 # MARCT
@@ -176,25 +180,25 @@ macrt_modules = module1:mmr3-174, module2:mmr3-184, module3:mgc3-66
 # Individual module setup
 # Format:
 #   macrt_[module name] = type:[mmr3 or mgc3], ip:[X.X.X.X], protocol:[udp or tcp]
-#   macrt_[module_name]_chan[0,1, or 2] = name:[unique name], number:[unique number],
-#                                         type:[RX, CX, or FR], serial:[...]
+#   macrt_[module_name]_chan[0,1,2,or 3] = name:[unique name], number:[unique number],
+#                                          type:[RuO2, CX, or FR], serial:[...]
 #
 #  "type" and "serial" are optional is resistance only measurement or temperature
 #  curve loaded in module
 
-# MMR3-174
+# Resistance module MMR3-174 - channels are labeled 1, 2, or 3
 macrt_mmr3-174_setup = type:mmr3, ip:192.168.0.31
-macrt_mmr3-174_chan1 = name:CP, number:17, type:RX, serial:R654
-macrt_mmr3-174_chan2 = name:Still, number:18, type:CX, serial:121325
+macrt_mmr3-174_chan2 = name:CP, global_number:17, type:RX, serial:R654
+macrt_mmr3-174_chan3 = name:Still, global_number:18, type:CX, serial:121325
 
-# MMR3-184
+# Resistance MMR3-184 - channels are labeled 1, 2, or 3
 macrt_mmr3-184_setup = type:mmr3, ip:192.168.0.32
-macrt_mmr3-184_chan0 = name:MC, number:19, type:FR, serial:105D
-macrt_mmr3-184_chan1 = name:2nde, number:20, type:CX, serial:121324
-macrt_mmr3-184_chan2 = name:1st, number:21, type:CX, serial:121322
+macrt_mmr3-184_chan1 = name:MC, global_number:19, type:FR, serial:105D
+macrt_mmr3-184_chan2 = name:2nde, global_number:20, type:CX, serial:121324
+macrt_mmr3-184_chan3 = name:1st, global_number:21, type:CX, serial:121322
 
-# MGC3-66
+# Heater MGC3-66 - Channel are labeled 0,1, or 2
 macrt_mgc3-66_setup = type:mgc3, ip:192.168.0.34
-macrt_mgc3-66_chan1 = name:heaterMC, number:22
-macrt_mgc3-66_chan2 = name:heaterStil, number:23
+macrt_mgc3-66_chan0 = name:heaterMC, global_number:31
+macrt_mgc3-66_chan1 = name:heaterStill, global_number:32
 
