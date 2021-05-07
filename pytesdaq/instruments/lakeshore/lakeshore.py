@@ -806,6 +806,9 @@ class Lakeshore():
                     if self._verbose:
                         print('INFO: Temperature ' + str(temperature_now*1000) + 'mK reached!')
                     break
+
+                # sleep...
+                time.sleep(wait_cycle_time)
                 
             # re-enable channels
             self.enable_channels(channel_numbers=channel_enable_list,

@@ -363,6 +363,7 @@ class MACRT(InstrumentComm):
             # loop cycle
             for icycle in range(nb_cycles):
 
+                             
                 # current time and temperature
                 time_now = time.perf_counter()
                 temperature_now = self.get_temperature(channel_number=channel_number)
@@ -377,7 +378,8 @@ class MACRT(InstrumentComm):
                         print('INFO: Temperature ' + str(temperature_now*1000) + 'mK reached!')
                     break
             
-
+                # sleep...
+                time.sleep(wait_cycle_time)
 
     def get_pid_control(self, heater_channel_name=None, heater_global_channel_number=None):
         """
