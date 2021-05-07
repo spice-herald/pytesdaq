@@ -1870,16 +1870,6 @@ class Control:
 
     
     
-    def set_temperature(self, temperature):
-        
-        """
-        Set temperature
-        """
-        
-        print('Setting heater to  ' + str(temperature) + 'mK')
-
-
-
         
     def get_temperature_controllers_table(self, channel_type=None):
         """
@@ -1948,7 +1938,7 @@ class Control:
         
     def get_temperature(self, channel_name=None,
                         global_channel_number=None,
-                        instrument=None):
+                        instrument_name=None):
         
         """
         Get temperature from thermometer [mK]
@@ -1994,8 +1984,45 @@ class Control:
         return resistance
          
 
-    
 
+    
+    def set_temperature(self, temperature,
+                        channel_name=None,
+                        global_channel_number=None,
+                        heater_channel_name=None,
+                        heater_global_channel_number=None,
+                        instrument_name=None,
+                        wait_temperature_reached=False,
+                        wait_cycle_time=30,
+                        wait_stable_time=300,
+                        max_wait_time=1200,
+                        tolerance=0.2):
+        
+        """
+        Set temperature
+        """
+
+        # find instrument
+        inst = self.get_temperature_controller(channel_name=channel_name,
+                                               global_channel_number=global_channel_number,
+                                               instrument_name=instrument_name,
+                                               channel_type='resistance')
+
+        # set temperature
+        inst.set_temperature(temperature,
+                             channel_name=channel_name,
+                             global_channel_number=global_channel_number,
+                             heater_channel_name=heater_channel_name,
+                             heater_global_channel_number=heater_global_channel_number,
+                             wait_temperature_reached=wait_temperature_reached,
+                             wait_cycle_time=wait_cycle_time,
+                             wait_stable_time=wait_stable_time,
+                             max_wait_time=max_wait_time,
+                             tolerance=tolerance)
+        
+        
+        
+        
 
     def _connect_instruments(self):
         """
