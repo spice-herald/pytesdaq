@@ -15,7 +15,6 @@ if __name__ == "__main__":
     parser.add_argument('--enable-didv',dest='enable_didv',action='store_true')
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
     parser.add_argument('--enable-rn',dest='enable_rn',action='store_true')
-    parser.add_argument('--enable-tc',dest='enable_tc',action='store_true')
     parser.add_argument('--enable-temperature-sweep',dest='enable_temperature_sweep',action='store_true')
     
     parser.add_argument('--tes_channels', type = str,
@@ -91,7 +90,7 @@ if __name__ == "__main__":
         sequencer_file = args.sequencer_file
     else:
         this_dir = os.path.dirname(os.path.realpath(__file__))
-        sequencer_file = this_dir + '/../pytesdaq/config/sequencer.ini'
+        sequencer_file = this_dir + '/../pytesdaq/config/iv_didv.ini'
 
     if not os.path.isfile(sequencer_file):
         print('ERROR: Sequencer file "' + sequencer_file + '" not found!')
@@ -104,13 +103,10 @@ if __name__ == "__main__":
     
 
     # check arguments
-    if not (enable_iv_didv or enable_tc):
+    if not enable_iv_didv:
         print('Not measurement has been enabled! Type "python run_sequencer.py --help"')
         exit(0)
 
-    if enable_tc and enable_iv_didv:
-        print('Tc measurement cannot be done with Rp,Rn,IV, or dIdV')
-        exit(0)
 
     if not args.tes_channels and not args.detector_channels:
         print('No channels (TES or Detector) have been selected! Type "python run_sequencer.py --help"')
