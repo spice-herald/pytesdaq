@@ -1,15 +1,14 @@
-import pytesdaq.instruments.funcgenerators as funcgenerators
-
+from  pytesdaq.instruments.keysight import KeysightFuncGenerator
 if __name__ == "__main__":
 
     
     # VISA Address
     visa_address = 'GPIB0::9::INSTR'
     # visa_address = 'COM1'
-
+    visa_address = 'TCPIP::192.168.0.7::1234::SOCKET'
     
     # Instantiate instrument
-    myinstrument = funcgenerators.KeysightFuncGenerator(visa_address)
+    myinstrument = KeysightFuncGenerator(visa_address)
 
     # get IDN
     idn = myinstrument.get_idn()
