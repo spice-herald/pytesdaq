@@ -1873,8 +1873,7 @@ class Control:
     def set_temperature(self, temperature):
         
         """
-        Iteratively set the temperature by increasing 
-        the heater (feedback co
+        Set temperature
         """
         
         print('Setting heater to  ' + str(temperature) + 'mK')
@@ -1973,9 +1972,9 @@ class Control:
           
 
     
-    def get_temperature_resistance(self, channel_name=None,
-                                   global_channel_number=None,
-                                   instrument_name=None):
+    def get_resistance(self, channel_name=None,
+                       global_channel_number=None,
+                       instrument_name=None):
         
         """
         Get resistance from thermometer [Ohms]

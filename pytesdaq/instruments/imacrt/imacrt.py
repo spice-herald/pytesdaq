@@ -72,7 +72,11 @@ class MACRT(InstrumentComm):
 
 
                 # add channels
-                for chan in range(1,4):
+                chan_list = list(range(1,4))
+                if module_type == 'MGC3':
+                    chan_list = list(range(0,3))
+                
+                for chan in chan_list:
                     item_name = module_name + '_chan' + str(chan)
                     if item_name in macrt_setup:
                         chan_dict = macrt_setup[item_name]
@@ -308,8 +312,15 @@ class MACRT(InstrumentComm):
     
     
     def set_temperature(self, temperature,
-                        channel_name=None, global_channel_number=None,
-                        heater_channel_name=None, heater_global_channel_number=None):
+                        channel_name=None,
+                        global_channel_number=None,
+                        heater_channel_name=None,
+                        heater_global_channel_number=None,
+                        wait_temperature_reached=False,
+                        wait_cycle_time=30,
+                        wait_stable_time=300,
+                        max_wait_time=1200,
+                        tolerance=0.2):
         """
         Set temperature
         """
@@ -338,11 +349,110 @@ class MACRT(InstrumentComm):
     
 
 
+        # wait time
+        if wait_temperature_reached:
+
+            # number of cycles
+            nb_cycles = int(round(max_wait_time/wait_cycle_time))
+            if nb_cycles<1:
+                nb_cycles = 1
+
+            # initialize stable time
+            time_stable = time.perf_counter()
+                
+            # loop cycle
+            for icycle in range(nb_cycles):
+
+                # current time and temperature
+                time_now = time.perf_counter()
+                temperature_now = self.get_temperature(channel_number=channel_number)
+
+                # check tolerance
+                if abs(temperature_now-temperature)/temperature_now > tolerance:
+                    # reset stable time 
+                    time_stable =  time_now
+
+                if time_stable-time_now > wait_stable_time:
+                    if self._verbose:
+                        print('INFO: Temperature ' + str(temperature_now*1000) + 'mK reached!')
+                    break
+            
+
+
+    def get_pid_control(self, heater_channel_name=None, heater_global_channel_number=None):
+        """
+        Get PID
+        """
+
+        # get heater module
+        heater_module = self.get_module(channel_name=heater_channel_name,
+                                        global_channel_number=heater_global_channel_number,
+                                        module_type='MGC3')
+        
+        # Initialize ouput
+        output = dict()
+        if heater_channel_name is not None:
+            output['heater_channel_name']  = heater_channel_name
+        if heater_global_channel_number is not None:
+            output['heater_global_channel_number'] = heater_global_channel_number 
+
+
+        # check pid enables
+        output['pid_enabled'] = bool(float(
+            heater_module.get('onoff',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        ))
+        
+        
+        output['P'] = float(
+            heater_module.get('P',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        )
+        
+        output['I'] = float(
+            heater_module.get('I',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        )
+        
+        output['D'] = float(
+            heater_module.get('D',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        )
+        
+        
+        output['input_channel_number'] = int(float(
+            heater_module.get('channel',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        ))
+        
+        output['input_module'] = str(
+            heater_module.get('name',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        )
+
+        output['setpoint'] =  float(
+            heater_module.get('setpoint',
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+        )
+        
+
+
+        return output
+
+    
 
         
-    def set_pid_control(self, on=False, P=None, I=None, D=None,
-                        channel_name=None, global_channel_number=None,
-                        heater_channel_name=None, heater_global_channel_number=None):
+    def set_pid_control(self, on=None,
+                        heater_channel_name=None, heater_global_channel_number=None,
+                        P=None, I=None, D=None,
+                        channel_name=None, global_channel_number=None):
         """
         Set PID 
         """
@@ -383,9 +493,6 @@ class MACRT(InstrumentComm):
             channel_number = resistance_module.get_channel_number(channel_name=channel_name,
                                                                   global_channel_number=global_channel_number)
 
-            # convert channel number to index 
-            channel_number -= 1
-
             # module identity
             module_identity = resistance_module.identity
 
@@ -395,12 +502,21 @@ class MACRT(InstrumentComm):
                               global_channel_number=heater_global_channel_number)
 
             # set channel number/index (Note: channel number from 0-2)
+            channel_number -= 1
             heater_module.set('channel', channel_number,
                               channel_name=heater_channel_name,
                               global_channel_number=heater_global_channel_number)
             
 
+        # on/off
+        if on is not None and isinstance(on, bool):
+            onoff = int(on)
+            heater_module.set('onoff', onoff,
+                              channel_name=heater_channel_name,
+                              global_channel_number=heater_global_channel_number)
+            
 
+            
 
     def disconnect(self):
         """

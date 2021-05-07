@@ -560,6 +560,7 @@ class Lakeshore():
 
         mode = int(result_split[0])
         output['mode'] = mode
+        output['pid_enabled'] = False
         mode_string = 'off'
         if mode==1:
             mode_string = 'monitor_out'
@@ -571,9 +572,11 @@ class Lakeshore():
             mode_string = 'still'
         elif mode==5:
             mode_string = 'closed_loop'
+            output['pid_enabled'] = True
         elif mode==6:
             mode_string = 'warm_up'
-         
+
+        
         output['mode_description'] = mode_string
         output['input_channel_number'] =  result_split[1]
         output['powerup_enable'] =  int(result_split[2])
@@ -688,10 +691,7 @@ class Lakeshore():
 
             self._inst.command(write_command)
 
-            
-            
-        
-
+   
         
     
     
@@ -701,10 +701,16 @@ class Lakeshore():
                         heater_global_channel_number=None,
                         channel_number=None,
                         channel_name=None,
-                        global_channel_number=None):
+                        global_channel_number=None,
+                        wait_temperature_reached=False,
+                        wait_cycle_time=30,
+                        wait_stable_time=300,
+                        max_wait_time=1200,
+                        tolerance=0.2):
         """
         Set temperature
         """
+
 
         # get  heater channel
         if (heater_channel_number is None and
@@ -714,11 +720,10 @@ class Lakeshore():
                 global_channel_numbers=heater_global_channel_number,
                 channel_type='heater')
 
-
         if heater_channel_number is None:
             raise ValueError('ERROR: heater channel number or name is required!')
 
-        # input channel number
+        # get input channel number
         if (channel_number is None and
             (channel_name is not None or global_channel_number is not None)):
             channel_number = self._extract_channel_numbers(
@@ -732,13 +737,16 @@ class Lakeshore():
 
         # check PID control
         pid_control_params = self.get_pid_control(heater_channel_number=heater_channel_number)
-        if pid_control_params['mode']!=5:
+        if not pid_control_params['pid_enabled']:
             raise ValueError('ERROR: PID Control not enabled! Use "set_pid_control" function" to setup PID.')
 
         if pid_control_params['input_channel_number'] != channel_number:
-            error_msg = 'ERROR: PID Control input channel not accurate. '
-            error_msg += 'Use "set_pid_control" function" to setup PID.'
-            raise ValueError(error_msg)
+            if self._verbose:
+                print('WARNING: PID input channel not accurate. Setting input channel number = '
+                      + str(channel_number) + '!')
+            self.set_pid_control(heater_channel_number=heater_channel_number,
+                                 channel_number=channel_number)
+            
 
         # check input parameters
         channel_params = self.get_channel_parameters(channel_number=channel_number)
@@ -747,17 +755,21 @@ class Lakeshore():
             error_msg += 'Use "enable_channels" function" to enable channel.'
             raise ValueError(error_msg)
 
-        
+        # reading units
         if channel_params['reading_units'] != 'kelvin':
             error_msg = 'ERROR: Input thermometer reading unit is not "kelvin"! '
             error_msg += 'Use "set_channel_parameters" function" to setup channel.'
             raise ValueError(error_msg)
 
+        # channel enabled
         channel_enable_list = self.get_channel_enabled_list()
         if len(channel_enable_list)>1:
-            error_msg = 'ERROR: Multiple channels enabled! This can affect PID. '
-            error_msg += 'Use "set_channel_parameters" function" to setup channel.'
-            raise ValueError(error_msg)
+            print('WARNING: Multiple channels enabled. The PID control will be affected!')
+            print('Disabling all channels except input thermometer...')
+            self.enable_channels(channel_numbers=channel_number,
+                                 disable_other=True)
+            
+             
         # set point
         write_command = 'SETP ' + str(heater_channel_number)
         write_command += ',' + str(temperature)
@@ -766,10 +778,41 @@ class Lakeshore():
             print('DEBUG: Write command to lakeshore =  ' + write_command)  
         self._inst.command(write_command)
 
-            
 
-        
-        return
+        # wait time
+        if wait_temperature_reached:
+
+            # number of cycles
+            nb_cycles = int(round(max_wait_time/wait_cycle_time))
+            if nb_cycles<1:
+                nb_cycles = 1
+
+            # initialize stable time
+            time_stable = time.perf_counter()
+                
+            # loop cycle
+            for icycle in range(nb_cycles):
+
+                # current time and temperature
+                time_now = time.perf_counter()
+                temperature_now = self.get_temperature(channel_number=channel_number)
+
+                # check tolerance
+                if abs(temperature_now-temperature)/temperature_now > tolerance:
+                    # reset stable time 
+                    time_stable =  time_now
+
+                if time_stable-time_now > wait_stable_time:
+                    if self._verbose:
+                        print('INFO: Temperature ' + str(temperature_now*1000) + 'mK reached!')
+                    break
+                
+            # re-enable channels
+            self.enable_channels(channel_numbers=channel_enable_list,
+                                 disable_other=True)
+            
+            
+            
 
 
     

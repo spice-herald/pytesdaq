@@ -16,7 +16,7 @@ class MACRTModule(InstrumentComm):
                          verbose=verbose)
         
         # debug
-        self._debug = True
+        self._debug = False
         
       
         # port/IP address
@@ -308,7 +308,7 @@ class MACRTModule(InstrumentComm):
         ----------
 
         """
-
+        
         # check if parameter writable
         if not self._is_writable(param_name):
             print('WARNING: paramter "' + param_name + '" is not writable!')
@@ -319,7 +319,10 @@ class MACRTModule(InstrumentComm):
         idx = self._extract_param_index(param_name, channel_number,
                                         global_channel_number, channel_name)
 
+        
         # build command
+        if isinstance(param_val, str):
+            param_val = '"' + param_val + '"'
         cmd = self._set_cmd.format(param_idx=idx, value=param_val)
 
         if self._debug:
