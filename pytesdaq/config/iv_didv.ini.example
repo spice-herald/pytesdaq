@@ -1,18 +1,20 @@
-[sequencer]
+[iv_didv]
 
 daq_driver = polaris
-dummy_mode = False
 
 # TES bias IV/dIdV
 
 # sleep time [seconds]
-tes_bias_change_sleep_time = 60
+tes_bias_change_sleep_time = 3
+
+# Negative bias
+use_negative_tes_bias = false
 
 # TES bias sweep: use vect OR  min/max/step 
 use_tes_bias_vect = false
 
 # bias vect
-tes_bias_vect = 0
+tes_bias_vect = 20, 10, 5, 1,
 
 # min/max/steps [all in muAmps]
 tes_bias_max = 300
@@ -22,11 +24,6 @@ tes_bias_SC =  10
 tes_bias_step_N = 40
 tes_bias_step_T = 4
 tes_bias_step_SC = 2
-
-
-# TES rp/rn
-tes_bias_rp = 0
-tes_bias_rn = 500
 
 
 # Temperature sweep (Tc, IV,dIdV)  [percent]
@@ -107,24 +104,11 @@ output_gain = 10
 
 
 [rn]
+
+# Rn TES bias
+tes_bias = 500
+
 # any parameters in this section supersede dIdV parameters
 signal_gen_voltage = 100 
 voltage_min = -2
 
-
-
-[tc]
-
-# signal generator
-# amplitude in mVpp
-signal_gen_voltage = 20
-
-# frequency in Hz
-signal_gen_frequency =  100 
-
-# shape: 1= square, 2=sine, 3=triangle, 4 = arbitrary waveform
-signal_gen_shape = 1
-
-
-# TES/SQUID parameters (comment if no change)
-output_gain = 20
