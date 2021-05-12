@@ -6,6 +6,8 @@ import shutil
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import connection_utils
+from pytesdaq.utils import arg_utils
+
 import stat
 
 class Sequencer:
@@ -13,46 +15,71 @@ class Sequencer:
      TBD
      """
 
-     def __init__(self, channel_list=list(), sequencer_file=None, setup_file=None,
-                  pickle_file=None, verbose=True):
+     def __init__(self, measurement_name,
+                  measurement_list=None,
+                  detector_channels=None,
+                  tc_channels=None,
+                  sequencer_file=None, setup_file=None,
+                  sequencer_pickle_file=None,
+                  dummy_mode=False,
+                  verbose=True):
           
 
 
+          # measurement name and list
+          self._measurement_name = measurement_name
+          self._measurement_list = measurement_list
+          if self._measurement_list is None:
+               self._measurement_list = [self._measurement_name]
+               
+               
           # initialize some parameters
           # can be overwritten by config and class property
           self._verbose = verbose
           self._online_analysis = False
           self._enable_redis = False
           self._daq_driver = 'polaris'
-          self._dummy_mode = False
+          self._dummy_mode = dummy_mode
           self._facility = 1
-          self._data_path = './'
-          
+          self._save_raw_data = True
 
-          # read configuration data
+
+          # default data path
+          self._raw_data_path = './'
+          self._automation_data_path = './'
+          
+          # setup files
           self._setup_file = setup_file
+          self._sequencer_pickle_file = sequencer_pickle_file
           self._sequencer_file = sequencer_file
-          self._config= []
-          self._sequencer_config = dict()
-          self._connection_table = dict()
-          self._read_config()
-          
-          
-          # read pickle file
-          #self._read_pickle
-          
-          
-          # check channels -> use "tes_channel" only
-          channel_list = self._check_channels(channel_list)
-          self._selected_channel_list = channel_list
 
+
+          # channels (can also be set in sequencer file)
+          self._detector_channels = detector_channels
+          self._tc_channels = tc_channels
+
+          
+          # Instantiate config
+          try:
+               self._config = settings.Config(sequencer_file=self._sequencer_file,
+                                              setup_file=self._setup_file)
+          except Exception as e:
+               print('ERROR reading configuration files!')
+               print(str(e))
+               exit(1)
+
+          # Read measurement(s)  configuration
+          self._read_measurement_config()
+
+
+          
           # redis (can be enable in sequncer.ini file)
           if self._enable_redis:
                self._redis_db = redis.RedisCore()
                self._redis_db.connect()
                
           
-          # daq / instrument
+          # Initialize daq / instrument
           self._daq = None
           self._instrument = None
                
@@ -78,147 +105,194 @@ class Sequencer:
 
 
            
-     def _read_config(self):
+     def _read_measurement_config(self):
+          """
+          Read sequencer configuration
+          """
           
-          # configuration dictionary 
-          try:
-               self._config = settings.Config(sequencer_file=self._sequencer_file,
-                                              setup_file=self._setup_file)
-          except Exception as e:
-               print('ERROR reading configuration files!')
-               print(str(e))
-               exit(1)
-
-
-          config_dict = self._config.get_sequencer_setup()
-
-          for key in config_dict:
-
-               if key == 'verbose':
-                    self._verbose = config_dict[key]
-               elif key == 'online':
-                    self._online_analysis = config_dict[key]
-               elif key == 'dummy_mode':
-                    self._dummy_mode = config_dict[key]
-               elif key == 'daq_driver':
-                    self._daq_driver = config_dict[key]
-               elif key == 'enable_redis':
-                    self._enable_redis = config_dict[key]
-               else:
-                    self._sequencer_config[key] = config_dict[key]
-          
+          self._measurement_config = self._config.get_sequencer_setup(self._measurement_name,
+                                                                      self._measurement_list)
         
-          # connection table
-          self._connection_table= self._config.get_adc_connections()
-               
+          # save some parameters from user settings
+          for key,item in self._measurement_config[self._measurement_name].items():
+               if key == 'online':
+                    self._online_analysis = item
+               elif key == 'daq_driver':
+                    self._daq_driver = item
+               elif key == 'enable_redis':
+                    self._enable_redis = item
+               elif key == 'save_raw_data':
+                    self._save_raw_data = item
+         
           # facility
           self._facility = self._config.get_facility_num()
 
           # data path
-          self._data_path = self._config.get_data_path()
-
+          data_path = self._config.get_data_path()
+          
           # append run#
           fridge_run = 'run' + str(self._config.get_fridge_run())
-          if self._data_path.find(fridge_run)==-1:
-               self._data_path += '/' + fridge_run
-       
+          if data_path.find(fridge_run)==-1:
+               data_path += '/' + fridge_run
+          self._raw_data_path =  data_path + '/raw'
+          self._automation_data_path =  data_path + '/automation'
+          arg_utils.make_directories([data_path, self._raw_data_path,
+                                  self._automation_data_path])
+
+          
+          # channels
+          for measurement in  self._measurement_list:
+               # detector channels
+               if (self._detector_channels is None and
+                   'detector_channels' in self._measurement_config[measurement]):
+                    channels = self._measurement_config[measurement]['detector_channels']
+                    self._detector_channels = channels
+                    
+               # Tc channels
+               if (self._tc_channels is None and
+                   'tc_channels' in self._measurement_config[measurement]):
+                    channels = self._measurement_config[measurement]['tc_channels']
+                    self._tc_channels = channels
+
+               break
 
 
-     def _read_pickle(self):
-          print('Reading pickle -> Not implemented...')
-          
-     def _check_channels(self,channel_list):
+          # connection
+          if self._detector_channels is not None:
+               self._connection_table = self._config.get_adc_connections()
 
-          if not channel_list: 
-               raise ValueError('No channel has been selected!')
 
-          selected_channels = list()
-          items_dict = connection_utils.get_items(self._connection_table)
-          
-          
-          # loop channels
-          for channel in channel_list:
-               if channel in items_dict['tes_channel']:
-                    selected_channels.append(channel)
-               elif channel in items_dict['detector_channel']:
-                    ind = items_dict['detector_channel'].index(channel)
-                    selected_channels.append(items_dict['tes_channel'][ind])
-               else:
-                    raise ValueError('Channel ' + channel + 
-                                     ' unrecognized. Please check input or connections map in setup.ini)')
-                         
-               
-          return selected_channels
-          
-          
+          # check channels
+          self._check_channels()
 
-     def _get_adc_setup(self, config_dict, measurement_name):
-          
-          
+          # done if no detector channels
+          if self._detector_channels is None:
+               return
+
+          # ADC parameter for measurement with detector channels
           adc_dict = dict()
-
-          # didv, rp, and rn have same adc setup
-          is_didv = (measurement_name == 'rp' or measurement_name == 'rn' or measurement_name == 'didv')
-          
-          # fill channel list
-          for channel in  self._selected_channel_list:
-               adc_id, adc_chan = connection_utils.get_adc_channel_info(self._connection_table,
-                                                                        tes_channel=channel)
+          for channel in  self._detector_channels:
+               adc_id, adc_chan = connection_utils.get_adc_channel_info(
+                    self._connection_table,
+                    detector_channel=channel
+               )
                if adc_id not in adc_dict:
                     adc_dict[adc_id] = self._config.get_adc_setup(adc_id).copy()
                     adc_dict[adc_id]['channel_list'] = list()
+
                adc_dict[adc_id]['channel_list'].append(int(adc_chan))
                     
-          
-                
+
           # check required parameter
+          # add or replace parameter from measurement_config
           required_parameter_adc = ['sample_rate','voltage_min','voltage_max']
-          for item in required_parameter_adc:
-               if item not in config_dict:
-                    raise ValueError(measurement_name + ' measurement require ' + str(item) +
-                                     ' ! Please check configuration')
-        
-          # calculate nb_samples
-          nb_samples = 0
-          sample_rate = int(config_dict['sample_rate'])
-          if (is_didv and 'nb_cycles' in config_dict):
-               signal_gen_freq = float(config_dict['signal_gen_frequency'])
-               nb_samples= round(float(config_dict['nb_cycles'])*sample_rate/signal_gen_freq)
-          elif 'trace_length_ms' in config_dict:
-               nb_samples= round(float(config_dict['trace_length_ms'])*sample_rate/1000)
-          elif 'trace_length_adc' in config_dict:
-               nb_samples = int(config_dict['trace_length_adc'])
+          required_parameter_didv = ['signal_gen_frequency', 'signal_gen_shape',
+                                     'loop_channels']
+          if self._config.get_signal_generator()=='magnicon':
+               required_parameter_didv.append('signal_gen_current')
           else:
-               raise ValueError('Nb of cycles or trace length required for TES measurement!')
+               required_parameter_didv.append('signal_gen_voltage')
+          
+        
+
+          # loop measurements
+          for measurement in  self._measurement_list:
+               
+               # measurement config
+               config_dict = self._measurement_config[measurement]
+
+               
+               # dIdV flag
+               is_didv_used = (measurement != 'iv'
+                               and  measurement != 'noise')
+
+               # check dIdV parameters
+               if is_didv_used:
+                    for item in required_parameter_didv:
+                         if item not in config_dict:
+                              raise ValueError(measurement
+                                               + '  measurement require '
+                                               + str(item)
+                                               + ' ! Please check configuration')
+            
+               # ADC parameters
+               for adc_id in adc_dict:
+                    for item,value in adc_dict[adc_id].items():
+                         if item in config_dict:
+                              value = config_dict[item]
+                              adc_dict[adc_id][item] = value
+
+                    # check required parameter
+                    for item in required_parameter_adc:
+                         if item not in adc_dict[adc_id]:
+                              raise ValueError(measurement
+                                               + ' measurement require '
+                                               + str(item)
+                                               + ' ! Please check configuration')
+                         
+                    # calculate number of samples (dIdV fit)
+                    nb_samples = 0
+                    sample_rate = int(config_dict['sample_rate'])
+                    if (is_didv_used and 'nb_cycles' in config_dict):
+                         signal_gen_freq = float(config_dict['signal_gen_frequency'])
+                         nb_samples= round(
+                              float(config_dict['nb_cycles'])*sample_rate/signal_gen_freq
+                         )
+                    elif 'trace_length_ms' in config_dict:
+                         nb_samples= round(float(config_dict['trace_length_ms'])*sample_rate/1000)
+                    elif 'trace_length_adc' in config_dict:
+                         nb_samples = int(config_dict['trace_length_adc'])
+                    else:
+                         raise ValueError('Nb of cycles or trace length required for "'
+                                          + measurement + '" measurement!')
                     
 
-          # trigger
-          trigger_type = 1
-          if is_didv:
-               trigger_type = 2
+                    # trigger
+                    trigger_type = 1
+                    if is_didv_used:
+                         trigger_type = 2
                
+                    # add parameters
+                    for adc_id in adc_dict:
+                         adc_dict[adc_id]['nb_samples'] = int(nb_samples)
+                         adc_dict[adc_id]['trigger_type'] =  trigger_type
+                         if trigger_type==2:
+                              trigger_channel = '/Dev1/pfi0'
+                              if ('device_name' in adc_dict[adc_id] and 
+                                  'trigger_channel' in  adc_dict[adc_id]):
+                                   trigger_channel = '/' + adc_dict[adc_id]['device_name'] + '/' 
+                                   trigger_channel += adc_dict[adc_id]['trigger_channel']
+                              adc_dict[adc_id]['trigger_channel'] = trigger_channel
+
+               self._measurement_config[measurement]['adc_setup'] = adc_dict
+
+                         
+                         
+
+     def _read_pickle(self):
+          print('Reading pickle -> Not implemented...')
+
+
+
           
-         
-          # overwrite dictionary with setup from sequencer.ini
-          for adc_id in adc_dict:
-               adc_dict[adc_id]['nb_samples'] = int(nb_samples)
-               adc_dict[adc_id]['sample_rate'] = int(config_dict['sample_rate'])
-               adc_dict[adc_id]['voltage_min'] = float(config_dict['voltage_min'])
-               adc_dict[adc_id]['voltage_max'] = float(config_dict['voltage_max'])
-               adc_dict[adc_id]['trigger_type'] =  trigger_type
-               if trigger_type==2:
-                    trigger_channel = '/Dev1/pfi0'
-                    if ('device_name' in adc_dict[adc_id] and 
-                        'trigger_channel' in  adc_dict[adc_id]):
-                         trigger_channel = '/' + adc_dict[adc_id]['device_name'] + '/' 
-                         trigger_channel += adc_dict[adc_id]['trigger_channel']
-                    adc_dict[adc_id]['trigger_channel'] = trigger_channel
-         
-          return adc_dict
-
-
-
-     def _create_directory(self, base_name=None):
+     def _check_channels(self):
+          """
+          Check channels
+          """
+          
+          # loop detector channels
+          if self._detector_channels is not None:
+               # connection info
+               items_dict = connection_utils.get_items(self._connection_table)
+               
+               for channel in self._detector_channels:
+                    if channel not in items_dict['detector_channel']:
+                         raise ValueError('Channel ' + channel + ' unrecognized. '
+                                          + 'Please check input or connections map in setup.ini)')
+                         
+               
+       
+     def _create_measurement_directories(self, base_name=None):
           """
           Create sequencer directory
           """
@@ -232,13 +306,15 @@ class Sequencer:
           else:
                base_name = series
 
-          self._data_path = self._data_path + '/' + base_name
-          
-          
-          if not os.path.isdir(self._data_path):
-               try:
-                    os.makedirs(self._data_path)
-                    os.chmod(self._data_path, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
-               except OSError:
-                    raise ValueError('\nERROR: Unable to create directory "'+ self._data_path  + '"!\n')
-              
+               
+          # raw data
+          if self._save_raw_data and self._detector_channels is not None:
+               self._raw_data_path += '/' + base_name
+               arg_utils.make_directories(self._raw_data_path)
+                             
+          # tc data
+          if self._tc_channels is not None:
+               self._automation_data_path += '/' + base_name
+               arg_utils.make_directories(self._automation_data_path)
+            
+

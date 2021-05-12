@@ -62,79 +62,87 @@ class Config:
         
         
 
-    def get_sequencer_setup(self):
+    def get_sequencer_setup(self, measurement_name, measurement_list=None):
         """
         get sequencer setup
 
         """
 
-        setup = dict()
+        output_setup = dict()
+
+        # measurement list
+        if measurement_list is None:
+            measurement_list = [measurement_name]
+            
         try:
-            setup_configs = self._get_section('sequencer')
-            for config in setup_configs:
+
+            # convert to dictionary
+            config_dict = dict()
+            setup_config = self._get_section(measurement_name)
+            for config in setup_config:
                 if len(config)!=2:
                     continue
+                if config[1].strip() == '':
+                    continue
                 key = config[0]
-                if config[1].strip() != '':
-                    item = [s.strip() for s in config[1].split(',')]
-                    if len(item)==1:
-                        item = item[0]
-                        if item =='true':
-                            item = True
-                        if item =='false':
-                            item = False
+                values = [s.strip() for s in config[1].split(',')]
+                if len(values)==1:
+                    values = values[0]
+                    if values =='true' or values =='True':
+                        values = True
+                    elif values =='false' or values =='False':
+                        values = False
+                    elif values.isdigit():
+                        values = float(values)
+                elif len(values)>1:
+                    for ival in range(len(values)):
+                        if values[ival].isdigit():
+                            values[ival] = float(values[ival])
                         
-                    setup[key] = item
-                                     
+                config_dict[key] = values
+          
+
+                        
+            # case "iv_didv": get other individual sections
+            if measurement_name == 'iv_didv':
+                output_setup['iv_didv'] = config_dict.copy()
+                for name in measurement_list:
+                    # copy setup and update with individual setup
+                    output_setup[name] = config_dict.copy()
+                
+                    if self._has_section(name):
+                        iv_didv_config =  self._get_section(name)
+                        for config in iv_didv_config:
+                            if len(config)!=2:
+                                continue
+                            if config[1].strip() == '':
+                                continue
+                            key = config[0]
+                            values = [s.strip() for s in config[1].split(',')]
+                            if len(values)==1:
+                                values = values[0]
+                                if values =='true' or values =='True':
+                                    values = True
+                                elif values =='false' or values =='False':
+                                    values = False
+                                elif values.isdigit():
+                                    values = float(values)
+                            elif len(values)>1:
+                                for ival in range(len(values)):
+                                    if values[ival].isdigit():
+                                        values[ival] = float(values[ival])
+                            output_setup[name][key] = values
+            else:
+                output_setup[measurement_name] = config_dict
+                          
         except:
-            pass
+            print('WARNING: Problem reading settings file for "'+
+                  measurement_name + '" measurement!')
 
-        return setup
+        return output_setup 
 
 
-
-    def get_iv_didv_setup(self):
-        """
-        Get IV / didv
-        
-        """
-        iv_didv_config = dict()
-
-        if self._has_section('iv'):
-            config_section =  self._get_section('iv')
-            setup_dict = dict()
-            for config in config_section:
-                if len(config)==2 and config[1].strip() != '':
-                    setup_dict[config[0]] = config[1].strip()
-            iv_didv_config['iv'] = setup_dict
-
-        if self._has_section('didv'):
-            config_section =  self._get_section('didv')
-            setup_dict = dict()
-            for config in config_section:
-                if len(config)==2  and config[1].strip() != '':
-                    setup_dict[config[0]] = config[1]
-            iv_didv_config['didv'] = setup_dict
-            iv_didv_config['rp'] = setup_dict.copy()
-            iv_didv_config['rn'] = setup_dict.copy()
-            
-   
-        if self._has_section('rp'):
-            config_section =  self._get_section('rp')
-            for config in config_section:
-                if len(config) == 2 and config[1].strip() != '':
-                    iv_didv_config['rp'][config[0]] = config[1]
-   
-        if self._has_section('rn'):
-            config_section =  self._get_section('rn')
-            for config in config_section:
-                if len(config) == 2 and config[1].strip() != '':
-                    iv_didv_config['rn'][config[0]] = config[1]
-      
-        return iv_didv_config
-
-            
-
+  
     def get_squid_controller(self):
         """
         get SQUID/TES controller device name

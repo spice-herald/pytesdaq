@@ -24,7 +24,8 @@ class Control:
     Control TES related instruments
     """
     
-    def __init__(self, setup_file=None, verbose=True, dummy_mode=True, raise_errors=True):
+    def __init__(self, setup_file=None, verbose=True,
+                 dummy_mode=False, raise_errors=True):
         
         # for code development
         self._dummy_mode = dummy_mode
@@ -979,20 +980,13 @@ class Control:
         # initialize dictionary
         output_dict = dict()
         output_dict['source'] = nan
-        output_dict['amplitude'] = nan
         output_dict['frequency'] = nan
         output_dict['shape'] = nan
         output_dict['phase_shift'] = nan
         output_dict['freq_div'] = nan
         output_dict['half_pp_offset'] = nan
-       
-
-        if self._dummy_mode:
-            print('INFO: Getting signal generator #' + str(signal_gen_num) + ', ' + 
-                   controller_id + ' channel ' + str(controller_channel))
-            return output_dict
-
-
+        output_dict['voltage'] = []
+        output_dict['current'] = []
 
         # magnicon
         if self._signal_generator_name == 'magnicon':
@@ -1007,6 +1001,12 @@ class Control:
                                                      adc_channel=adc_channel)
             )
         
+
+            if self._dummy_mode:
+                print('INFO: Getting signal generator #' + str(signal_gen_num) + ', ' + 
+                      controller_id + ' channel ' + str(controller_channel))
+                return output_dict
+            
             
             # convert some parameters
             source_magnicon = 'I'
@@ -1038,11 +1038,16 @@ class Control:
         else:
 
             # signal generator parameter
-            output_dict['voltage'] = float(self._signal_generator_inst.get_amplitude(source=signal_gen_num))
-            resistance = float(self._config.get_signal_gen_tes_resistance())
-            output_dict['current']  = float(output_dict['voltage']/resistance)
-            output_dict['frequency'] = float(self._signal_generator_inst.get_frequency(source=signal_gen_num))
-            output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
+            if not self._dummy_mode:
+                output_dict['voltage'] = float(
+                    self._signal_generator_inst.get_amplitude(source=signal_gen_num)
+                )
+                resistance = float(self._config.get_signal_gen_tes_resistance())
+                output_dict['current']  = float(output_dict['voltage']/resistance)
+                output_dict['frequency'] = float
+                (self._signal_generator_inst.get_frequency(source=signal_gen_num)
+                )
+                output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
 
             # source
             if self._squid_controller_name == 'feb':
@@ -1057,7 +1062,13 @@ class Control:
                                                          adc_channel=adc_channel)
                 )
 
-                                
+
+                if self._dummy_mode:
+                    print('INFO: Getting signal generator #' + str(signal_gen_num) + ', ' + 
+                          controller_id + ' channel ' + str(controller_channel))
+                    return output_dict
+
+                
                 is_connected_to_tes = (
                     self.is_signal_gen_connected_to_tes(tes_channel=tes_channel,
                                                         detector_channel=detector_channel,
@@ -1364,6 +1375,7 @@ class Control:
         output_dict['open_loop_full_norm'] = list()
 
 
+        
         # ====================
         # channels
         # ====================
@@ -1449,6 +1461,7 @@ class Control:
                                                       detector_channel=detector_chan, 
                                                       adc_id=adc_chan_id, adc_channel=adc_chan)
 
+            print(sig_gen_dict)
             onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan,
                                               detector_channel=detector_chan, 
                                               adc_id=adc_chan_id, adc_channel=adc_chan)
@@ -1735,9 +1748,9 @@ class Control:
             slot = int(feb_info[1])
             
             if self._verbose or self._debug:
-                print('INFO: Setting ' + param_name + ' to ' + str(value) + ' using FEB:')
+                print('INFO: Setting ' + param_name + ' to ' + str(value) + ' using FEB!')
             if self._debug:
-                print('subrack = ' + str(subrack) + ', slot = ' + str(slot) + ', channel = ' + 
+                print('DEBUG: FEB - subrack = ' + str(subrack) + ', slot = ' + str(slot) + ', channel = ' + 
                       str(controller_channel))
                  
             if not self._dummy_mode:
@@ -2028,7 +2041,12 @@ class Control:
         """
         Connect instruments
         """
-                    
+
+
+        if self._dummy_mode:
+            print('WARNING: Dummy mode enabled. Not connecting instruments!')
+            return
+        
         # ----------
         # CDMS FEB
         # ----------
@@ -2128,4 +2146,4 @@ class Control:
         """
         Disconnect instruments
         """
-        
+        return

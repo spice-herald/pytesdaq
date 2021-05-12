@@ -11,14 +11,12 @@ if __name__ == "__main__":
     # ========================
 
     parser = argparse.ArgumentParser(description='Launch Sequencer')
+    parser.add_argument('--dummy-mode',dest='dummy_mode',action='store_true')
     parser.add_argument('--enable-iv',dest='enable_iv',action='store_true')
     parser.add_argument('--enable-didv',dest='enable_didv',action='store_true')
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
     parser.add_argument('--enable-rn',dest='enable_rn',action='store_true')
     parser.add_argument('--enable-temperature-sweep',dest='enable_temperature_sweep',action='store_true')
-    
-    parser.add_argument('--tes_channels', type = str,
-                        help='Comma sepated TES channels (check connections in setup.ini are uptodate)')
     parser.add_argument('--detector_channels', type = str,
                         help='Comma sepated detector channels (check connections in setup.ini are uptodate)')
     parser.add_argument('--setup_file', type = str,
@@ -26,9 +24,17 @@ if __name__ == "__main__":
     parser.add_argument('--sequencer_file', type = str,
                         help = 'Sequencer configuration file name (full path) [default: pytesdaq/config/sequencer.ini]')
     parser.add_argument('--pickle_file', type = str,help='Pickle file with channel dependent sweep arrays')
+    parser.add_argument('--dummy_mode',dest='dummy_mode',action='store_true')
+    
     args = parser.parse_args()
 
-  
+
+
+    dummy_mode = False
+    if args.dummy_mode:
+        dummy_mode = True
+
+    
     enable_iv = False
     if args.enable_iv:
         enable_iv = True
@@ -45,10 +51,6 @@ if __name__ == "__main__":
     if args.enable_rn:
         enable_rn = True
 
-    enable_tc = False
-    if args.enable_tc:
-        enable_tc = True
-
     enable_temperature_sweep = False
     if args.enable_temperature_sweep:
         enable_temperature_sweep = True
@@ -59,15 +61,12 @@ if __name__ == "__main__":
     
     # channels
     channels = list()
-    if args.tes_channels:
-        channels = args.tes_channels
-    elif args.detector_channels:
+    if args.detector_channels:
         channels = args.detector_channels
     else:
-        print('TES or Detector channels required!')
+        print('Detector channels required!')
         exit(1)
-        
-    
+          
     channels = [chan.strip() for chan in channels.split(',')]
    
 
@@ -107,14 +106,6 @@ if __name__ == "__main__":
         print('Not measurement has been enabled! Type "python run_sequencer.py --help"')
         exit(0)
 
-
-    if not args.tes_channels and not args.detector_channels:
-        print('No channels (TES or Detector) have been selected! Type "python run_sequencer.py --help"')
-        exit(0)
-
-    if args.tes_channels and args.detector_channels:
-        print('please choose between channel type (TES or Detector). Not both')
-        exit(0)
         
    
     # ========================
@@ -122,15 +113,12 @@ if __name__ == "__main__":
     # ========================
     
     if enable_iv_didv:
-        sequencer = IV_dIdV(iv=enable_iv, didv=enable_didv,
+        sequencer = IV_dIdV(dummy_mode=dummy_mode,
+                            iv=enable_iv, didv=enable_didv,
                             rp=enable_rp, rn=enable_rn,
                             temperature_sweep=enable_temperature_sweep, 
-                            channel_list=channels,
+                            detector_channels=channels,
                             sequencer_file=sequencer_file, setup_file=setup_file,
-                            pickle_file=pickle_file)
-
-        
-        sequencer.verbose = True
-        sequencer.dummy_mode = False
+                            sequencer_pickle_file=pickle_file)
         sequencer.run()
 
