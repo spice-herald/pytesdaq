@@ -171,7 +171,7 @@ class FEB(InstrumentComm):
 
         # write
         time.sleep(millisec_delay)
-        self.write_feb(subrack, address, data)
+        self._write_feb(subrack, address, data)
 
         
     def set_phonon_feedback_loop(self, subrack, slot, channel, closed):
@@ -215,7 +215,7 @@ class FEB(InstrumentComm):
                     data += int(squid_CSR[i]) << i
                     
         time.sleep(0.16)
-        self.write_feb(subrack, address, data)
+        self._write_feb(subrack, address, data)
 
 
     def set_phonon_feedback_polarity(self,subrack, slot, channel, inverted):
@@ -258,7 +258,7 @@ class FEB(InstrumentComm):
                 if i != 7:
                     data += int(squid_CSR[i]) << i
         time.sleep(0.16)
-        self.write_feb(subrack, address, data)
+        self._write_feb(subrack, address, data)
        
 
 
@@ -295,7 +295,7 @@ class FEB(InstrumentComm):
                     if i != 15:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self.write_feb(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified to set signal source: "
                             + str(channel))
@@ -334,7 +334,7 @@ class FEB(InstrumentComm):
                     if i != 11:
                         data += int(squid_CSR[i]) << i
             time.sleep(0.16)
-            self.write_feb(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setting SG to FB line:: "
                             + str(channel))
@@ -375,7 +375,7 @@ class FEB(InstrumentComm):
                     if i != 3:
                         data += int(sense_bias_CSR[i]) << i
             time.sleep(0.16)
-            self.write_feb(subrack, address, data)
+            self._write_feb(subrack, address, data)
         else: 
             raise Exception("FEB: Invalid channel value specified for setting SG to TES line: "
                             + str(channel))
@@ -672,7 +672,7 @@ class FEB(InstrumentComm):
 
         # address  number
         address = (slot << 8) + (setting << 4) + channel
-
+        
         # data number
         data = 0
         if setting == FEBSettings.SENSORBIAS.value:
@@ -690,7 +690,7 @@ class FEB(InstrumentComm):
             data = int(round(4095.0 * (5.0 - value) / 10.0))
         
         time.sleep(millisec_delay)
-        self.write_feb(subrack, address, data)
+        self._write_feb(subrack, address, data)
         
 
     def _get_param(self, subrack, slot, setting, channel, millisec_delay = 0.160):
