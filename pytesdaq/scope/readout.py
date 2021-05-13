@@ -768,7 +768,8 @@ class Readout:
         
         # Instantiate instrument
         if self._instrument is None:
-            self._instrument = instrument.Control(dummy_mode=False)
+            self._instrument = instrument.Control(setup_file=self._setup_file,
+                                                  dummy_mode=False)
 
 
         # Read normalization

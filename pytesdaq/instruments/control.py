@@ -2046,6 +2046,10 @@ class Control:
         if self._dummy_mode:
             print('WARNING: Dummy mode enabled. Not connecting instruments!')
             return
+
+
+        # visa library
+        visa_library = self._config.get_visa_library()
         
         # ----------
         # CDMS FEB
@@ -2055,7 +2059,9 @@ class Control:
             if address:
                 if self._verbose:
                     print('INFO: Instantiating FEB using address: ' + address)
-                self._readout_inst = FEB(address, verbose=self._verbose, raise_errors=self._raise_errors)
+                self._readout_inst = FEB(address,
+                                         visa_library=visa_library,
+                                         verbose=self._verbose, raise_errors=self._raise_errors)
             else:
                 raise ValueError('Unable to find GPIB address. It will not work!')
 
@@ -2105,6 +2111,7 @@ class Control:
             address = self._config.get_signal_generator_address('keysight')
             self._signal_generator_inst = (
                 KeysightFuncGenerator(address,
+                                      visa_library=visa_library,
                                       verbose=self._verbose,
                                       raise_errors=self._raise_errors)
             )

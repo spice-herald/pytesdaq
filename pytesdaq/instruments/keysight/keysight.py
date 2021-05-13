@@ -8,9 +8,11 @@ class KeysightFuncGenerator(InstrumentComm):
     Keysight function generators management
     """
 
-    def __init__(self, visa_address, raise_errors=True, verbose=True):
+    def __init__(self, visa_address, visa_library=None, raise_errors=True, verbose=True):
         super().__init__(visa_address=visa_address, termination='\n',
-                         raise_errors=raise_errors, verbose=verbose)
+                         visa_library=visa_library,
+                         raise_errors=raise_errors,
+                         verbose=verbose)
         """
         Keysight
         """

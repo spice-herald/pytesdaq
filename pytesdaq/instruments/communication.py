@@ -10,8 +10,10 @@ class InstrumentComm:
     """
     
     def __init__(self, protocol='tcp', termination=None, timeout=2,
-                 ip_address=None, visa_address=None, port=None,
-                 recv_port=None, raise_errors=True, verbose=True):
+                 ip_address=None, visa_address=None,
+                 port=None, recv_port=None,
+                 visa_library=None,
+                 raise_errors=True, verbose=True):
 
         self._protocol = protocol.lower()
         self._timeout = timeout
@@ -22,7 +24,7 @@ class InstrumentComm:
         self._recv_port  = recv_port
         if recv_port is None:
             self._recv_port = port
-            
+        self._visa_library = visa_library
         self._verbose = verbose
         self._raise_errors = raise_errors
 
@@ -172,8 +174,12 @@ class InstrumentComm:
                 print('DEBUG: UDP socket created!')
 
         else:
-        
-            rm = visa.ResourceManager()        
+            rm = None
+            if self._visa_library is None:
+                rm = visa.ResourceManager()
+            else:
+                rm = visa.ResourceManager(self._visa_library)
+                
             try:
                 if self._verbose:
                     print('INFO: Opening VISA resource "{}"'.format(self._visa_address))

@@ -31,8 +31,12 @@ class FEB(InstrumentComm):
     FEB control
     """
 
-    def __init__(self, gpib_address, verbose=False, raise_errors=True):
-        super().__init__(visa_address=gpib_address, verbose=verbose,
+    def __init__(self, gpib_address, visa_library=None, verbose=False,
+                 raise_errors=True):
+        
+        super().__init__(visa_address=gpib_address,
+                         visa_library=visa_library,
+                         verbose=verbose,
                          raise_errors=raise_errors)
 
         self._is_modified = True

@@ -16,6 +16,9 @@ signal_generator = keysight
 temperature_controllers = lakeshore
 
 
+# VISA Library (leave commented if standard path)
+visa_library = /usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0
+
 # ADC list
 enable_adc = adc1
 

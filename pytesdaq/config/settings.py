@@ -244,15 +244,6 @@ class Config:
         
         return data_path
 
-    
-    def get_fig_data_path(self):
-        data_path = './'
-        try:
-            data_path =  str(self._get_setting('setup','fig_data_path'))
-        except:
-            pass
-        
-        return data_path
 
     def get_fridge_run(self):
         fridge_run = []
@@ -495,7 +486,21 @@ class Config:
                        
         return detector_config 
 
-
+    def get_visa_library(self):
+        """
+        get VISA Library
+        
+        Returns:
+            str - no type conversion happens here!
+        """
+        library_path = None
+        try:
+            if self._has_setting('setup','visa_library'):
+                library_path =  self._get_setting('setup','visa_library')
+        except:
+            pass
+    
+        return library_path
 
     
     def get_feb_address(self):
