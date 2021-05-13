@@ -617,7 +617,7 @@ class Config:
         return info
 
 
-    def get_signal_generator_address(self, device_name):
+    def get_signal_generator_visa_address(self, device_name):
         """
         get function generators
         
@@ -625,7 +625,7 @@ class Config:
             str - no type conversion happens here!
         """
 
-        key = device_name + '_address'
+        key = device_name + '_visa_address'
         
         address=str()
         try:

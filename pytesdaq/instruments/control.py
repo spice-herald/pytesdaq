@@ -2108,7 +2108,7 @@ class Control:
         # Signal Generator
         # ----------------
         if self._signal_generator_name == 'keysight':
-            address = self._config.get_signal_generator_address('keysight')
+            address = self._config.get_signal_generator_visa_address('keysight')
             self._signal_generator_inst = (
                 KeysightFuncGenerator(address,
                                       visa_library=visa_library,
