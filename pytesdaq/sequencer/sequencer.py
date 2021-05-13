@@ -31,7 +31,7 @@ class Sequencer:
           self._measurement_list = measurement_list
           if self._measurement_list is None:
                self._measurement_list = [self._measurement_name]
-               
+          self._measurement_config = None
                
           # initialize some parameters
           # can be overwritten by config and class property

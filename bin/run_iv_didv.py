@@ -11,7 +11,6 @@ if __name__ == "__main__":
     # ========================
 
     parser = argparse.ArgumentParser(description='Launch Sequencer')
-    parser.add_argument('--dummy-mode',dest='dummy_mode',action='store_true')
     parser.add_argument('--enable-iv',dest='enable_iv',action='store_true')
     parser.add_argument('--enable-didv',dest='enable_didv',action='store_true')
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
