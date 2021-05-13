@@ -1,0 +1,205 @@
+[setup] 
+
+# Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge,
+#                  3 = UMass
+facility = 2
+
+# fridge run
+fridge_run = 6
+
+# data path 
+data_path = /sdata/runs
+
+# type of instruments used 
+squid_controller = feb
+signal_generator = keysight
+temperature_controllers = lakeshore
+
+
+# ADC list
+enable_adc = adc1
+
+# database (FIXME -> Not implemented yet)
+enable_redis = false
+enable_sql = false
+
+# readback instrument values (FIXME -> Not implemented yet)
+enable_readback = false
+
+
+
+[adc1]
+device_name  = Dev1
+
+
+# default adc settings
+# (may be changed with run_daq.py arguments!)
+sample_rate = 1250000 
+nb_samples = 8192
+voltage_min = -5
+voltage_max = 5
+channel_list = 0-3
+trigger_type = 3
+trigger_channel = pfi0
+
+
+
+# NI ADC connection information
+
+# Format: string array for each ADC channel used [0:7]
+#   Controller ->  "controller:[name]_[channel]"
+#   TES wiring ->  "tes:[channel]  (optional if same as controller channel)
+#   Detector   ->  "detector:[name]_[channel]"  (set to "None" if no parameter
+connection0 = detector:TES25x100, tes:A, controller:feb1_A
+connection1 = detector:TES50x200, tes:B, controller:feb1_B
+connection2 = detector:TES25x100NoGlue, tes:C, controller:feb1_C
+connection3 = detector:TES50x200NoGlue, tes:D, controller:feb1_D
+
+
+
+
+# Electronics and detector readout configuration
+# 
+# shunt_resistance [Ohms]
+# squid_turn_ratio 
+# feedback_resistance [Ohms] (for FEB ONLY, magnicon->read from board)
+# 
+# Other parameters useful for processing/analysis  (ONLY IF DETECTOR CONTROL DISABLED!)
+#     tes_bias: [uAmps]
+#     close_loop_norm: Output gain * feedback resistance [Ohms] * squid_turn_ratio
+#     open_loop_norm:  Output gain * Preamp gain
+#     signal_gen_current:  [uAmps]
+#     signal_gen_frequency: [Hz]
+
+detector_config0 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
+detector_config1 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
+detector_config2 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
+detector_config3 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
+
+
+
+
+
+[polaris_daq]
+lib = /data/DAQ/nidaq/lib/libnidaq.so
+fcn = NIdaq
+enable = true 
+next = recorder
+
+
+[polaris_recorder]
+lib = /data/DAQ/nidaq/lib/libnidaq.so
+fcn = HDF5Recorder
+enable = true
+next = daq
+
+
+[redis]
+enable = false
+host = 127.0.0.1
+port = 6379
+password = None
+data_stream = NIstream
+
+
+[feb]
+visa_address = GPIB0::18::INSTR
+
+# FEBs, each FEB has 4 channels (A,B,C,D)
+# Format: subrack, slot
+feb1 = 1,4
+feb2 = 1,7
+
+# fixed gains (total SQUID loop gain  is preamp * feedback gains)
+preamp_fix_gain = 1
+feedback_fix_gain = 21
+output_fix_gain = 1
+signal_gen_tes_resistance = 10000
+
+# Note: FEB preamp fix gain is actually 20 but it is taken into account
+# with variable gain read from FEB
+
+
+
+[magnicon]
+# Details of remote connection
+hostname = 128.32.239.62
+username = mckinseyleidenfridge
+port = 22
+# auth_method = rsa; can be dss or password
+rsa_key = /home/vetri/.ssh/id_rsa_no_pass
+log_file = /home/vetri/Desktop/pytesdaq/squid.log
+exe_location = C:\Users\McKinseyLeidenFridge\GitRepos\pytesdaq\pytesdaq\instruments\magnicon\dll
+channel_list = 1,2,3
+default_active = 1
+reset_active = 1
+
+# fixed gains (total SQUID loop gain  is preamp * feedback gains)
+preamp_fix_gain = 1
+feedback_fix_gain = 1
+output_fix_gain = 1
+
+
+
+
+
+[signal_generators]
+keysight_visa_address = TCPIP::192.168.0.4::5025::SOCKET
+
+
+
+[temperature_controllers]
+# Lakeshore
+
+# TCP or USB information
+lakeshore_setup  =  model:372, ip:192.168.0.3, tcp_port:7777
+
+# channel setup
+# Format:
+#    lakeshore_chan[1-16] = name:[unique name], type:[RX, CX, or FR], serial:[...]
+#    "type" and "serial" are optional is resistance only measurement or temperature
+#    curve loaded in lakeshore
+
+lakeshore_chan1 = name:TES1, global_number:1
+lakeshore_chan2 = name:MF3, global_number:2
+lakeshore_chan3 = name:MF2, global_number:3
+lakeshore_heater0 = name:heaterMCls, global_number:30
+
+
+# MARCT
+
+# Module names
+#
+# Format:
+#   macrt_modules = module1:[module name], module2:...
+# (no specific format for module name, need to be unique)
+macrt_modules = module1:mmr3-174, module2:mmr3-184, module3:mgc3-66
+
+
+# Individual module setup
+# Format:
+#   macrt_[module name] = type:[mmr3 or mgc3], ip:[X.X.X.X], protocol:[udp or tcp]
+#   macrt_[module_name]_chan[0,1,2,or 3] = name:[unique name], number:[unique number],
+#                                          type:[RuO2, CX, or FR], serial:[...]
+#
+#  "type" and "serial" are optional is resistance only measurement or temperature
+#  curve loaded in module
+
+# Resistance module MMR3-174 - channels are labeled 1, 2, or 3
+macrt_mmr3-174_setup = type:mmr3, ip:192.168.0.31
+macrt_mmr3-174_chan2 = name:CP, global_number:17, type:RX, serial:R654
+macrt_mmr3-174_chan3 = name:Still, global_number:18, type:CX, serial:121325
+
+# Resistance MMR3-184 - channels are labeled 1, 2, or 3
+macrt_mmr3-184_setup = type:mmr3, ip:192.168.0.32
+macrt_mmr3-184_chan1 = name:MC, global_number:19, type:FR, serial:105D
+macrt_mmr3-184_chan2 = name:2nde, global_number:20, type:CX, serial:121324
+macrt_mmr3-184_chan3 = name:1st, global_number:21, type:CX, serial:121322
+
+# Heater MGC3-66 - Channel are labeled 0,1, or 2
+macrt_mgc3-66_setup = type:mgc3, ip:192.168.0.34
+macrt_mgc3-66_chan0 = name:heaterMC, global_number:31
+macrt_mgc3-66_chan1 = name:heaterStill, global_number:32
+
+
+
