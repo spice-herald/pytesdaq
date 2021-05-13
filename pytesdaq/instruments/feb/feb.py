@@ -35,8 +35,11 @@ class FEB(InstrumentComm):
         super().__init__(visa_address=gpib_address, verbose=verbose,
                          raise_errors=raise_errors)
 
+        self._is_modified = True
+
         
-    def set_phonon_qet_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_qet_bias(self, subrack, slot, channel, value,
+                            millisec_delay = 0.160):
         """
         Set Phonon QET bias
         Value should be [-2000:2000] uA
@@ -48,10 +51,12 @@ class FEB(InstrumentComm):
             print('WARNING: Maximum QET bias value is 2000uA. Setting to 2000uA!')
             value = 2000
 
-        self._set_param(subrack, slot, FEBSettings.SENSORBIAS.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SENSORBIAS.value,
+                        channel, value, millisec_delay)
                 
         
-    def set_phonon_squid_bias(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_squid_bias(self, subrack, slot, channel,
+                              value, millisec_delay = 0.160):
         """
         Set Phonon SQUID bias
         Value should be [-200:200] uA
@@ -63,10 +68,12 @@ class FEB(InstrumentComm):
             print('WARNING: Maximum SQUID bias value is 200uA. Setting to 200uA!')
             value = 200
         
-        self._set_param(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDBIAS.value,
+                        channel, value, millisec_delay)
                 
   
-    def set_phonon_lock_point(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_lock_point(self,subrack, slot, channel,
+                              value, millisec_delay = 0.160):
         """
         Set lock point
         Value should be [-8:8] mV
@@ -78,10 +85,12 @@ class FEB(InstrumentComm):
             print('WARNING: Maximum SQUID lock point value is 8mV. Setting to 8mV!')
             value = 8
             
-        self._set_param(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDLOCK.value,
+                        channel, value, millisec_delay)
 
    
-    def set_phonon_preamp_gain(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_preamp_gain(self,subrack, slot, channel,
+                               value, millisec_delay = 0.160):
         """
         Set Phonon Preamp Gain
         Value should be [20:100]
@@ -95,10 +104,12 @@ class FEB(InstrumentComm):
             print('WARNING: Maxmium Preamp gain is 100. Setting to 100!')
             value = 100
         
-        self._set_param(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDGAIN.value,
+                        channel, value, millisec_delay)
 
         
-    def set_phonon_offset(self,subrack, slot, channel, value, millisec_delay = 0.160):
+    def set_phonon_offset(self,subrack, slot, channel,
+                          value, millisec_delay = 0.160):
         """
         Set phonon offset
         Value should be [-5:5] V
@@ -110,10 +121,12 @@ class FEB(InstrumentComm):
             print('WARNING: Maximum phonon offset is 5V. Setting to 5V!')
             value = 5
             
-        self._set_param(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, value, millisec_delay)
+        self._set_param(subrack, slot, FEBSettings.SQUIDDRIVER.value,
+                        channel, value, millisec_delay)
 
 
-    def set_phonon_output_gain(self,subrack, slot, channel, gain, millisec_delay = 0.160):
+    def set_phonon_output_gain(self,subrack, slot, channel,
+                               gain, millisec_delay = 0.160):
         """
         Set output gain
         Max gain is +-50
@@ -146,7 +159,10 @@ class FEB(InstrumentComm):
             data += gain_list.index(gain) << channel * 4
                     
         for i in range(16):
-            if i != channel * 4 and i != channel * 4 + 1 and i != channel * 4 + 2 and i != channel * 4 + 3:
+            if (i != channel * 4
+                and i != channel * 4 + 1
+                and i != channel * 4 + 2
+                and i != channel * 4 + 3):
                 data += int(old_driver_CSR[i]) << i
 
         # write
@@ -164,7 +180,8 @@ class FEB(InstrumentComm):
             channel = int(FEBChannels[channel].value)
 
         if channel < FEBChannels.A.value or channel > FEBChannels.D.value:
-            raise Exception("FEB: Invalid channel value specified for feedback loop open/closed: " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for feedback loop open/closed: "
+                            + str(channel))
 
         # address
         address = (slot << 8) + (14 << 4) + 1
@@ -206,7 +223,8 @@ class FEB(InstrumentComm):
             channel = int(FEBChannels[channel].value)
 
         if channel < FEBChannels.A.value or channel > FEBChannels.D.value:
-            raise Exception("FEB: Invalid channel value specified for feedback polarity: " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for feedback polarity: "
+                            + str(channel))
 
 
         # address
@@ -275,7 +293,8 @@ class FEB(InstrumentComm):
             time.sleep(0.16)
             self.write_feb(subrack, address, data)
         else: 
-            raise Exception("FEB: Invalid channel value specified to set signal source: " + str(channel))
+            raise Exception("FEB: Invalid channel value specified to set signal source: "
+                            + str(channel))
 
         
     def connect_signal_generator_feedback(self,subrack, slot, channel, enabled):
@@ -313,7 +332,8 @@ class FEB(InstrumentComm):
             time.sleep(0.16)
             self.write_feb(subrack, address, data)
         else: 
-            raise Exception("FEB: Invalid channel value specified for setting SG to FB line:: " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for setting SG to FB line:: "
+                            + str(channel))
 
 
 
@@ -353,7 +373,8 @@ class FEB(InstrumentComm):
             time.sleep(0.16)
             self.write_feb(subrack, address, data)
         else: 
-            raise Exception("FEB: Invalid channel value specified for setting SG to TES line: " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for setting SG to TES line: "
+                            + str(channel))
 
 
 
@@ -365,7 +386,8 @@ class FEB(InstrumentComm):
           float [uA]
         """
         
-        return self._get_param(subrack, slot, FEBSettings.SENSORBIAS.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SENSORBIAS.value,
+                               channel, millisec_delay)
 
 
     
@@ -377,7 +399,8 @@ class FEB(InstrumentComm):
           float [uA]
         """
         
-        return self._get_param(subrack, slot, FEBSettings.SQUIDBIAS.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDBIAS.value,
+                               channel, millisec_delay)
 
 
     
@@ -389,7 +412,8 @@ class FEB(InstrumentComm):
           float [mV]
         """
         
-        return self._get_param(subrack, slot, FEBSettings.SQUIDLOCK.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDLOCK.value,
+                               channel, millisec_delay)
 
     
     def get_phonon_preamp_gain(self, subrack, slot, channel, millisec_delay = 0.160):
@@ -399,7 +423,8 @@ class FEB(InstrumentComm):
         return:
           float
         """
-        return self._get_param(subrack, slot, FEBSettings.SQUIDGAIN.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDGAIN.value,
+                               channel, millisec_delay)
 
 
     def get_phonon_offset(self, subrack, slot, channel, millisec_delay = 0.160):
@@ -409,7 +434,8 @@ class FEB(InstrumentComm):
         return:
           float [V]
         """
-        return self._get_param(subrack, slot, FEBSettings.SQUIDDRIVER.value, channel, millisec_delay)
+        return self._get_param(subrack, slot, FEBSettings.SQUIDDRIVER.value,
+                               channel, millisec_delay)
 
     
     
@@ -444,7 +470,8 @@ class FEB(InstrumentComm):
         if data>=0 and data<16:
             gain = gain_list[int(data)]
         else:
-            raise Exception("FEB: Unable to get output gain for channel " + str(channel))
+            raise Exception("FEB: Unable to get output gain for channel "
+                            + str(channel))
         
         return gain
        
@@ -473,7 +500,8 @@ class FEB(InstrumentComm):
         elif channel == FEBChannels.D.value:
             return not squid_CSR[3]
         else:
-            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackCO() " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackCO() "
+                            + str(channel))
 
         
         
@@ -502,7 +530,8 @@ class FEB(InstrumentComm):
         elif channel == FEBChannels.D.value:
             return not squid_CSR[7]
         else:
-            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPolarity(): " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPolarity(): "
+                            + str(channel))
 
         
     def is_phonon_source_preamp(self,subrack, slot, channel):
@@ -530,7 +559,8 @@ class FEB(InstrumentComm):
         elif channel == FEBChannels.D.value:
             return not squid_CSR[15]
         else:
-            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPreamp() " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for getSquidFeedbackPreamp() "
+                            + str(channel))
                 
     def is_signal_generator_feedback_connected(self,subrack, slot, channel):
         """
@@ -556,7 +586,8 @@ class FEB(InstrumentComm):
         elif channel == FEBChannels.D.value:
             return squid_CSR[11]
         else:
-            raise Exception("FEB: Invalid channel value specified for getSquidExternalSignal() " + str(channel))
+            raise Exception("FEB: Invalid channel value specified for getSquidExternalSignal() "
+                            + str(channel))
 
     def is_signal_generator_tes_connected(self,subrack, slot, channel):
         """
@@ -641,7 +672,10 @@ class FEB(InstrumentComm):
         # data number
         data = 0
         if setting == FEBSettings.SENSORBIAS.value:
-            data = int(round(4095.0 * (500.0 + value) / 1000.0))
+            if self._is_modified:
+                data = int(round(4095.0 * (500.0 + value) / 1000.0))
+            else:
+                data = int(round(4095.0 * (2000.0 + value) / 4000.0)) 
         if setting == FEBSettings.SQUIDBIAS.value:
             data = int(round(4095.0 * (200.0 + value) / 400.0))
         if setting == FEBSettings.SQUIDLOCK.value:
@@ -674,7 +708,10 @@ class FEB(InstrumentComm):
         decimal_result = int(bias_val_hex, 16) & 4095
 
         if setting == FEBSettings.SENSORBIAS.value:
-            output_val = 1000.0 * float(decimal_result) / 4095.0 - 500.0
+            if self._is_modified:
+                output_val = 1000.0 * float(decimal_result) / 4095.0 - 500.0
+            else:
+                output_val = 4000.0 * float(decimal_result) / 4095.0 - 2000.0
         elif setting == FEBSettings.SQUIDBIAS.value:
             output_val = 400.0 * float(decimal_result) / 4095.0 - 200.0
         elif setting == FEBSettings.SQUIDLOCK.value:
