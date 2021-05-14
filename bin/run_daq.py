@@ -179,6 +179,8 @@ if __name__ == "__main__":
     dir_prefix = 'continuous'  
     if trigger_type[0]==2 or trigger_type[0]==4:
         dir_prefix = 'trigger'
+    elif trigger_type[0]==3:
+        dir_prefix = 'random'
     now = datetime.now()
     series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
     series_time = now.strftime('%H') + now.strftime('%M')
@@ -191,8 +193,11 @@ if __name__ == "__main__":
     data_prefix = 'cont'
     if trigger_type[0]==2:
         data_prefix = 'exttrig'
+    elif trigger_type[0]==3:
+        data_prefix = 'rand'
     elif trigger_type[0]==4:
         data_prefix = 'threshtrig'
+    
         
     
     # ========================
