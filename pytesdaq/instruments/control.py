@@ -1461,7 +1461,6 @@ class Control:
                                                       detector_channel=detector_chan, 
                                                       adc_id=adc_chan_id, adc_channel=adc_chan)
 
-            print(sig_gen_dict)
             onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan,
                                               detector_channel=detector_chan, 
                                               adc_id=adc_chan_id, adc_channel=adc_chan)
