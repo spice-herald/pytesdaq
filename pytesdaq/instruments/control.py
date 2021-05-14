@@ -1044,8 +1044,8 @@ class Control:
                 )
                 resistance = float(self._config.get_signal_gen_tes_resistance())
                 output_dict['current']  = float(output_dict['voltage']/resistance)
-                output_dict['frequency'] = float
-                (self._signal_generator_inst.get_frequency(source=signal_gen_num)
+                output_dict['frequency'] = float(
+                    self._signal_generator_inst.get_frequency(source=signal_gen_num)
                 )
                 output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
 
