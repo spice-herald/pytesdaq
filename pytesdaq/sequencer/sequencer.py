@@ -7,7 +7,7 @@ import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import connection_utils
 from pytesdaq.utils import arg_utils
-
+from pytesdaq.daq import daq
 import stat
 
 class Sequencer:
@@ -47,9 +47,16 @@ class Sequencer:
           # default data path
           self._raw_data_path = './'
           self._automation_data_path = './'
+
+          # automation data
+          self._automation_data = dict()
+          self._automation_data['info'] = None
+          self._automation_data['data'] = None
+
           
           # setup files
           self._setup_file = setup_file
+          
           self._sequencer_pickle_file = sequencer_pickle_file
           self._sequencer_file = sequencer_file
 
@@ -57,8 +64,15 @@ class Sequencer:
           # channels (can also be set in sequencer file)
           self._detector_channels = detector_channels
           self._tc_channels = tc_channels
-
+          self._is_tc_channel_number = False
           
+
+          # channel tables
+          self._detector_connection_table = None
+          self._tc_connection_table = None
+          
+          
+                    
           # Instantiate config
           try:
                self._config = settings.Config(sequencer_file=self._sequencer_file,
@@ -101,6 +115,7 @@ class Sequencer:
      @dummy_mode.setter
      def dummy_mode(self,value):
           self._dummy_mode=value
+
 
 
 
@@ -157,13 +172,14 @@ class Sequencer:
                break
 
 
-          # connection
+          # channel table
           if self._detector_channels is not None:
-               self._connection_table = self._config.get_adc_connections()
+               self._detector_connection_table = self._config.get_adc_connections()
 
+                       
 
           # check channels
-          self._check_channels()
+          self._check_detector_channels()
 
           # done if no detector channels
           if self._detector_channels is None:
@@ -173,7 +189,7 @@ class Sequencer:
           adc_dict = dict()
           for channel in  self._detector_channels:
                adc_id, adc_chan = connection_utils.get_adc_channel_info(
-                    self._connection_table,
+                    self._detector_connection_table,
                     detector_channel=channel
                )
                if adc_id not in adc_dict:
@@ -185,13 +201,12 @@ class Sequencer:
 
           # check required parameter
           # add or replace parameter from measurement_config
-          required_parameter_adc = ['sample_rate','voltage_min','voltage_max']
-          required_parameter_didv = ['signal_gen_frequency', 'signal_gen_shape',
-                                     'loop_channels']
+          required_parameters = ['sample_rate','voltage_min','voltage_max']
+          required_parameters_didv = ['signal_gen_frequency', 'signal_gen_shape']
           if self._config.get_signal_generator()=='magnicon':
-               required_parameter_didv.append('signal_gen_current')
+               required_parameters_didv.append('signal_gen_current')
           else:
-               required_parameter_didv.append('signal_gen_voltage')
+               required_parameters_didv.append('signal_gen_voltage')
           
         
 
@@ -208,13 +223,16 @@ class Sequencer:
 
                # check dIdV parameters
                if is_didv_used:
-                    for item in required_parameter_didv:
+                    required_parameters.extend(required_parameters_didv)
+
+               if self._detector_channels is not None:
+                    for item in required_parameters:
                          if item not in config_dict:
                               raise ValueError(measurement
-                                               + '  measurement require '
+                                               + ' measurement require '
                                                + str(item)
-                                               + ' ! Please check configuration')
-            
+                                               + '! Please check configuration')
+                         
                # ADC parameters
                for adc_id in adc_dict:
                     for item,value in adc_dict[adc_id].items():
@@ -222,14 +240,6 @@ class Sequencer:
                               value = config_dict[item]
                               adc_dict[adc_id][item] = value
 
-                    # check required parameter
-                    for item in required_parameter_adc:
-                         if item not in adc_dict[adc_id]:
-                              raise ValueError(measurement
-                                               + ' measurement require '
-                                               + str(item)
-                                               + ' ! Please check configuration')
-                         
                     # calculate number of samples (dIdV fit)
                     nb_samples = 0
                     sample_rate = int(config_dict['sample_rate'])
@@ -274,22 +284,71 @@ class Sequencer:
 
 
 
-          
-     def _check_channels(self):
+     def _instantiate_drivers(self):
           """
-          Check channels
+          Instantiate drivers
           """
           
-          # loop detector channels
+          # DAQ (if detector readout)
+          if self._detector_channels is not None:
+               self._daq = daq.DAQ(driver_name=self._daq_driver,
+                                   verbose=self._verbose,
+                                   setup_file=self._setup_file)
+               
+        
+          # Instrumment controller
+          self._instrument = instrument.Control(setup_file=self._setup_file,
+                                                dummy_mode=self._dummy_mode)
+               
+          if self._tc_channels is not None:
+               self._tc_connection_table = self._instrument.get_temperature_controllers_table()
+               self._check_tc_channels()
+          
+
+          
+     def _check_detector_channels(self):
+          """
+          Check detector (SQUID readout) channels
+          """
+          
+          # check detector channels
           if self._detector_channels is not None:
                # connection info
-               items_dict = connection_utils.get_items(self._connection_table)
+               items_dict = connection_utils.get_items(self._detector_connection_table)
                
                for channel in self._detector_channels:
                     if channel not in items_dict['detector_channel']:
                          raise ValueError('Channel ' + channel + ' unrecognized. '
                                           + 'Please check input or connections map in setup.ini)')
-                         
+
+
+                    
+
+     def _check_tc_channels(self):
+          """
+          Check Tc channels
+          """
+             
+          if self._tc_channels is not None:
+
+               # check if global number or name
+               self._is_channel_number = all([x.isdigit() for x in self._tc_channels])
+               item_name = 'channel_name'
+               if self._is_channel_number:
+                    self._tc_channels = [int(x) for x in self._tc_channels]
+                    item_name = 'global_channel_number'
+
+               # loop channel and check if available
+               for chan in self._tc_channels:
+                    query_string = item_name + ' == @chan'
+                    channel_check = self._tc_connection_table.query(query_string)[item_name].values
+                    if len(channel_check)>1:
+                         raise ValueError('ERROR: Multiple temperature controller channel found for '
+                                          + 'tc channel = ' + str(chan) + '!')
+                    elif len(channel_check)<1:
+                         raise ValueError('ERROR: No temperature controller channel found for '
+                                          + 'tc channel = "' + str(chan) + '"!')
+
                
        
      def _create_measurement_directories(self, base_name=None):
@@ -318,3 +377,12 @@ class Sequencer:
                arg_utils.make_directories(self._automation_data_path)
             
 
+          # update automation data
+          if self._automation_data['info'] is None:
+               self._automation_data['info'] = dict()
+
+          self._automation_data['info']['date'] = now
+          self._automation_data['info']['series'] = series
+          self._automation_data['info']['measurements'] = 'Tc'
+          
+        

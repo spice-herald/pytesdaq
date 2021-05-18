@@ -1,0 +1,61 @@
+[tc]
+
+# dummy mode for debuging
+dummy_mode = false
+
+# save raw data
+save_raw_data = false
+
+# thermometers  
+thermometer_names = MF2, MF3
+# thermometer_global_numbers = 2,3
+
+# heater
+heater_name = heaterMCls
+# heater_global_number = 30
+
+# primary control thermometer (for PID)
+# and Tc status
+control_thermometer_name = MF2
+
+
+# temperature sweep
+
+# Temperature sweep: use vect OR  min/max/step 
+use_temperature_vect = false
+
+# bias vect [mK]
+temperature_vect = 10, 15, 20, 25
+
+# min/max/steps
+temperature_min = 10
+temperature_max = 20
+temperature_step = 5
+
+
+
+# For SQUID readout
+
+# sample rate 
+sample_rate = 1250000
+
+# voltage range
+voltage_min = -5
+voltage_max = 5
+
+# number of cycles test signal 
+nb_cycles = 4.1
+
+# signal generator
+# amplitude in mVpp
+signal_gen_voltage = 20
+
+# frequency in Hz
+signal_gen_frequency =  100 
+
+# shape: 1= square, 2=sine, 3=triangle, 4 = arbitrary waveform
+signal_gen_shape = 1
+
+
+# TES/SQUID parameters (comment if no change)
+output_gain = 20
