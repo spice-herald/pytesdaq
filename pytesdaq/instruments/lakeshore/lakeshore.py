@@ -502,7 +502,26 @@ class Lakeshore():
                 channel_number = channel_number[0]
             else:
                 raise ValueError('ERROR: Unable to extract channel number!')
-                
+
+
+        # get scan parameters
+        scan_parameters = self.get_scan_parameters()
+        is_channel_enabled = self.is_channel_enabled(channel_number=channel_number)
+        
+        # enable channel
+        if not is_channel_enabled:
+
+            if scan_parameters['autoscan']:
+                raise ValueError('ERROR: Ongoing scan but requested channel not enabled.'
+                                 + ' Unable to get resistance!')
+            else:
+                self.enable_channels(channel_numbers=channel_number)
+
+
+        # select channel
+        if not scan_parameters['autoscan']:
+            self.select_channel(channel_number=channel_number)
+            
 
         # query temperature
         query_command = 'RDGK? ' + str(channel_number)
@@ -533,6 +552,25 @@ class Lakeshore():
                 raise ValueError('ERROR: Unable to extract channel number!')
             
 
+        # get scan parameters
+        scan_parameters = self.get_scan_parameters()
+        is_channel_enabled = self.is_channel_enabled(channel_number=channel_number)
+        
+        # enable channel
+        if not is_channel_enabled:
+
+            if scan_parameters['autoscan']:
+                raise ValueError('ERROR: Ongoing scan but requested channel not enabled.'
+                                 + ' Unable to get resistance!')
+            else:
+                self.enable_channels(channel_numbers=channel_number)
+
+
+        # select channel
+        if not scan_parameters['autoscan']:
+            self.select_channel(channel_number=channel_number)
+            
+            
         # query resistance
         query_command = 'RDGR? ' + str(channel_number)
         result = self._inst.query(query_command)
@@ -1278,22 +1316,25 @@ class Lakeshore():
                 command_list = [excitation_mode, excitation_range, int(autorange),
                                 resistance_range, int(cs_shunt_enabled), reading_units]
 
-                command = 'INTYPE ' + str(chan)
+                write_command = 'INTYPE ' + str(chan)
                 for param in command_list:
-                    command += ',' + str(param)
-                self._inst.command(command)
-
+                    write_command += ',' + str(param)
+                self._inst.command(write_command)
+                
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)  
 
                 # input channel parameter
                 command_list = [int(enable), dwell_time, pause_time, curve_number, tempco]          
-                command = 'INSET ' + str(chan)
+                write_command = 'INSET ' + str(chan)
                 for param in command_list:
-                    command += ',' + str(param)
-                self._inst.command(command)
+                    write_command += ',' + str(param)
+                self._inst.command(write_command)
 
                 if self._debug:
-                    print('DEBUG: Write command to lakeshore = ' + command)  
+                    print('DEBUG: Write command to lakeshore = ' + write_command)  
 
+                    
             elif disable_other:
 
                 # let's first read setting
@@ -1302,15 +1343,15 @@ class Lakeshore():
                 # build command
                 command_list = [0, current_setup['dwell_time'], current_setup['pause_time'],
                                 current_setup['curve_number'], current_setup['tempco']]          
-                command = 'INSET ' + str(chan)
+                write_command = 'INSET ' + str(chan)
                 for param in command_list:
-                    command += ',' + str(param)
+                    write_command += ',' + str(param)
 
                 # write
-                self._inst.command(command)
+                self._inst.command(write_command)
                                 
                 if self._debug:
-                    print('DEBUG: Write command to lakeshore = ' + command)  
+                    print('DEBUG: Write command to lakeshore = ' + write_command)  
 
 
                     
@@ -1377,8 +1418,31 @@ class Lakeshore():
 
      
 
-
+    def is_channel_enabled(self, channel_number=None, channel_name=None,
+                           global_channel_number=None):
         
+        """
+        Check if channel enabled
+        """
+        
+        # get channel number if channel name or global_channel_number provided
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self._extract_channel_numbers(channel_names=channel_name,
+                                                           global_channel_numbers=global_channel_number)
+            if len(channel_number)==1:
+                channel_number = channel_number[0]
+            else:
+                raise ValueError('ERROR: Unable to extract channel number!')
+            
+                
+        # get channel info dictionary
+        data_dict = self.get_channel_parameters(channel_numbers=channel_number)
+        is_enabled = data_dict[channel_number]['enabled']
+        
+        return is_enabled                 
+
+
+    
             
     def get_channel_enabled_list(self):
         """
@@ -1411,9 +1475,37 @@ class Lakeshore():
 
     
 
+    def get_scan_parameters(self):
+        """
+        Get scan parameter
+        """
+
+        
+        query_command = 'SCAN?' 
+        result = self._inst.query(query_command)
+        
+        if self._debug:
+            print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                  +  str(result))
+
+        result_split = result.split(',')
+
+        output = dict()
+        output['scan_channel_number'] = int(result_split[0])
+        scan_enabled = False
+        if int(result_split[1]) == 1:
+            scan_enabled = True
+        output['autoscan'] = scan_enabled
+
+        return output
+    
+
+
+
+    
             
     def select_channel(self, channel_number=None, channel_name=None,
-                       global_channel_number=None, autoscan=False):
+                       global_channel_number=None, autoscan=None):
         """
         Specified which channel to switch the scanner to
 
@@ -1422,8 +1514,8 @@ class Lakeshore():
         channel_number: int
            Channel number (1-16)
         autoscan: bool (optional)
-           False: Autoscan feature off
-           True: Autoscan feature on (Default)
+           False: Autoscan feature off 
+           True: Autoscan feature on 
         """
 
         # get channel number if channel name or global_channel_number provided
@@ -1443,15 +1535,24 @@ class Lakeshore():
                 raise
             else:
                 return
+
+        # autoscan
+        if autoscan is None:
+            scan_parameters = self.get_scan_parameters()
+            autoscan = scan_parameters['autoscan']
+            
         
-        command = 'SCAN ' + str(channe_number) + ',' + str(int(autoscan))
-        self._inst.command(command)
+        write_command = 'SCAN ' + str(channel_number) + ',' + str(int(autoscan))
+        self._inst.command(write_command)
         
+        if self._debug:
+            print('DEBUG: Write command to lakeshore = ' + write_command)  
 
 
         
         
-    def start_scan(self, channel_number=None, channel_name=None, global_channel_number=None):
+    def start_scan(self, channel_number=None, channel_name=None,
+                   global_channel_number=None):
         """
         Start scanning by selecting first channel. At least one channel 
         should be enabled!
@@ -1469,7 +1570,8 @@ class Lakeshore():
 
 
         
-    def stop_scan(self, channel_number=None, channel_name=None, global_channel_number=None):
+    def stop_scan(self, channel_number=None, channel_name=None,
+                  global_channel_number=None):
         """
         Stop scanning, keeping channels enabled
          
@@ -1518,7 +1620,7 @@ class Lakeshore():
             if self._verbose:
                 print('WARNING: No channel has been enabled!')
             return
-        elif channel_number is not None and channel_number not in chan_list:
+        elif channel_number is not None and channel_number not in channel_list :
             if self._verbose:
                 print('ERROR: Selected channel (' + str(channel_number) + ') not enabled!')
                 if self._raise_errors:
@@ -1526,7 +1628,7 @@ class Lakeshore():
                 else:
                     return
 
-        first_chan = chan_list[0]
+        first_chan = channel_list[0]
         if channel_number is not None:
             first_chan = channel_number
 
