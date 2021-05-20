@@ -435,31 +435,42 @@ class Lakeshore():
             output_chan = dict()
 
             # input_channel parameter (INSET)
-            command = 'INSET? ' + str(chan)
-            data = self._inst.query(command)
-            data_list = self._get_comma_separated_list(data)
-            output_chan['enabled'] = bool(int(data_list[0]))
-            output_chan['dwell_time'] = int(data_list[1])
-            output_chan['pause_time'] = int(data_list[2])
-            output_chan['curve_number'] = int(data_list[3])
-            output_chan['tempco'] = int(data_list[4])
+            query_command = 'INSET? ' + str(chan)
+            result = self._inst.query(query_command)
+
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+
+            
+            result_list = self._get_comma_separated_list(result)
+            output_chan['enabled'] = bool(int(result_list[0]))
+            output_chan['dwell_time'] = int(result_list[1])
+            output_chan['pause_time'] = int(result_list[2])
+            output_chan['curve_number'] = int(result_list[3])
+            output_chan['tempco'] = int(result_list[4])
 
             # input channel setup (INTYPE)
-            command = 'INTYPE? ' + str(chan)
-            data = self._inst.query(command)
-            data_list = self._get_comma_separated_list(data)
+            query_command = 'INTYPE? ' + str(chan)
+            result = self._inst.query(query_command)
 
-            if int(data_list[0]) == 0:
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+            
+            result_list = self._get_comma_separated_list(result)
+
+            if int(result_list[0]) == 0:
                output_chan['excitation_mode'] = 'voltage'
             else:
                 output_chan['excitation_mode'] = 'current'
                 
-            output_chan['excitation_range'] = int(data_list[1])
-            output_chan['autorange'] = int(data_list[2])                                
-            output_chan['resistance_range'] = int(data_list[3])
-            output_chan['cs_shunt_enabled'] = bool(int(data_list[4]))
+            output_chan['excitation_range'] = int(result_list[1])
+            output_chan['autorange'] = int(result_list[2])                                
+            output_chan['resistance_range'] = int(result_list[3])
+            output_chan['cs_shunt_enabled'] = bool(int(result_list[4]))
 
-            if int(data_list[5]) == 1:
+            if int(result_list[5]) == 1:
                 output_chan['reading_units'] = 'kelvin'
             else:
                 output_chan['reading_units'] = 'ohms'
@@ -495,7 +506,12 @@ class Lakeshore():
 
         # query temperature
         query_command = 'RDGK? ' + str(channel_number)
-        temperature = float(self._inst.query(query_command))
+        result = self._inst.query(query_command)
+
+        if self._debug:
+            print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                  +  str(result))
+        temperature = float(result)
 
         return temperature
         
@@ -519,7 +535,13 @@ class Lakeshore():
 
         # query resistance
         query_command = 'RDGR? ' + str(channel_number)
-        resistance = float(self._inst.query(query_command))
+        result = self._inst.query(query_command)
+
+        if self._debug:
+            print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                  +  str(result))
+            
+        resistance = float(result)
 
         return resistance
 
@@ -656,7 +678,7 @@ class Lakeshore():
             write_command = 'PID ' + str(heater_channel_number)
             write_command += ',' + str(P) + ',' + str(int(I)) + ',' + str(int(D))
             if self._debug:
-                print('DEBUG: Write command to lakeshore =  ' + write_command)
+                print('DEBUG: Write command to lakeshore = ' + write_command)
             self._inst.command(write_command)
 
 
@@ -687,12 +709,338 @@ class Lakeshore():
  
             
             if self._debug:
-                print('DEBUG: Write command to lakeshore =  ' + write_command)
+                print('DEBUG: Write command to lakeshore = ' + write_command)
 
             self._inst.command(write_command)
 
-   
+
+  
+
+                   
+    def get_heater_parameters(self,
+                              heater_channel_numbers=None,
+                              heater_channel_names=None,
+                              heater_global_channel_numbers=None,
+                              heater_resistance=None,
+                              heater_range=None,
+                              output_unit=None):
+        """
+        Set heater parameters
+        """        
+
+        # get channel number 
+        if heater_channel_names is not None or heater_global_channel_numbers is not None:
+            heater_channel_numbers = self._extract_channel_numbers(
+                channel_names=heater_channel_names,
+                global_channel_numbers=heater_global_channel_numbers,
+                channel_type='heater'
+            )
+            
+        if not isinstance(heater_channel_numbers, list):
+            heater_channel_numbers  = [heater_channel_numbers]
+            
+                        
+        # initialize output
+        output = dict()
+
+        # loop channels and get setup
+        for chan in heater_channel_numbers:
+
+            # intialize
+            output_chan = dict()
+
+            # heater setup
+            query_command = 'HTRSET? ' + str(chan)
+            result = self._inst.query(query_command)
+            
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+                
+            result_list = self._get_comma_separated_list(result)
+            output_chan['heater_resistance'] = float(result_list[0])
+            output_chan['max_current'] = int(result_list[1])
+            output_chan['max_user_current'] = float(result_list[2])
+            if int(result_list[3])==1:
+                output_chan['heater_unit'] = 'current'
+            else:
+                output_chan['heater_unit'] = 'power'
+
+
+            #  heater range
+            query_command = 'RANGE? ' + str(chan)
+            result = self._inst.query(query_command)
+ 
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+
+            output_chan['heater_range'] = int(result)
+
+
+            # manual heater value
+            query_command = 'MOUT? ' + str(chan)
+            result = self._inst.query(query_command)
+            
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+
+            if  output_chan['heater_unit'] == 'current':
+                output_chan['heater_percent'] = float(result)
+            else:
+                output_chan['heater_power'] = float(result)
+
+
+            # status
+            query_command = 'HTRST? ' + str(chan)
+            result = self._inst.query(query_command)
         
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+
+            output_chan['heater_error_code'] = int(result)
+
+
+            # save
+            output[chan] = output_chan
+            
+
+        return output
+            
+        
+
+    def set_heater_parameters(self,
+                              heater_channel_numbers=None,
+                              heater_channel_names=None,
+                              heater_global_channel_numbers=None,
+                              heater_resistance=None,
+                              heater_unit=None):
+        """
+        Set heater parameters
+        """        
+
+        # get channel number 
+        if heater_channel_names is not None or heater_global_channel_numbers is not None:
+            heater_channel_numbers = self._extract_channel_numbers(
+                channel_names=heater_channel_names,
+                global_channel_numbers=heater_global_channel_numbers,
+                channel_type='heater'
+            )
+            
+        if not isinstance(heater_channel_numbers, list):
+            heater_channel_numbers  = [heater_channel_numbers]
+
+
+        # get current status
+        current_parameters = self.get_heater_parameters(
+            heater_channel_numbers=heater_channel_numbers
+            )
+
+
+        
+        # set parameters
+        for chan in heater_channel_numbers:
+
+            # current channel parameters
+            chan_parameters = current_parameters[chan]
+
+            # resistance
+            resistance = chan_parameters['heater_resistance']
+            if  heater_resistance is not None:
+                resistance = heater_resistance
+
+            # output unit
+            unit = chan_parameters['heater_unit']
+            if heater_unit is not None:
+                unit = heater_unit
+
+            unit_int = 1
+            if unit == 'power':
+                unit_int = 2
+
+            max_current = chan_parameters['max_current']
+            max_user_current =  chan_parameters['max_user_current']
+                       
+            # build command
+            write_command = 'HTRSET ' + str(chan)
+            write_command += ',' + str(resistance)
+            write_command += ',' + str(max_current)
+            write_command += ',' + str(max_user_current)
+            write_command +=  ',' + str(unit_int)
+
+            # write 
+            self._inst.command(write_command)
+                                
+            if self._debug:
+                print('DEBUG: Write command to lakeshore = ' + write_command)  
+
+        
+
+
+        
+        return
+        
+                   
+        
+                
+                   
+    def set_heater(self,
+                   heater_channel_numbers=None,
+                   heater_channel_names=None,
+                   heater_global_channel_numbers=None,
+                   on=None,
+                   heater_range=None,
+                   heater_percent=None,
+                   heater_power=None):
+                   
+        """
+        Set heater manually
+        """
+
+        # get channel number 
+        if heater_channel_names is not None or heater_global_channel_numbers is not None:
+            heater_channel_numbers = self._extract_channel_numbers(
+                channel_names=heater_channel_names,
+                global_channel_numbers=heater_global_channel_numbers,
+                channel_type='heater'
+            )
+            
+        if not isinstance(heater_channel_numbers, list):
+            heater_channel_numbers  = [heater_channel_numbers]
+
+
+        # get current status
+        current_parameters = self.get_heater_parameters(
+            heater_channel_numbers=heater_channel_numbers
+        )
+
+
+
+        # loop channels
+        for chan in heater_channel_numbers:
+
+            # current channel parameters
+            chan_parameters = current_parameters[chan]
+        
+            
+            # turn heater off
+            if on is not None and not on:
+
+                if self._verbose:
+                    print('INFO: Turn off heater "' + str(chan) + '"')
+            
+                # range
+                write_command = 'RANGE ' + str(chan)
+                write_command += ',0'
+            
+                self._inst.command(write_command)
+            
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)  
+
+                # set percent or power to 0
+                # range
+                write_command = 'MOUT ' + str(chan)
+                write_command += ',0'
+            
+                self._inst.command(write_command)
+            
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)  
+
+                # done
+                return
+
+
+            
+            
+            # check status of output mode (needs to be on manual)
+            query_command = 'OUTMODE? ' + str(chan)
+            result = self._inst.query(query_command)
+
+            if self._debug:
+                print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
+                      +  str(result))
+                
+            output_mode_splot = result.split(',')
+            mode = int(output_mode_splot[0])
+            
+            #
+            if (on is None and
+                (heater_range is not None
+                 or heater_percent is not None
+                 or heater_power is not None)):
+                print('WARNING: Heater is off. Turn on with "on=True" flag.' +
+                      ' Will set parameters regardless!')
+                 
+            
+            
+            # set heater on
+            if on is not None and on:
+
+
+                # check if range already set
+                if heater_range is None:
+                    heater_range = chan_parameters['heater_range']
+                    if heater_range == 0:
+                        raise ValueERROR('ERROR: To  turn on heater, a current range needs to be provided')
+                
+                         
+                if mode != 2:
+                    write_command = 'OUTMODE '  + str(chan)
+                    write_command += ',2'
+                    write_command += ',' + output_mode_splot[1]
+                    write_command += ',' + output_mode_splot[2]
+                    write_command += ',' + output_mode_splot[3]
+                    write_command += ',' + output_mode_splot[4]
+                    write_command += ',' + output_mode_splot[5]
+
+                    self._inst.command(write_command)
+
+                    if self._debug:
+                        print('DEBUG: Write command to lakeshore = ' + write_command)
+                
+                        
+            # set range
+            if heater_range is not None:
+                
+                write_command = 'RANGE ' + str(chan)
+                write_command += ',' + str(heater_range)
+
+                self._inst.command(write_command)
+ 
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)
+
+            # set  percent or power
+            if heater_percent is not None or heater_power is not None:
+
+                if ((heater_percent is not None and
+                     chan_parameters['heater_unit'] != 'current') or 
+                    (heater_power is not None and
+                     chan_parameters['heater_unit'] != 'power')):
+                    raise ValueError('ERROR:  Wrong heater output unit.' +
+                                     ' Please change unit with set_heater_parameters!')
+
+                heater_value = heater_percent
+                if  heater_power is not None:
+                     heater_value = heater_power
+
+
+                write_command = 'MOUT ' + str(chan)
+                write_command += ',' + str(heater_value)
+
+                self._inst.command(write_command)
+ 
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)
+
+                
+
+
+                   
     
     
     def set_temperature(self,  temperature,
@@ -775,7 +1123,7 @@ class Lakeshore():
         write_command += ',' + str(temperature)
         
         if self._debug:
-            print('DEBUG: Write command to lakeshore =  ' + write_command)  
+            print('DEBUG: Write command to lakeshore = ' + write_command)  
         self._inst.command(write_command)
 
 
@@ -943,6 +1291,9 @@ class Lakeshore():
                     command += ',' + str(param)
                 self._inst.command(command)
 
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + command)  
+
             elif disable_other:
 
                 # let's first read setting
@@ -958,8 +1309,11 @@ class Lakeshore():
                 # write
                 self._inst.command(command)
                                 
-            
- 
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + command)  
+
+
+                    
     def enable_channels(self, channel_numbers=None, channel_names=None,
                         global_channel_numbers=None,
                         disable_other=False):
