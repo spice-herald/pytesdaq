@@ -36,7 +36,7 @@ class Lakeshore():
         
         # verbose
 
-        self._debug = True
+        self._debug = False
         self._verbose = verbose
         self._raise_errors = raise_errors
 
@@ -900,7 +900,7 @@ class Lakeshore():
 
             max_current = chan_parameters['max_current']
             max_user_current =  chan_parameters['max_user_current']
-                       
+                        
             # build command
             write_command = 'HTRSET ' + str(chan)
             write_command += ',' + str(resistance)
@@ -1296,7 +1296,7 @@ class Lakeshore():
                 if cs_shunt_enabled is None:
                     cs_shunt_enabled = current_setup['cs_shunt_enabled']
                 if reading_units is None:
-                    reading_units = current_setup['excitation_mode']
+                    reading_units = current_setup['reading_units']
 
                     
                 # convert
