@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime
 from glob import glob
+import pytesdaq as ptd
 from pytesdaq.processing.trigger import ContinuousData
 import pytesdaq.config.settings as settings
 from pytesdaq.utils import arg_utils
@@ -22,13 +23,21 @@ if __name__ == "__main__":
     parser.add_argument('--nb_samples', type=float, help='Trace length [# samples]')
     parser.add_argument('--nb_samples_pretrigger', type=float,
                         help='Pretrigger length [# samples]  (default: 1/2 trace lenght)')
-    parser.add_argument('--chan_to_trigger', type=str, help='Name(s) or Number(s) of channel(s) to trigger on, separated by commas without spaces. (e.g. 0,1 or PD2,G124_PAS2)')
-    parser.add_argument('--threshold', type=float, help='Trigger sigma threshold (default=10)')
-    parser.add_argument('--rise_time', type=float, help='Template rise time in usec [20 usec]')
-    parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
-    parser.add_argument('--is_negative_pulse', action='store_true', help='Nagative pulse')
+    parser.add_argument('--is_negative_pulse', action='store_true', help='Negative pulse')
     parser.add_argument('--save_filter', action='store_true', help='Save PSD/Template in a pickle file')
     parser.add_argument('--facility', type = int, help='Facility number [default=2]')
+
+    #parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
+    #parser.add_argument('--rise_time', type=float, help='Template rise time in usec [20 usec]')
+    #parser.add_argument('--threshold', type=float, help='Trigger sigma thresholds (default=10)')
+    parser.add_argument('--fall_time', nargs='+', type=float, help='Template fall time in usec. Must be same length as chan_to_trigger')
+    parser.add_argument('--rise_time', nargs='+', type=float, help='Template rise time in usec. Must be same length as chan_to_trigger')
+    parser.add_argument('--threshold', nargs='+', type=float, help='Trigger sigma thresholds. Must be same length as chan_to_trigger (e.g. --threshold 40 50 --chan_to_trigger 0,1)')
+    parser.add_argument('--chan_to_trigger', type=str, help='Name(s) or Number(s) of channel(s) to trigger on, separated by commas without spaces. (e.g. 0,1 or PD2,G124_PAS2)')
+    parser.add_argument('--pileup_window', type=float, help='Window in usec for removing pileup on individual channels (default = 0 usec)')
+    parser.add_argument('--coincident_window', type=float, help='Window in usec for merging coincident events on channels from chan_to_trigger (default = 50 usec)')
+
+
     args = parser.parse_args()
 
     
@@ -46,20 +55,24 @@ if __name__ == "__main__":
 
     # default
     facility = 2
-    chan_to_trigger='all'
-    threshold = 10
     nb_randoms = 500
     nb_triggers = -1
-    rise_time = 20e-6
-    fall_time = 30e-6
+
     trace_length_ms = None
     pretrigger_length_ms = None
     nb_samples = None
     nb_samples_pretrigger = None
     save_filter = False
     is_negative_pulse = False
-    
 
+    rise_time = [20e-6]
+    fall_time = [30e-6]
+    threshold = [10]
+    chan_to_trigger='all'
+    pileup_window = 0
+    coincident_window = 50e-6
+
+    
     # input
     series = None
     if args.series:
@@ -77,20 +90,29 @@ if __name__ == "__main__":
         nb_samples = int(args.nb_samples)
     if args.nb_samples_pretrigger:
         nb_samples_pretrigger = int(args.nb_samples_pretrigger)
-    if args.chan_to_trigger:
-        chan_to_trigger = args.chan_to_trigger
-    if args.threshold:
-        threshold = args.threshold
-    if args.rise_time:
-        rise_time = float(args.rise_time) * 1e-6
-    if args.fall_time:
-        fall_time = float(args.fall_time) * 1e-6
     if args.save_filter:
         save_filter = True
     if args.is_negative_pulse:
         is_negative_pulse = True
     if args.facility:
         facility = args.facility
+
+    #if args.rise_time:
+    #    rise_time = float(args.rise_time) * 1e-6
+    #if args.fall_time:
+    #    fall_time = float(args.fall_time) * 1e-6
+    if args.rise_time:
+        rise_time = [i*1e-6 for i in args.rise_time]
+    if args.fall_time:
+        fall_time = [i*1e-6 for i in args.fall_time]
+    if args.threshold:
+        threshold = args.threshold
+    if args.chan_to_trigger:
+        chan_to_trigger = args.chan_to_trigger
+    if args.pileup_window:
+        pileup_window = args.pileup_window * 1e-6
+    if args.coincident_window:
+        coincident_window = args.coincident_window * 1e-6
 
 
     # input directory
@@ -162,7 +184,18 @@ if __name__ == "__main__":
     else:
         chan_to_trigger_list = 'all'
 
-    print('chan_to_trigger_list = ', chan_to_trigger_list)    
+    print(f'rise_time = {rise_time}')
+    print(f'threshold = {threshold}')
+    print(f'len(threshold) = {len(threshold)}')
+    print(f'len(chan_to_trigger_list) = {len(chan_to_trigger_list)}')
+
+
+    print('wap: chan_to_trigger_list = ', chan_to_trigger_list)    
+
+    if ((len(threshold) != len(chan_to_trigger_list)) and (chan_to_trigger_list is not 'all')):
+        raise ValueError("threshold must be the same size as chan_to_trigger")
+
+
     
     data_inst = ContinuousData(file_list,
                                nb_events_randoms=nb_randoms,
@@ -176,7 +209,9 @@ if __name__ == "__main__":
                                series_name=series_name,
                                data_path=output_dir,
                                negative_pulse=is_negative_pulse,
-                               save_filter=save_filter)
+                               save_filter=save_filter,
+                               pileup_window=pileup_window,
+                               coincident_window=coincident_window)
     
     data_inst.create_template(rise_time, fall_time)
     data_inst.acquire_randoms()

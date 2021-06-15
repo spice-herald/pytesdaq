@@ -24,7 +24,9 @@ class ContinuousData:
                  series_name = None,
                  data_path = '/sdata/raw',
                  negative_pulse = True,
-                 save_filter=False):
+                 save_filter=False,
+                 pileup_window=0,
+                 coincident_window=50e-6):
         
         
         # file list
@@ -56,7 +58,6 @@ class ContinuousData:
         self._h5writer = h5io.H5Writer()
         self._h5writer.initialize(series_name=self._series_name,
                                   data_path=self._data_path)
-
 
 
         # get sample rate and number of continuous samples
@@ -109,7 +110,10 @@ class ContinuousData:
         self._save_filter = save_filter
         self._filter_file_name = self._data_path + '/' + self._series_name  + '_filter.pickle'
         
-        
+        # pileup and coincidence windows
+        self._pileup_window = pileup_window
+        self._coincident_window = coincident_window
+
     def create_template(self, rise_time, fall_time):
         """
         Create template
@@ -123,9 +127,14 @@ class ContinuousData:
         
         trace_time = 1.0/self._sample_rate *(np.arange(1,self._nb_samples+1)-self._nb_samples_pretrigger)
         lgc_b0 = trace_time < 0.0
-        self._template = np.exp(-trace_time/fall_time)-np.exp(-trace_time/rise_time)
-        self._template[lgc_b0] = 0.0
-        self._template = self._template/max(self._template)
+
+        self._template = []
+        for i, r in enumerate(rise_time):
+            template= np.exp(-trace_time/fall_time[i])-np.exp(-trace_time/r)
+            template[lgc_b0] = 0.0
+            template = template/max(template)
+            self._template.append(template)
+
         self._filter_dict['template'] = self._template
 
         
@@ -186,6 +195,11 @@ class ContinuousData:
         if verbose:
             print('INFO: Acquiring randoms!')
 
+        # this is a list, length of self._chans, that
+        # should store the ndarrays randoms
+        trace_buffer = None
+
+
         event_counter = 0
         for ifile, chunk_indices in event_dict.items():
                    
@@ -218,6 +232,16 @@ class ContinuousData:
                 # truncate
                 traces = traces[:,bin_start:bin_start+self._nb_samples]
 
+                if trace_buffer is None:
+                    trace_buffer =  np.expand_dims(traces, axis=0)
+                else:
+                    trace_buffer = np.append(trace_buffer,
+                                             np.expand_dims(traces, axis=0),
+                                             axis=0)
+
+
+                # wap: lots of the following pt_trace lines
+                # can be removed 
                 # pt trace (channel sum determined by self._chan)
                 if self._chan == "all":
                     pt_trace = traces.sum(axis=0)
@@ -229,12 +253,11 @@ class ContinuousData:
                     pt_trace = traces[self._chan]
                 else:
                     pt_trace = np.sum(traces[self._chan],axis=0)
-                
+
                 if pt_trace.shape[0] != self._nb_samples:
                     continue
 
                 pt_trace = np.expand_dims(pt_trace, axis=0)
-
                 
                 # dataset metadata
                 dataset_metadata = dict()
@@ -247,7 +270,6 @@ class ContinuousData:
 
 
 
-                
                 if self._randoms_buffer is None:
                     self._randoms_buffer =  pt_trace
                 else:
@@ -258,8 +280,6 @@ class ContinuousData:
                 event_counter += 1
                 if (verbose and event_counter % 50 == 0):
                     print('INFO: Number of randoms = ' + str(event_counter))
-                    
-
 
 
         # cleanup
@@ -269,7 +289,6 @@ class ContinuousData:
         if verbose:
             print('INFO: Done acquiring randoms!')
 
-        
 
         # check buffer 
         if self._randoms_buffer.shape[0]<1:
@@ -280,10 +299,24 @@ class ContinuousData:
         if verbose:
             print('INFO: Calculating PSD for optimal filter trigger')
 
-        cut = qp.autocuts(self._randoms_buffer, fs=self._sample_rate)
-        f, psd = qp.calc_psd(self._randoms_buffer[cut], fs=self._sample_rate, folded_over=False)
-        f_fold, psd_fold = qp.foldpsd(psd, fs=self._sample_rate)
-        self._noise_psd = psd
+        self._noise_psd = []
+        for ichan, chan in enumerate(self._chan):
+            chans_to_sum = self._chan[ichan]
+
+            if np.isscalar(chans_to_sum):
+                traces_red = trace_buffer[:,chans_to_sum]
+            else:
+                # if chan_to_sum has multiple entries (i.e. 1,2)
+                # then it trace_buffer[:, chans_to_sum] has shape
+                # 20,2,62500
+                traces_red = np.sum(trace_buffer[:,chans_to_sum], axis=1)
+
+            cut = qp.autocuts(traces_red, fs=self._sample_rate)
+            print(f'PSD for channel/combination {chan}. Autocuts efficiency={np.sum(cut)/len(cut)}')
+            f, psd = qp.calc_psd(traces_red[cut], fs=self._sample_rate, folded_over=False)
+            f_fold, psd_fold = qp.foldpsd(psd, fs=self._sample_rate)
+
+            self._noise_psd.append(psd)
 
         
         # save psd
@@ -297,7 +330,172 @@ class ContinuousData:
         self._randoms_buffer = None
 
 
+    def find_close_times(self, pulsetimes, timethresh):
 
+        piledup_bool = np.diff(pulsetimes) < timethresh
+        piledup_bool = np.concatenate(([0], piledup_bool , [0]))
+        absdiff = np.abs(np.diff(piledup_bool))
+        ranges = np.where(absdiff == 1)[0].reshape(-1, 2)
+        # wap: extend ranges last element by 1 
+        # so if the pileup candidates are [45 46 47]
+        # ranges will be [45 48]
+        # and this way the irange variable below will be
+        # [45 46 47]
+        ranges[:,1] = ranges[:,1] + 1
+
+        return ranges
+
+
+    def find_pileup(self, pulsetimes, pulseamps, timethresh, chantrig=None):
+        """
+        Function to find pileup
+        """
+        ranges = self.find_close_times(pulsetimes, timethresh)
+
+        lgc_verbose = False
+
+        if lgc_verbose:
+            print(f'close time ranges. ranges = {ranges}')
+
+        inds_to_remove = []
+        # to keep track of which channels were merged
+        inds_merged = []
+        chantrig_merged = []
+
+        if len(ranges) == 0:
+            return inds_to_remove, inds_merged, chantrig_merged
+        else:
+            for i in range(len(ranges)):
+                irange = np.arange(ranges[i][0], ranges[i][1], dtype=int)
+                imax = int(np.argmax(pulseamps[ranges[i][0]:ranges[i][1]]))
+                irange_mod = np.delete(irange,imax)
+
+                if lgc_verbose:
+                    print(f'irange={irange}')
+                    print(f'ranges[{i}]={ranges[i]}')
+                    print(f'imax = {imax}')
+                    print(f'irange[imax]={irange[imax]}')
+                    print(f'irange_mod = {irange_mod}')
+
+                inds_to_remove.extend(irange_mod)
+                inds_merged.append(irange[imax])
+
+                # we know which indices are being merged to
+                # and now we want to know all the 
+                # channels/channels combos that triggered
+                # that were merged 
+                if chantrig is not None:
+                    # theres a subtlrey where unique will not work 
+                    chantrig_range = np.array(chantrig[ranges[i][0]:ranges[i][1]],
+                                              dtype=object)
+                    #chantrig_range = chantrig[ranges[i][0]:ranges[i][1]]
+                    chantrig_range_u = np.unique(chantrig_range)
+                    if lgc_verbose:
+                        print(f'chantrig_range={chantrig_range}')
+                        print(f'chantrig_range_u={chantrig_range_u}')
+                    chantrig_merged.append(list(chantrig_range_u))
+
+        if lgc_verbose:
+            print(f'inds_to_remove={inds_to_remove}')
+            print(f'inds_merged={inds_merged}')
+            print(f'chantrig_merged={chantrig_merged}')
+
+        return inds_to_remove, inds_merged, chantrig_merged
+
+
+
+    def remove_triggers(self, filt, inds_to_remove):
+        """
+        Remove certain triggers from OptimumFilt object which
+        requires deleting elements from the following lists:
+            evttraces
+            pulseamps
+            pulsetimes
+            trigamps
+            trigtimes
+            trigtypes
+        """ 
+
+        lgc_verbose = False
+
+        if lgc_verbose and (len(inds_to_remove) > 0):
+            print('type(filt.evttraces)=', type(filt.evttraces))
+            print('type(filt.evttraces[0])=', type(filt.evttraces[0]))
+            print('len(filt.evttraces)=', len(filt.evttraces))
+
+            print('filt.pulseamps=', filt.pulseamps)
+            print('type(filt.pulseamps)=', type(filt.pulseamps))
+
+            print('filt.pulsetimes=', filt.pulsetimes)
+            print('type(filt.pulsetimes)=', type(filt.pulsetimes))
+
+        # remove elements from all object members that
+        # are lists of triggers
+        for ind in sorted(inds_to_remove, reverse=True):
+
+            if lgc_verbose:
+                print('ind=',ind)
+                print('pulsetimes=', filt.pulsetimes[ind])
+                print('pulseamps=', filt.pulseamps[ind])
+
+            del filt.evttraces[ind]
+            del filt.pulseamps[ind]
+            del filt.pulsetimes[ind]
+            del filt.trigamps[ind]
+            del filt.trigtimes[ind]
+            del filt.trigtypes[ind]
+
+        if lgc_verbose:
+            print('after removal ...')
+            print('filt.pulseamps=', filt.pulseamps)
+            print('filt.pulsetimes=', filt.pulsetimes)
+            print('len(filt.evttraces)=', len(filt.evttraces))
+
+        return filt
+
+    def combine_sort_triggers(self, filt_list):
+
+        # make list of filt.chan for each filter
+        # and combine into single long list for filters
+        chancomb = list()
+        for filt in filt_list:
+            chancomb.extend([filt.chan] * len(filt.pulseamps))
+
+        # combine filt_list lists into single long list
+        evttracescomb = [evt for filt in filt_list for evt in filt.evttraces]
+        pulseampscomb = [amp for filt in filt_list for amp in filt.pulseamps]
+        pulsetimescomb = [time for filt in filt_list for time in filt.pulsetimes]
+        trigampscomb = [trigamp for filt in filt_list for trigamp in filt.trigamps]
+        trigtimescomb = [trigtime for filt in filt_list for trigtime in filt.trigtimes]
+        trigtypescomb = [trigtypes for filt in filt_list for trigtypes in filt.trigtypes]
+
+        # sort by pulsetimes (not the same as trig times)
+        indsort = np.argsort(pulsetimescomb)
+
+        # reorder the lists based on sorted order
+        evttracescomb = [evttracescomb[i] for i in indsort]
+        pulseampscomb = [pulseampscomb[i] for i in indsort]
+        pulsetimescomb = [pulsetimescomb[i] for i in indsort]
+        trigampscomb = [trigampscomb[i] for i in indsort]
+        trigtimescomb = [trigtimescomb[i] for i in indsort]
+        trigtypescomb = [trigtypescomb[i] for i in indsort]
+        # also reorder the chancomb
+        chancomb = [chancomb[i] for i in indsort]
+
+        # make new OptimumFilt object
+        filtcomb = rq.process.OptimumFilt(self._sample_rate,
+                                                self._template[0],
+                                                self._noise_psd,
+                                                self._nb_samples,
+                                                lgcoverlap=True)
+        filtcomb.evttraces = evttracescomb
+        filtcomb.pulseamps = pulseampscomb
+        filtcomb.pulsetimes = pulsetimescomb
+        filtcomb.trigamps = trigampscomb
+        filtcomb.trigtimes = trigtimescomb
+        filtcomb.trigtypes = trigtypescomb
+
+        return filtcomb, chancomb
 
         
     def acquire_trigger(self, template=None, noise_psd=None, verbose=True):
@@ -351,40 +549,96 @@ class ContinuousData:
             
             # event time
             time_array = np.asarray([info['event_time']])
-
             
             # expand dimension traces
             traces = np.expand_dims(traces, axis=0)
-            
-            # find triggers
-            filt = rq.process.OptimumFilt(self._sample_rate,
-                                          self._template,
-                                          self._noise_psd,
-                                          self._nb_samples,
-                                          chan_to_trigger=self._chan,
-                                          lgcoverlap=True)
 
-            filt.filtertraces(traces, time_array)
-            filt.eventtrigger(self._threshold, positivepulses=True)
+            # loop over channels to trigger
+            # make filters for channel and store in list
+            filt_list = []
+            for ichan, chan in enumerate(self._chan):
+                print(f'OF on channel {chan}')
+                # find triggers
+                filt = rq.process.OptimumFilt(self._sample_rate,
+                                              self._template[ichan],
+                                              self._noise_psd[ichan],
+                                              self._nb_samples,
+                                              chan_to_trigger=[chan],
+                                              lgcoverlap=True)
 
+                filt.filtertraces(traces, time_array)
+                filt.eventtrigger(self._threshold[ichan], positivepulses=True)
+                filt_list.append(filt)
+
+
+            # remove pileup
+            for ichan, chan in enumerate(self._chan):
+
+                piledup_ind, _, _ = self.find_pileup(filt_list[ichan].pulsetimes,
+                                                     filt_list[ichan].pulseamps,
+                                                     self._pileup_window)
+
+                print(f'Pileup on channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
+
+                lgc_verbose = False
+                if lgc_verbose:
+                    import inspect
+                    import pprint
+                    attributes = inspect.getmembers(filt_list[ichan], lambda a:not(inspect.isroutine(a)))
+                    print('\n\n')
+                    pprint.pprint([(a[0], type(a[1]), np.shape(a[1])) for a in attributes if not(a[0].startswith('__') and a[0].endswith('__'))])
+                    print('\n\n')
+
+                filt_list[ichan] = self.remove_triggers(filt_list[ichan], piledup_ind)
+
+            # combine and sort the multiple
+            # filt_list objects into a single one
+            filtcomb, chancomb= self.combine_sort_triggers(filt_list)
+
+            print('Combining Triggers')
             
+            # find:
+            # (1) coincidence triggers
+            # (2) which triggers have had other channels merged into them
+            # (3) which channels have been merged into the merged triggers
+            coinc_ind, inds_merged, chancomb_merged = self.find_pileup(filtcomb.pulsetimes,
+                                                                        filtcomb.pulseamps,
+                                                                        self._coincident_window,
+                                                                        chancomb)
+
+            for i, ind in enumerate(inds_merged):
+                chancomb[ind] = chancomb_merged[i]
+
+            # remove the coincidence triggers from filtcomb
+            filtcomb = self.remove_triggers(filtcomb, coinc_ind)
+
+            # remove coincident triggers from chancomb
+            for ind in sorted(coinc_ind, reverse=True):
+                del chancomb[ind]
+
+
+            print(f'Number of events with merged triggers = {len(inds_merged)}')
+            print(f'Final number of events in this continuous data chunk = {len(chancomb)} \n')
+
+            print(f'type(chancomb)={type(chancomb)}')
+            print(f'type(chancomb[0])={type(chancomb[0])}')
+            print(f'chancomb[0]={chancomb[0]}')
+
             # loop triggers
-            for itrig in range(len(filt.pulsetimes)):
+            for itrig in range(len(filtcomb.pulsetimes)):
 
-                             
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['event_time'] = filt.pulsetimes[itrig]
-                dataset_metadata['trigger_time'] = filt.pulsetimes[itrig]
-                dataset_metadata['trigger_amplitude'] = filt.pulseamps[itrig]
-                              
+                dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
+                dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
+                dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
+                dataset_metadata['trigger_channel'] = chancomb[itrig]
+
                 # write new file
-                self._h5writer.write_event(filt.evttraces[itrig], prefix='trigger',
+                self._h5writer.write_event(filtcomb.evttraces[itrig], prefix='trigger',
                                            data_mode = 'threshold',
                                            dataset_metadata=dataset_metadata)
 
-                
-                
                 # event counter
                 trigger_counter += 1
                 if self._nb_events_trigger>0 and trigger_counter>=self._nb_events_trigger:
