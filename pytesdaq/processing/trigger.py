@@ -269,7 +269,6 @@ class ContinuousData:
                                            dataset_metadata=dataset_metadata)
 
 
-
                 if self._randoms_buffer is None:
                     self._randoms_buffer =  pt_trace
                 else:
@@ -619,21 +618,17 @@ class ContinuousData:
 
             print(f'Number of events with merged triggers = {len(inds_merged)}')
             print(f'Final number of events in this continuous data chunk = {len(chancomb)} \n')
-
-            print(f'type(chancomb)={type(chancomb)}')
-            print(f'type(chancomb[0])={type(chancomb[0])}')
-            print(f'chancomb[0]={chancomb[0]}')
-
+            
             # loop triggers
             for itrig in range(len(filtcomb.pulsetimes)):
 
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
                 dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
+                dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
                 dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
                 dataset_metadata['trigger_channel'] = chancomb[itrig]
-
+                
                 # write new file
                 self._h5writer.write_event(filtcomb.evttraces[itrig], prefix='trigger',
                                            data_mode = 'threshold',
