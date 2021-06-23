@@ -639,6 +639,9 @@ class Lakeshore():
         
         output['mode_description'] = mode_string
         output['input_channel_number'] =  result_split[1]
+        if output['input_channel_number'].isdigit():
+            output['input_channel_number'] = int(output['input_channel_number'])
+            
         output['powerup_enable'] =  int(result_split[2])
         output['polarity'] = int(result_split[3])
         output['filter'] = int(result_split[4])
@@ -752,7 +755,17 @@ class Lakeshore():
             self._inst.command(write_command)
 
 
-  
+
+        if not on:
+            # set point to 0
+            write_command = 'SETP ' + str(heater_channel_number)
+            write_command += ',0'
+        
+            if self._debug:
+                print('DEBUG: Write command to lakeshore = ' + write_command)
+            self._inst.command(write_command)
+
+            
 
                    
     def get_heater_parameters(self,
@@ -929,6 +942,7 @@ class Lakeshore():
                    heater_channel_names=None,
                    heater_global_channel_numbers=None,
                    on=None,
+                   heater_mode=None,
                    heater_range=None,
                    heater_percent=None,
                    heater_power=None):
@@ -950,7 +964,7 @@ class Lakeshore():
 
 
         # get current status
-        current_parameters = self.get_heater_parameters(
+        current_heater_parameters = self.get_heater_parameters(
             heater_channel_numbers=heater_channel_numbers
         )
 
@@ -959,15 +973,14 @@ class Lakeshore():
         # loop channels
         for chan in heater_channel_numbers:
 
-            # current channel parameters
-            chan_parameters = current_parameters[chan]
-        
-            
+            # current heater channel parameters
+            heater_channel_parameters = current_heater_parameters[chan]
+                    
             # turn heater off
             if on is not None and not on:
 
                 if self._verbose:
-                    print('INFO: Turn off heater "' + str(chan) + '"')
+                    print('INFO: Turning off heater "' + str(chan) + '"')
             
                 # range
                 write_command = 'RANGE ' + str(chan)
@@ -997,50 +1010,52 @@ class Lakeshore():
             # check status of output mode (needs to be on manual)
             query_command = 'OUTMODE? ' + str(chan)
             result = self._inst.query(query_command)
+            output_mode = result.split(',')
 
             if self._debug:
                 print('DEBUG: Query command to lakeshore = ' + query_command + ' --> '
                       +  str(result))
                 
-            output_mode_splot = result.split(',')
-            mode = int(output_mode_splot[0])
-            
-            #
-            if (on is None and
-                (heater_range is not None
-                 or heater_percent is not None
-                 or heater_power is not None)):
-                print('WARNING: Heater is off. Turn on with "on=True" flag.' +
-                      ' Will set parameters regardless!')
-                 
-            
-            
-            # set heater on
+                        
+            # set heater on:
+            #   heater_range>0
+            #   ouput mode > 0
             if on is not None and on:
 
+                # check range
+                input_range = heater_range
+                if input_range is None:
+                    input_range =  int(heater_channel_parameters['heater_range'])
 
-                # check if range already set
-                if heater_range is None:
-                    heater_range = chan_parameters['heater_range']
-                    if heater_range == 0:
-                        raise ValueERROR('ERROR: To  turn on heater, a current range needs to be provided')
+                if input_range == 0:
+                    raise ValueERROR('ERROR: To  turn on heater, a current range ("heater_range")' +
+                                     ' needs to be provided!')
                 
-                         
-                if mode != 2:
-                    write_command = 'OUTMODE '  + str(chan)
-                    write_command += ',2'
-                    write_command += ',' + output_mode_splot[1]
-                    write_command += ',' + output_mode_splot[2]
-                    write_command += ',' + output_mode_splot[3]
-                    write_command += ',' + output_mode_splot[4]
-                    write_command += ',' + output_mode_splot[5]
+                # check mode
+                if heater_mode is None:
+                    heater_mode = output_mode[0]
 
-                    self._inst.command(write_command)
 
-                    if self._debug:
-                        print('DEBUG: Write command to lakeshore = ' + write_command)
+                if heater_mode == 0:
+                    raise ValueERROR('ERROR: To  turn on heater, a non zero output mode "output_mode"' +
+                                     ' needs to be provided!')
+                     
+               
+                write_command = 'OUTMODE '  + str(chan)
+                write_command += ',' + str(heater_mode)
+                write_command += ',' + str(output_mode[1])
+                write_command += ',' + str(output_mode[2])
+                write_command += ',' + str(output_mode[3])
+                write_command += ',' + str(output_mode[4])
+                write_command += ',' + str(output_mode[5])
+
+                self._inst.command(write_command)
                 
-                        
+                if self._debug:
+                    print('DEBUG: Write command to lakeshore = ' + write_command)
+                
+
+                    
             # set range
             if heater_range is not None:
                 
@@ -1052,13 +1067,14 @@ class Lakeshore():
                 if self._debug:
                     print('DEBUG: Write command to lakeshore = ' + write_command)
 
+                    
             # set  percent or power
             if heater_percent is not None or heater_power is not None:
 
                 if ((heater_percent is not None and
-                     chan_parameters['heater_unit'] != 'current') or 
+                     heater_channel_parameters['heater_unit'] != 'current') or 
                     (heater_power is not None and
-                     chan_parameters['heater_unit'] != 'power')):
+                     heater_channel_parameters['heater_unit'] != 'power')):
                     raise ValueError('ERROR:  Wrong heater output unit.' +
                                      ' Please change unit with set_heater_parameters!')
 
@@ -1117,25 +1133,29 @@ class Lakeshore():
                 global_channel_numbers=global_channel_number,
                 channel_type='resistance')
 
-        if channel_number is None:
-            raise ValueError('ERROR: thermometer channel number or name is required!')
-
-
+       
         # check PID control
         pid_control_params = self.get_pid_control(heater_channel_number=heater_channel_number)
         if not pid_control_params['pid_enabled']:
             raise ValueError('ERROR: PID Control not enabled! Use "set_pid_control" function" to setup PID.')
 
-        if pid_control_params['input_channel_number'] != channel_number:
-            if self._verbose:
-                print('WARNING: PID input channel not accurate. Setting input channel number = '
-                      + str(channel_number) + '!')
-            self.set_pid_control(heater_channel_number=heater_channel_number,
-                                 channel_number=channel_number)
+
+        # check input channel number
+        if channel_number is not None:
+            if int(pid_control_params['input_channel_number']) != channel_number:
+                print('INFO: Modifying PID input channel number to ' + str(channel_number) + '!')
+                self.set_pid_control(heater_channel_number=heater_channel_number,
+                                     channel_number=channel_number)
+        else:
+            channel_number = int(pid_control_params['input_channel_number'])
             
+        if self._verbose:
+            print('INFO: Input channel number is set to '
+                  + str(channel_number) + '!')
 
         # check input parameters
-        channel_params = self.get_channel_parameters(channel_number=channel_number)
+        channel_params = self.get_channel_parameters(channel_numbers=channel_number)[channel_number]
+    
         if not channel_params['enabled']:
             error_msg = 'ERROR: Input thermometer channel not enabled! '
             error_msg += 'Use "enable_channels" function" to enable channel.'
@@ -1161,7 +1181,8 @@ class Lakeshore():
         write_command += ',' + str(temperature)
         
         if self._debug:
-            print('DEBUG: Write command to lakeshore = ' + write_command)  
+            print('DEBUG: Write command to lakeshore = ' + write_command)
+            
         self._inst.command(write_command)
 
 
