@@ -24,5 +24,6 @@ setup(name='pytesdaq',
           'qetpy',
           'scipy',
           'seaborn',
+          'astropy',
       ],
 )
