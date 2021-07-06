@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime
 from glob import glob
+from pathlib import Path
 from pytesdaq.processing.trigger import ContinuousData
 import pytesdaq.config.settings as settings
 from pytesdaq.utils import arg_utils
@@ -130,7 +131,7 @@ if __name__ == "__main__":
     # input path
     # ------------------
     input_data_dir = raw_path
-    input_data_dir_split = input_data_dir.split('/')
+    input_data_dir_split = Path(raw_path).parts
     if series is not None and input_data_dir_split[-1]!=series:
         input_data_dir_temp = input_data_dir + '/' + series
         if os.path.isdir(input_data_dir_temp):
@@ -178,7 +179,7 @@ if __name__ == "__main__":
     pos_cont = input_data_dir_split[-1].find('continuous_')
     if pos_cont!=-1:
         series_dir = input_data_dir_split[-1][11:]
-        output_dir = raw_path[0:-len(input_data_dir_split[-1])] + 'trigger_' + series_dir 
+        output_dir = str(Path(raw_path).joinpath('trigger_' + series_dir))
            
     if not os.path.isdir(output_dir):
         try:
