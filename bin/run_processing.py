@@ -131,7 +131,7 @@ if __name__ == "__main__":
     # input path
     # ------------------
     input_data_dir = raw_path
-    input_data_dir_split = Path(raw_path).parts
+    input_data_dir_split = Path(input_data_dir).parts
     if series is not None and input_data_dir_split[-1]!=series:
         input_data_dir_temp = input_data_dir + '/' + series
         if os.path.isdir(input_data_dir_temp):
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     pos_cont = input_data_dir_split[-1].find('continuous_')
     if pos_cont!=-1:
         series_dir = input_data_dir_split[-1][11:]
-        output_dir = str(Path(raw_path).parent.joinpath('trigger_' + series_dir))
+        output_dir = str(Path(input_data_dir).parent.joinpath('trigger_' + series_dir))
            
     if not os.path.isdir(output_dir):
         try:
