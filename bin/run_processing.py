@@ -179,7 +179,7 @@ if __name__ == "__main__":
     pos_cont = input_data_dir_split[-1].find('continuous_')
     if pos_cont!=-1:
         series_dir = input_data_dir_split[-1][11:]
-        output_dir = str(Path(raw_path).joinpath('trigger_' + series_dir))
+        output_dir = str(Path(raw_path).parent.joinpath('trigger_' + series_dir))
            
     if not os.path.isdir(output_dir):
         try:
