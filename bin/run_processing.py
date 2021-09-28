@@ -186,7 +186,7 @@ if __name__ == "__main__":
             os.makedirs(output_dir)
             os.chmod(output_dir, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
         except OSError:
-            print('\nERROR: Unable to create directory "'+ data_path  + '"!\n')
+            print('\nERROR: Unable to create directory "'+ output_dir  + '"!\n')
             exit()
             
 
