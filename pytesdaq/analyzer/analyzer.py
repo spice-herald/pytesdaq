@@ -119,7 +119,8 @@ class Analyzer:
 
             # calculate running avg (>1 events)
             nb_events = self._buffer.shape[2]
-
+            self._nb_events_running_avg = nb_events
+            
             if nb_events>1:
 
                 # pileup rejection mask
@@ -442,9 +443,6 @@ class Analyzer:
                     if cut_name not in cuts_val:
                         do_reset_buffer = True
 
-                
-                        
-
         # reset if needed
         if do_reset_buffer:
             
@@ -466,7 +464,7 @@ class Analyzer:
         if self._nb_events_running_avg>=self._analysis_config['nb_events_avg']:
 
             nb_to_delete = self._nb_events_running_avg-self._analysis_config['nb_events_avg']+1
-                    
+            
             # data buffer
             self._buffer = np.delete(self._buffer, list(range(nb_to_delete)), axis=2)
 
@@ -533,7 +531,7 @@ class Analyzer:
         nb_channels = self._buffer.shape[0]
         nb_samples =  self._buffer.shape[1]
         nb_events = self._buffer.shape[2]
-        self._nb_events_running_avg = nb_events
+       
 
         # calculate average
         if pileup_mask is not None:
