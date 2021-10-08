@@ -223,7 +223,7 @@ class IV_dIdV(Sequencer):
                     # get/set detector config metadata
                     det_config = dict()
                     adc_channel_dict= connection_utils.get_adc_channel_list(
-                        self._connection_table,
+                        self._detector_connection_table,
                         detector_channel_list=self._detector_channels
                     )
 
@@ -297,7 +297,7 @@ class IV_dIdV(Sequencer):
                             # get/set detector config metadata
                             det_config = dict()
                             adc_channel_dict = connection_utils.get_adc_channel_list(
-                                self._connection_table,
+                                self._detector_connection_table,
                                 detector_channel_list=self._detector_channels
                             )
                             
@@ -337,7 +337,7 @@ class IV_dIdV(Sequencer):
                         # get/set detector config metadata
                         det_config = dict()
                         adc_channel_dict= connection_utils.get_adc_channel_list(
-                            self._connection_table,
+                            self._detector_connection_table,
                             detector_channel_list=self._detector_channels
                         )
 
@@ -466,7 +466,7 @@ class IV_dIdV(Sequencer):
                     # read and store detector settings
                     det_config = dict()
                     adc_channel_dict = connection_utils.get_adc_channel_list(
-                        self._connection_table,
+                        self._detector_connection_table,
                         detector_channel_list=self._detector_channels
                     )
                     
@@ -498,7 +498,7 @@ class IV_dIdV(Sequencer):
                 # read and store detector settings
                 det_config = dict()
                 adc_channel_dict= connection_utils.get_adc_channel_list(
-                    self._connection_table,
+                    self._detector_connection_table,
                     detector_channel_list=self._detector_channels
                 )
 
@@ -574,9 +574,13 @@ class IV_dIdV(Sequencer):
                                                          axis=0))
 
                 tes_bias_vect = tes_bias_vect[::-1]
-                if ('use_negative_tes_bias' in config_dict and
-                    config_dict['use_negative_tes_bias']):
-                    tes_bias_vect = [-x for x in tes_bias_vect]
+
+            # wap: moved indentation back one tab
+            print('wap: testing negative bias tab')
+            if ('use_negative_tes_bias' in config_dict and
+                config_dict['use_negative_tes_bias']):
+                tes_bias_vect = [-x for x in tes_bias_vect]
+                print('wap: in negative bias')
              
                 
             config_dict['tes_bias_vect'] =  tes_bias_vect 
