@@ -366,14 +366,13 @@ class MACRT(InstrumentComm):
                              
                 # current time and temperature
                 time_now = time.perf_counter()
-                temperature_now = self.get_temperature(channel_number=channel_number)
-
+                temperature_now = self.get_temperature(channel_name=channel_name)
                 # check tolerance
                 if abs(temperature_now-temperature)/temperature_now > tolerance:
                     # reset stable time 
                     time_stable =  time_now
 
-                if time_stable-time_now > wait_stable_time:
+                if time_now-time_stable > wait_stable_time:
                     if self._verbose:
                         print('INFO: Temperature ' + str(temperature_now*1000) + 'mK reached!')
                     break
