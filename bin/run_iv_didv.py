@@ -16,7 +16,8 @@ if __name__ == "__main__":
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
     parser.add_argument('--enable-rn',dest='enable_rn',action='store_true')
     parser.add_argument('--relock', dest='relock',action='store_true')
-    parser.add_argument('--zero_offset', dest='zero_offset',action='store_true')
+    parser.add_argument('--zero', '--zero_offset', dest='zero_offset',action='store_true')
+    parser.add_argument('--snap', '--zap_tes', dest='zap_tes',action='store_true')
     parser.add_argument('--enable-temperature-sweep',dest='enable_temperature_sweep',action='store_true')
     parser.add_argument('--detector_channels', type = str,
                         help='Comma sepated detector channels (check connections in setup.ini are uptodate)')
@@ -66,6 +67,10 @@ if __name__ == "__main__":
     do_zero = False
     if args.zero_offset:
         do_zero = True
+
+    do_zap = False
+    if args.zap_tes:
+        do_zap = True
     
     # channels
     channels = list()
@@ -127,6 +132,7 @@ if __name__ == "__main__":
                             temperature_sweep=enable_temperature_sweep,
                             do_relock=do_relock,
                             do_zero=do_zero,
+                            do_zap=do_zap,
                             detector_channels=channels,
                             sequencer_file=sequencer_file, setup_file=setup_file,
                             sequencer_pickle_file=pickle_file)

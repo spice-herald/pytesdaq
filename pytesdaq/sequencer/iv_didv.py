@@ -12,7 +12,9 @@ class IV_dIdV(Sequencer):
     def __init__(self, iv =False, didv =False, rp=False, rn=False, 
                  temperature_sweep=False, detector_channels=None,
                  sequencer_file=None, setup_file=None, sequencer_pickle_file=None,
-                 dummy_mode=False, do_relock=False, do_zero=False, verbose=True):
+                 dummy_mode=False,
+                 do_relock=False, do_zero=False, do_zap=False,
+                 verbose=True):
 
         # measurements
         self._enable_iv = iv
@@ -22,9 +24,9 @@ class IV_dIdV(Sequencer):
         self._enable_temperature_sweep = temperature_sweep
 
         # relock/zap
-        self._do_zap_tes = False
+        self._do_zap_tes = do_zap
         self._do_relock = do_relock
-        self._do_zero = do_zero
+        self._do_zero_offset = do_zero
                
         measurement_list = list()
         if self._enable_iv:
@@ -215,7 +217,20 @@ class IV_dIdV(Sequencer):
             self._create_measurement_directories(basename)
         
 
-                
+
+            # ZAP TES
+            if self._do_zap_tes:
+                tes_bias_max = 500
+                if sweep_config['use_negative_tes_bias']:
+                    tes_bias_max = -500
+                    
+                print('INFO: Zapping TES  with bias ' + str(tes_bias_max) + 'uA') 
+                for channel in self._detector_channels:
+                    self._instrument.set_tes_bias(tes_bias_max, detector_channel=channel)
+                time.sleep(5)
+
+
+            
             # IV-dIdV:  TES bias loop
             sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
             tes_bias_vect = sweep_config['tes_bias_vect']
@@ -247,7 +262,7 @@ class IV_dIdV(Sequencer):
                         self._instrument.relock(detector_channel=channel)
                         
                     # Zero
-                    if self._do_zero:
+                    if self._do_zero_offset:
 
                         print('INFO: Zeroing offset channel ' + channel) 
 
