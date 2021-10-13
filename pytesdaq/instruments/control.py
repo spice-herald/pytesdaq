@@ -310,7 +310,45 @@ class Control:
             print('ERROR setting feedback loop state (open/closed)')
             return False
 
-        return True   
+        return True
+
+
+    def relock(self,
+               tes_channel=None,
+               detector_channel=None,
+               adc_id=None, adc_channel=None,
+               num_relock=2):
+        
+
+        """
+        Relock (open/close)
+
+        Parameters:
+        ----------
+           Required: tes_channel OR detector_channel 
+                     OR (adc_id AND adc_channel)
+        """
+
+        for ilock in range(num_relock):
+
+            # open
+            self.set_feedback_mode('open', 
+                                   tes_channel=tes_channel,
+                                   detector_channel=detector_channel,
+                                   adc_id=adc_id, adc_channel=adc_channel)
+
+            # sleep 2 seconds
+            time.sleep(2)
+
+            # close
+            self.set_feedback_mode('close', 
+                                   tes_channel=tes_channel,
+                                   detector_channel=detector_channel,
+                                   adc_id=adc_id, adc_channel=adc_channel)
+            # sleep 2 seconds
+            time.sleep(2)
+
+    
 
 
     def set_signal_source(self, source, 
@@ -1780,7 +1818,10 @@ class Control:
                     )
             
                 elif param_name == 'feedback_mode':
-                    self._readout_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, value)
+                    do_open = False
+                    if value == 'open':
+                        do_open = True
+                    self._readout_inst.set_phonon_feedback_loop(subrack, slot, controller_channel, do_open)
                 
                 elif param_name == 'preamp_source':
                     self._readout_inst.set_phonon_source_preamp(subrack, slot, controller_channel, value)
