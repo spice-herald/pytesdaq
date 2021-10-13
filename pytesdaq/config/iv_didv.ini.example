@@ -26,20 +26,26 @@ tes_bias_step_T = 4
 tes_bias_step_SC = 2
 
 
-# Temperature sweep (Tc, IV,dIdV)  [percent]
-# "percent" or "mk"
-thermometer_num = 11
-iv_didv_temperature_sweep = true
+# Temperature sweep, temperature in mk
+iv_didv_temperature_sweep = false
+
+# thermometer/heater name or global number (defined in setup.ini)
+# thermometer_global_num = 11
+# heater_global_num = 11
+thermometer_name = MC
+heater_name = heaterMC
+
+
 use_temperature_vect = true		
-temperature_sweep_type = percent 
-temperature_vect = 0, 10, 20, 30
+temperature_vect = 15,20
 #temperature_min = 0
 #temperature_max = 0
 #temperature_step = 0
 
-# wait time [min], slope
-max_temperature_wait_time = 15
-max_temperature_slope = 0.2
+# wait time [min]
+temperature_stable_wait_time=5
+temperature_max_wait_time = 15
+temperature_tolerance_percent = 0.4
 
 
 

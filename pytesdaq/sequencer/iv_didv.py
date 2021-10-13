@@ -141,36 +141,78 @@ class IV_dIdV(Sequencer):
         temperature_vect = []
         nb_temperature_steps = 1
         if self._enable_temperature_sweep:
+
+            # temperature array
             temperature_vect  = sweep_config['temperature_vect']
             nb_temperature_steps = len(temperature_vect)
+
+            # thermometer
+            thermometer_global_num = None
+            if 'thermometer_global_num' in sweep_config:
+                thermometer_global_num = int(sweep_config['thermometer_global_num'])
+            thermometer_name = None
+            if 'thermometer_name' in sweep_config:
+                thermometer_name = sweep_config['thermometer_name']
+
+            # heater
+            heater_global_num = None
+            if 'heater_global_num' in sweep_config:
+                heater_global_num = int(sweep_config['heater_global_num'])
+            heater_name = None
+            if 'heater_name' in sweep_config:
+                heater_name = sweep_config['heater_name']
+
+            wait_stable_time =  300
+            if 'temperature_stable_wait_time' in sweep_config:
+                wait_stable_time = 60 * float(sweep_config['temperature_stable_wait_time'])
+
+            max_wait_time =  300
+            if 'temperature_max_wait_time' in sweep_config:
+                max_wait_time = 60 * float(sweep_config['temperature_max_wait_time'])
+
+            tolerance = 0.4
+            if 'temperature_tolerance_percent' in sweep_config:
+                tolerance = float(sweep_config['temperature_tolerance_percent'])
+                            
             
         for istep in range(nb_temperature_steps):
 
             # change temperature
+            temperature = None
             if self._enable_temperature_sweep:
-            
-                value = temperature_vect[istep]
                 
-                if sweep_config['temperature_sweep_type']=='percent':
-                    # use heater without PID control
-                    
-                    self._instrument.set_heater(value)
-                    
-                    # wait time (FIXME: add slope calculation)
-                    for itemp in range(sweep_config['max_temperature_wait_time']*2):
-                        temperature = self._instrument.get_temperature(channel=sweep_config['thermometer_num'])
-                        if self._verbose:
-                            print('Current temperature: ' + str(temperature) + 'mK')
-                        
-                        # FIXME: slope calculation
-                        time.wait(30)
+                temperature = temperature_vect[istep]/1000
+                print('INFO: Setting temperature to ' + str(temperature*1000) +'mK!')
 
-                else:         
-                    # PID controlled temperature 
-                    self._instrument.set_temperature(value)
-                    
+                
+                self._instrument.set_temperature(temperature,
+                                                 channel_name=thermometer_name,
+                                                 global_channel_number=thermometer_global_num,
+                                                 heater_channel_name=heater_name,
+                                                 heater_global_channel_number=heater_global_num,
+                                                 wait_temperature_reached=True,
+                                                 wait_cycle_time=5,
+                                                 wait_stable_time=wait_stable_time,
+                                                 max_wait_time=max_wait_time,
+                                                 tolerance=tolerance)
+            
+                
 
-            # bias sweep
+            # create sequencer directory
+            basename = str()
+            if self._enable_iv:
+                basename += '_iv'
+            if self._enable_didv:
+                basename += '_didv'
+        
+            if basename[0] == '_':
+                basename = basename[1:]
+
+            self._create_measurement_directories(basename)
+        
+
+                
+            # IV-dIdV:  TES bias loop
             tes_bias_vect = sweep_config['tes_bias_vect']
             nb_steps = len(tes_bias_vect)
             istep = 0
@@ -179,8 +221,10 @@ class IV_dIdV(Sequencer):
 
                 # set bias all channels
                 istep+=1
-                print('INFO: Sequencer step #' + str(istep) + ' out of total ' + str(nb_steps) + ' steps!')
-                print('INFO: Setting TES bias all channels to : ' + str(bias) + 'uA!')
+                print('INFO: Sequencer step #' + str(istep) + ' out of total '
+                      + str(nb_steps) + ' steps!')
+                print('INFO: Setting TES bias all channels to : '
+                      + str(bias) + 'uA!')
                 for channel in self._detector_channels:
                     self._instrument.set_tes_bias(bias, detector_channel=channel)
                     
@@ -193,6 +237,16 @@ class IV_dIdV(Sequencer):
                 
 
 
+                # get temperature
+                if self._enable_temperature_sweep:
+                    temperature = self._instrument.get_temperature(
+                        channel_name=thermometer_name,
+                        global_channel_number=thermometer_global_num
+                    )
+                    
+                    print('INFO: Temperature is '
+                          + str(temperature*1000) +'mK!')
+                
                     
                 # -----------
                 # IV
@@ -232,6 +286,11 @@ class IV_dIdV(Sequencer):
                             adc_id=adc_name,
                             adc_channel_list=adc_channel_dict[adc_name]
                         )
+
+                        if temperature is not None:
+                            det_config[adc_name]['temperature'] = temperature
+                            
+                    
                         
                     self._daq.set_detector_config(det_config)
                     
@@ -306,6 +365,9 @@ class IV_dIdV(Sequencer):
                                     adc_id=adc_name,
                                     adc_channel_list=adc_channel_dict[adc_name]
                                 )
+                                if temperature is not None:
+                                    det_config[adc_name]['temperature'] = temperature
+                          
                                 
                             self._daq.set_detector_config(det_config)
 
@@ -328,7 +390,8 @@ class IV_dIdV(Sequencer):
                                 return False
                      
                             # turn off signal genrator
-                            self._instrument.set_signal_gen_onoff('off', detector_channel=channel)
+                            self._instrument.connect_signal_gen_to_tes(False, detector_channel=channel)
+                            
                          
 
                     # take data (if all channels)
@@ -346,7 +409,9 @@ class IV_dIdV(Sequencer):
                                 adc_id=adc_name,
                                 adc_channel_list=adc_channel_dict[adc_name]
                             )
-                            
+                            if temperature is not None:
+                                det_config[adc_name]['temperature'] = temperature
+                          
                         self._daq.set_detector_config(det_config)
 
 
@@ -370,7 +435,13 @@ class IV_dIdV(Sequencer):
 
         # set heater back to 0%?
         if self._enable_temperature_sweep:
-            self._instrument.set_heater(0)
+            self._instrument.set_temperature(0,
+                                             channel_name=thermometer_name,
+                                             global_channel_number=thermometer_global_num,
+                                             heater_channel_name=heater_name,
+                                             heater_global_channel_number=heater_global_num,
+                                             wait_temperature_reached=False)
+            
             
 
         if self._verbose:
@@ -409,6 +480,11 @@ class IV_dIdV(Sequencer):
                 print('===============================\n')
 
 
+            # create sequencer directory
+            basename = measurement.lower()
+            self._create_measurement_directories(basename)
+        
+                
             # configuration
             config_dict = self._measurement_config[measurement.lower()]
            
@@ -575,49 +651,33 @@ class IV_dIdV(Sequencer):
 
                 tes_bias_vect = tes_bias_vect[::-1]
 
-            # wap: moved indentation back one tab
-            print('wap: testing negative bias tab')
+          
             if ('use_negative_tes_bias' in config_dict and
                 config_dict['use_negative_tes_bias']):
                 tes_bias_vect = [-x for x in tes_bias_vect]
-                print('wap: in negative bias')
-             
+                
                 
             config_dict['tes_bias_vect'] =  tes_bias_vect 
 
-            
+          
             # Build temperature vector
             if self._enable_temperature_sweep:
                 if config_dict['use_temperature_vect']:
-                    temperature_vect = [float(temp) for temp in self._measurement_config['temperature_vect']]
+                    temperature_vect = [float(temp) for temp in config_dict['temperature_vect']]
                     temperature_vect = np.unique(np.asarray(temperature_vect))
                 else:
-                    temperature_vect = np.unique(np.arrange(self._measurement_config['temperature_min'],
-                                                            self._measurement_config['temperature_max'],
-                                                            self._measurement_config['temperature_step']))
+                    temperature_vect = np.arange(float(config_dict['temperature_min']),
+                                                 float(config_dict['temperature_max']),
+                                                 float(config_dict['temperature_step']))
+                    temperature_vect = np.unique(
+                        np.concatenate((temperature_vect,
+                                        np.array([float(config_dict['temperature_max'])])),
+                                       axis=0))
+                        
+                    
                 config_dict['temperature_vect'] = temperature_vect 
-                config_dict['temperature_sweep_type'] = self._measurement_config['temperature_sweep_type']
-                config_dict['max_temperature_wait_time'] = int(self._measurement_config['max_temperature_wait_time'])
-                config_dict['thermometer_num'] = int(self._measurement_config['thermometer_num'])
+               
         
             # save
             self._measurement_config['iv_didv'] = config_dict  
 
-
-        # create sequencer directory
-        basename = str()
-        if self._enable_iv:
-            basename = basename + '_iv'
-        if self._enable_didv:
-            basename = basename + '_didv'
-        if self._enable_rp:
-            basename = basename + '_rp'
-        if self._enable_rn:
-            basename = basename + '_rn'
-        
-
-        if basename[0] == '_':
-            basename = basename[1:]
-
-        self._create_measurement_directories(basename)
-        

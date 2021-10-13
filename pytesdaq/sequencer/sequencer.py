@@ -45,7 +45,9 @@ class Sequencer:
 
 
           # default data path
+          self._base_raw_data_path = './'
           self._raw_data_path = './'
+          self._base_automation_data_path = './'
           self._automation_data_path = './'
 
           # automation data
@@ -149,10 +151,10 @@ class Sequencer:
           fridge_run = 'run' + str(self._config.get_fridge_run())
           if data_path.find(fridge_run)==-1:
                data_path += '/' + fridge_run
-          self._raw_data_path =  data_path + '/raw'
-          self._automation_data_path =  data_path + '/automation'
-          arg_utils.make_directories([data_path, self._raw_data_path,
-                                  self._automation_data_path])
+          self._base_raw_data_path =  data_path + '/raw'
+          self._base_automation_data_path  =  data_path + '/automation'
+          arg_utils.make_directories([data_path, self._base_raw_data_path,
+                                      self._base_automation_data_path])
 
           
           # channels
@@ -367,14 +369,14 @@ class Sequencer:
 
                
           # raw data
+          self._raw_data_path = self._base_raw_data_path  + '/' + base_name
           if self._save_raw_data and self._detector_channels is not None:
-               self._raw_data_path += '/' + base_name
                arg_utils.make_directories(self._raw_data_path)
                              
           # tc data
+          self._automation_data_path = self._base_automation_data_path + '/' + base_name
           if self._tc_channels is not None:
-               self._automation_data_path += '/' + base_name
-               arg_utils.make_directories(self._automation_data_path)
+               arg_utils.make_directories(self._automation_data_path + '/' + base_name)
             
 
           # update automation data
