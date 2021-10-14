@@ -63,15 +63,7 @@ class IV_dIdV(Sequencer):
         Run IV / dIdV sequencer
         """
   
-        
-        # Instantiate DAQ
-        self._daq = daq.DAQ(driver_name=self._daq_driver,
-                            verbose=self._verbose,
-                            setup_file=self._setup_file)
-        
-        self._daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
-
-        
+                      
         # Instantiate instrumment controller
         self._instrument = instrument.Control(setup_file=self._setup_file,
                                               dummy_mode=self._dummy_mode)
@@ -236,6 +228,14 @@ class IV_dIdV(Sequencer):
             tes_bias_vect = sweep_config['tes_bias_vect']
             nb_steps = len(tes_bias_vect)
             istep = 0
+
+
+            # Instantiate DAQ
+            self._daq = daq.DAQ(driver_name=self._daq_driver,
+                                verbose=self._verbose,
+                                setup_file=self._setup_file)
+                
+
            
             for bias in tes_bias_vect:
 
@@ -252,10 +252,6 @@ class IV_dIdV(Sequencer):
                 # if step 1: tes zap, relock, zero
                 if istep==1:
 
-                    # ZAP TES
-                    if self._do_zap_tes:
-                        print('INFO: TES "zapping" not implemented!') 
-
                     # Relock
                     if self._do_relock:
                         print('INFO: Relocking channel ' + channel) 
@@ -265,6 +261,9 @@ class IV_dIdV(Sequencer):
                     if self._do_zero_offset:
 
                         print('INFO: Zeroing offset channel ' + channel) 
+
+                        # instantiate nidaq
+                        daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
 
                         
                         # setup ADC
@@ -279,7 +278,7 @@ class IV_dIdV(Sequencer):
                         setup_dict[adc_id]['channel_list'] = [adc_chan]
                         setup_dict[adc_id]['trigger_type'] = 3
 
-                        self._daq_online.set_adc_config_from_dict(setup_dict)
+                        daq_online.set_adc_config_from_dict(setup_dict)
 
 
                         # initialize array
@@ -289,7 +288,7 @@ class IV_dIdV(Sequencer):
                         for ievent in range(50):
 
                             # get event
-                            self._daq_online.read_single_event(data_array, do_clear_task=False)
+                            daq_online.read_single_event(data_array, do_clear_task=False)
                          
                             # normalize to volts
                             data_array_norm = np.zeros_like(data_array, dtype=np.float64)
@@ -306,7 +305,7 @@ class IV_dIdV(Sequencer):
                                 data_buffer = np.append(data_buffer, data_array_norm, axis=2)
 
                         
-                        self._daq_online.clear()
+                        daq_online.clear()
 
                         # calc offset
                         data_mean = np.mean(data_buffer, axis=2)
@@ -337,6 +336,8 @@ class IV_dIdV(Sequencer):
                     print('INFO: Temperature is '
                           + str(temperature*1000) +'mK!')
                 
+
+             
                     
                 # -----------
                 # IV
@@ -400,8 +401,9 @@ class IV_dIdV(Sequencer):
                     if not success:
                         print('ERROR taking data! Stopping sequencer')
                         return False
-                                  
-                    
+
+
+                                
                 # -----------
                 # dIdV
                 # ----------
@@ -520,8 +522,11 @@ class IV_dIdV(Sequencer):
                             print('ERROR taking data! Stopping sequencer')
                             return False
                             
+            self._daq.clear()
 
-        # Done
+
+
+        # Done temperature/tes sweep
 
         # set heater back to 0%?
         if self._enable_temperature_sweep:
