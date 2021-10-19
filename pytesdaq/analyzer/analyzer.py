@@ -16,7 +16,7 @@ class Analyzer:
         self._initialize_config()
 
         # Running avg data buffer
-        self._buffer = None
+        self._data_buffer = None
         self._nb_events_running_avg = 0
 
         # Running avg data buffer cuts
@@ -54,7 +54,6 @@ class Analyzer:
 
         if self._analysis_config['norm_type']=='NoNorm':
             self._analysis_config['norm_list'] = None
-        
         
       
     def process(self, data_array, adc_config, analysis_config=None):
@@ -118,7 +117,7 @@ class Analyzer:
             self._store_data(data_array, cuts_val)
 
             # calculate running avg (>1 events)
-            nb_events = self._buffer.shape[2]
+            nb_events = self._data_buffer.shape[2]
             self._nb_events_running_avg = nb_events
             
             if nb_events>1:
@@ -132,7 +131,7 @@ class Analyzer:
                 data_array = self._calc_running_avg(pileup_mask)
                         
         else:
-            self._buffer = None
+            self._data_buffer = None
             self._nb_events_running_avg = 0
             self._cut_buffer = None
 
@@ -148,10 +147,19 @@ class Analyzer:
             #if self._didv_fit_results is not None:
             #    didv_data_dict['prior_results'] = self._didv_fit_results
 
-            # fit
-            data_array, didv_data_dict = self.fit_didv(mask=pileup_mask,
+            # convert to amps
+            norm_amps = 1
+            if self._analysis_config['unit']!='uAmps':
+                norm_amps = 1e6
+            elif self._analysis_config['unit']!='pAmps':
+                norm_amps = 1e12
+                
+            data_buffer = self._data_buffer/norm_amps
+            data_buffer = np.moveaxis(self._data_buffer,2,0)
+            data_array, didv_data_dict = self.fit_didv(data_buffer, 
                                                        sample_rate=adc_config['sample_rate'],
-                                                       unit=self._analysis_config['unit'])
+                                                       mask=pileup_mask)
+            
             
             # save results
             self._didv_fit_results = didv_data_dict['results']
@@ -171,9 +179,26 @@ class Analyzer:
 
 
     
-    def normalize(self,data_array, adc_config, unit, norm_list=None):
+    def normalize(self, data_array, adc_config, unit, norm_list=None):
         """
-        Normalize array
+        Normalize traces
+
+        Arguments:
+        ----------
+        
+        data_array: 2D ndarray
+        adc_config: dictionary
+        unit: "ADC", "mVolts", "nVolts", "Amps", "uAmps",or "pAmps",  
+        norm_list: normalization factor
+
+        Return:
+        ------
+
+        data_array: ndarray
+           2D numpy float64 array [nb channels, nb samples] with traces 
+           in requested unit
+          
+
         """
 
         # check if normalization needed
@@ -255,66 +280,177 @@ class Analyzer:
 
     
             
-    def fit_didv(self, buffer=None, mask=None, sample_rate=None,
-                 unit=None, prior_didv=None):
+    def fit_didv(self, data_array, sample_rate, unit=None,
+                 mask=None, fit_config=None):
         
         """
-        Fit dIdV
+        dIdV fit:  1 pole (SC, Normal TES) or 2/3 poles (TES in transition)
+
+        Arguments
+        ---------
+
+        data_array: ndarray
+           Traces in unit="Amps"/"pAmps"/or "uAmps"
+              3D numpy float64 array [nb events, nb channels, nb samples] 
+           or 2D numpy float64 array [nb events, nb samples] 
+        
+        sample_rate: float
+           data taking sample rate
+
+        unit: float (optional)
+           unit = "pAmps" or "uAmps" (if traces not in Amps)
+
+        mask: ndarray (optional)
+           2D bool array [nb channels, nb events] with pileup cut
+
+        fit_config: dictionary (option)
+           Dictionary with fit parameters (see function _initialize_config() )
+           Parameters can be single value or a list of values with dimension 
+           number of channels. 
+
+           Default if parameter not in dictionary: self._analysis_config
+
+           Parameters:
+               - "signal_gen_frequency": float
+                      Signal generator frequency [Hz]
+               - "signal_gen_current":  float
+                      Signal generator current [Amps]
+               - "rshunt": float 
+                      Shunt resistance [Ohms]
+               - "rp": float, if TES Normal/Transition
+                      Parasitic resistance [Ohms]
+               - "dt": float
+                      Time offset starting guess [seconds]
+               - "add_180phase": boolean 
+                      Apply 180 deg shift (FEB: if inverted)
+               - "tes_bias": float, if TES Transition
+                      TES bias [uAmps] 
+               - 'didv_1pole': boolean, if TES SC/Normal
+                      Do 1 pole fit
+               - 'didv_2pole': boolean, if TES Transition
+                      Do 2 pole fit
+               - 'didv_3pole': boolean, if TES Transition
+                      Do 3 pole fit 
+
+        Return:
+        ------
+          data_array_truncated: ndarray
+             2D array [nb traces, nb samples]: Truncated and baseline subtracted mean trace 
+          didv_data_dict: dictionary
+             Fit results
+
+
         """
 
-        # buffer
-        if buffer is None:
-            buffer = self._buffer
+        # check array
+        if data_array.ndim != 2 and data_array.ndim != 3:
+            raise ValueError('Fit dIdV: Expecting 3D data darray!')
+        
 
-        # intialize
+        
+        # normalize to amps if needed
+        norm = 1
+        if unit=='uAmps':
+            norm = 1e6
+        elif unit=='pAmps':
+            norm = 1e12
+                
+        data_array = data_array/norm
+
+
+
+        
+        # number of channels
+        nb_channels = 1
+        if data_array.ndim == 3:
+            nb_channels = data_array.shape[1]
+            
+
+        # check configuration configuration
+        analysis_config = self._analysis_config
+        if fit_config is not None:
+            for key,val in fit_config.items():
+                analysis_config[key] = val
+
+        required_parameter = ['signal_gen_frequency',
+                              'signal_gen_current',
+                              'rshunt', 'r0', 'rp',
+                              'tes_bias',
+                              'dt', 'add_180phase',
+                              'didv_1pole','didv_2pole',
+                              'didv_3pole']
+
+        for item in required_parameter:
+            # check if exist
+            if item not in analysis_config:
+                raise ValueError('ERROR: Missing "'
+                                 + item
+                                 + '" parameter! ')
+            # check if array
+            if not isinstance(analysis_config[item],
+                              (list, np.ndarray)):
+                analysis_config[item] = [analysis_config[item]]*nb_channels           
+                
+            # check array len
+            if len(analysis_config[item])<nb_channels:
+                raise ValueError('ERROR: The number of values for '
+                                 +  item
+                                 + '" parameter is less than number!'
+                                 + ' of channels!')
+        
+            
+
+                
+                   
+        # initialize
         data_array_truncated = []
         fit_array = []
         result_list = list()
         didv_data_dict = dict()
-        
-        # Test signal information
-        sg_freq = self._analysis_config['signal_gen_frequency']
-        sg_current = self._analysis_config['signal_gen_current']
-        rshunt = self._analysis_config['rshunt']
-        rp = self._analysis_config['rp']
-        dt = self._analysis_config['dt']
-        r0 = self._analysis_config['r0'] 
-        dutycycle=0.5
-        add180phase = self._analysis_config['add_180phase']
-             
-        # check normalization
-        norm = 1
-        if unit is not None:
-            if unit=='uAmps':
-                norm = 1e6
-            elif unit=='pAmps':
-                norm = 1e12  
-                    
 
+        
         # loop channels
-        nb_channels = buffer.shape[0]
-        for ichan in range(0,nb_channels):
+        for ichan in range(0, nb_channels):
 
             # channel traces
+            traces = data_array
+            if data_array.ndim == 3:
+                traces = data_array[:,ichan,:]
+
+
+            # apply cut if provided
             if mask is not None:
                 cut = mask[ichan,:]
-                traces = buffer[ichan,:,cut]/norm
-            else:
-                traces = buffer[ichan,:,:]/norm
-                traces = np.swapaxes(traces,0,1)
+                traces = traces[cut,:]
+        
+            # channel parameters
+            dutycycle = 0.5
+            do_fit_1pole = analysis_config['didv_1pole'][ichan]
+            do_fit_2pole = analysis_config['didv_2pole'][ichan]
+            do_fit_3pole = analysis_config['didv_3pole'][ichan]
+            sg_freq = analysis_config['signal_gen_frequency'][ichan]
+            sg_current =  analysis_config['signal_gen_current'][ichan]
+            rshunt = analysis_config['rshunt'][ichan]
+            r0 = analysis_config['r0'][ichan]
+            rp = analysis_config['rp'][ichan]
+            dt = analysis_config['dt'][ichan]
+            add180phase=analysis_config['add_180phase'][ichan]
 
+
+            
             # instantiate DIDV
             didv_inst = qp.DIDV(traces,
                                 sample_rate,
                                 sg_freq,
                                 sg_current,
                                 rshunt,
-                                r0=r0, rp=rp,
+                                r0,
+                                rp,
                                 dutycycle=dutycycle,
                                 add180phase=add180phase,
                                 dt0=dt)
-            
-            # process
+                        
+            # process traces
             print('Info: dIdV processing')
             didv_inst.processtraces()
 
@@ -333,19 +469,19 @@ class Analyzer:
             
             # fit
             result = None
-            if self._analysis_config['didv_1pole']:
+            if do_fit_1pole:
                 print('Info: Starting dIdV 1-pole Fit')
                 didv_inst.dofit(1)
                 result = didv_inst.fitresult(1)
                 print('Info: dIdV 1-pole Fit Done')
 
-            if self._analysis_config['didv_2pole']:
+            if do_fit_2pole:
                 print('Info: Starting dIdV 2-pole Fit')
                 didv_inst.dofit(2)
                 result = didv_inst.fitresult(2)
                 print('Info: dIdV 2-pole Fit Done')
 
-            if self._analysis_config['didv_3pole']:
+            if do_fit_3pole:
                 print('Info: Starting dIdV 3-pole Fit')
                 didv_inst.dofit(3)
                 result = didv_inst.fitresult(3)
@@ -355,11 +491,10 @@ class Analyzer:
 
             # Calculate R0/I0/P0 (infinite loop
             # approximation)
-            if ((self._analysis_config['didv_2pole'] or
-                 self._analysis_config['didv_3pole'])
+            if ((do_fit_2pole or do_fit_3pole)
                 and 'smallsignalparams' in result):
                 didv = result['didv0']
-                tes_bias = self._analysis_config['tes_bias_list'][ichan]
+                tes_bias = self._analysis_config['tes_bias'][ichan]
               
                 # R0
                 r0_infinite = (abs(1/didv) + rp + rshunt)
@@ -410,21 +545,21 @@ class Analyzer:
         """
         
         # add extra dimension to data array
-        data_array.shape +=(1,)
+        data_array.shape += (1,)
         
         # check data buffer dimension
         dims_buffer = []
         do_reset_buffer = False
 
         if (self._analysis_config['reset_running_avg']
-            or self._buffer is None
+            or self._data_buffer is None
             or (self._analysis_config['enable_pileup_rejection']
                 and self._cut_buffer is None)):      
             do_reset_buffer = True
         else:
             
             # data buffer
-            dims_buffer = self._buffer.shape
+            dims_buffer = self._data_buffer.shape
             dims_array = data_array.shape
             if dims_buffer[0:2] != dims_array[0:2]:
                 do_reset_buffer = True
@@ -447,7 +582,7 @@ class Analyzer:
         if do_reset_buffer:
             
             # data buffer
-            self._buffer = data_array
+            self._data_buffer = data_array
 
             # cut buffer
             if self._analysis_config['enable_pileup_rejection']:
@@ -466,7 +601,7 @@ class Analyzer:
             nb_to_delete = self._nb_events_running_avg-self._analysis_config['nb_events_avg']+1
             
             # data buffer
-            self._buffer = np.delete(self._buffer, list(range(nb_to_delete)), axis=2)
+            self._data_buffer = np.delete(self._data_buffer, list(range(nb_to_delete)), axis=2)
 
             # cut buffer
             if self._analysis_config['enable_pileup_rejection']:
@@ -476,7 +611,7 @@ class Analyzer:
                                                             axis=1)
                 
         # append elements
-        self._buffer = np.append(self._buffer, data_array, axis=2)
+        self._data_buffer = np.append(self._data_buffer, data_array, axis=2)
         if self._analysis_config['enable_pileup_rejection']:
             for cut_name,val in self._cut_buffer.items():
                 self._cut_buffer[cut_name] = np.append(self._cut_buffer[cut_name],
@@ -490,8 +625,8 @@ class Analyzer:
         """
 
         # initialize mask
-        nb_channels = self._buffer.shape[0]
-        nb_events = self._buffer.shape[2]
+        nb_channels = self._data_buffer.shape[0]
+        nb_events = self._data_buffer.shape[2]
         pileup_mask =  np.ones((nb_channels, nb_events), dtype=bool)
 
         # loop channel and calculate cuts
@@ -525,12 +660,12 @@ class Analyzer:
         """
         
         data_array = []
-        if self._buffer is None:
+        if self._data_buffer is None:
             return  data_array
 
-        nb_channels = self._buffer.shape[0]
-        nb_samples =  self._buffer.shape[1]
-        nb_events = self._buffer.shape[2]
+        nb_channels = self._data_buffer.shape[0]
+        nb_samples =  self._data_buffer.shape[1]
+        nb_events = self._data_buffer.shape[2]
        
 
         # calculate average
@@ -540,14 +675,14 @@ class Analyzer:
 
             for ichan in range(nb_channels):
                 cut = pileup_mask[ichan,:]
-                data = self._buffer[ichan,:,cut]
+                data = self._data_buffer[ichan,:,cut]
                 if data.shape[1]<nb_events_min:
                     nb_events_min = data.shape[0]
                 data_array[ichan,:] = np.mean(data, axis=0)
             self._nb_events_running_avg = nb_events_min
 
         else:         
-            data_array = np.mean(self._buffer, axis=2)
+            data_array = np.mean(self._data_buffer, axis=2)
 
         return data_array
 
@@ -676,7 +811,7 @@ class Analyzer:
         self._analysis_config['nb_events_avg'] = 1
         self._analysis_config['signal_gen_current'] = None
         self._analysis_config['signal_gen_frequency'] = None
-        self._analysis_config['tes_bias_list'] = None
+        self._analysis_config['tes_bias'] = None
         self._analysis_config['rshunt'] = 0.005
         self._analysis_config['rp'] = 0.003
         self._analysis_config['r0'] = 0.2
