@@ -8,28 +8,25 @@ import pytesdaq as ptd
 from pytesdaq.processing.trigger import ContinuousData
 import pytesdaq.config.settings as settings
 from pytesdaq.utils import arg_utils
+import stat
 
 if __name__ == "__main__":
 
-
-    parser = argparse.ArgumentParser(description='Launch Processing')
-    parser.add_argument('-s','--series', dest="series", type = str, help='Series name (format string Ix_Dyyyymmdd_Thhmmss)')
+    # ------------------
+    # Input arguments
+    # ------------------
+    parser = argparse.ArgumentParser(description='Launch Trigger Processing')
     parser.add_argument('--raw_path', type = str, help='Raw data path')
+    parser.add_argument('-s','--series', dest="series", type = str,
+                        help='Series name (format string Ix_Dyyyymmdd_Thhmmss), Default: all data in raw_path')
     parser.add_argument('--nb_randoms', type=float, help='Number random events (default=500)')
     parser.add_argument('--nb_triggers', type=float, help='Number trigger events (default=all)')
     parser.add_argument('--trace_length_ms', type=float, help='Trace length [ms] [default: ')
     parser.add_argument('--pretrigger_length_ms', type=float,
-                        help='Pretrigger length [ms] [default: 1/2 trace lenght]')
+                        help='Pretrigger length [ms] [default: 1/2 trace length]')
     parser.add_argument('--nb_samples', type=float, help='Trace length [# samples]')
     parser.add_argument('--nb_samples_pretrigger', type=float,
-                        help='Pretrigger length [# samples]  (default: 1/2 trace lenght)')
-    parser.add_argument('--is_negative_pulse', action='store_true', help='Negative pulse')
-    parser.add_argument('--save_filter', action='store_true', help='Save PSD/Template in a pickle file')
-    parser.add_argument('--facility', type = int, help='Facility number [default=2]')
-
-    #parser.add_argument('--fall_time', type=float, help='Template fall time in usec [30 usec]')
-    #parser.add_argument('--rise_time', type=float, help='Template rise time in usec [20 usec]')
-    #parser.add_argument('--threshold', type=float, help='Trigger sigma thresholds (default=10)')
+                        help='Pretrigger length [# samples]  (default: 1/2 trace length)')
     parser.add_argument('--fall_time', nargs='+', type=float, help='Template fall time in usec. Must be same length as chan_to_trigger')
     parser.add_argument('--rise_time', nargs='+', type=float, help='Template rise time in usec. Must be same length as chan_to_trigger')
     parser.add_argument('--threshold', nargs='+', type=float, help='Trigger sigma thresholds. Must be same length as chan_to_trigger (e.g. --threshold 40 50 --chan_to_trigger 0,1)')
@@ -37,7 +34,11 @@ if __name__ == "__main__":
     parser.add_argument('--pileup_window', type=float, help='Window in usec for removing pileup on individual channels (default = 0 usec)')
     parser.add_argument('--coincident_window', type=float, help='Window in usec for merging coincident events on channels from chan_to_trigger (default = 50 usec)')
 
-
+    parser.add_argument('--is_negative_pulse', action='store_true', help='Negative pulse')
+    parser.add_argument('--save_filter', action='store_true', help='Save PSD/Template in a pickle file')
+    parser.add_argument('--setup_file', type = str,
+                        help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
+    
     args = parser.parse_args()
 
     
@@ -52,28 +53,27 @@ if __name__ == "__main__":
         print('ERROR: Either "pretrigger_length_ms" or "nb_samples" needs to be provided, not both!')
         exit(0)
 
-
-    # default
-    facility = 2
+    # ------------------
+    # Default 
+    # ------------------
+    chan_to_trigger='all'
     nb_randoms = 500
     nb_triggers = -1
-
+    rise_time = [20e-6]
+    fall_time = [30e-6]
+    threshold = [10]
+    pileup_window = 0
+    coincident_window = 50e-6
     trace_length_ms = None
     pretrigger_length_ms = None
     nb_samples = None
     nb_samples_pretrigger = None
     save_filter = False
     is_negative_pulse = False
-
-    rise_time = [20e-6]
-    fall_time = [30e-6]
-    threshold = [10]
-    chan_to_trigger='all'
-    pileup_window = 0
-    coincident_window = 50e-6
-
     
-    # input
+    # ------------------
+    # Parse arguments 
+    # ------------------
     series = None
     if args.series:
         series = args.series
@@ -90,32 +90,54 @@ if __name__ == "__main__":
         nb_samples = int(args.nb_samples)
     if args.nb_samples_pretrigger:
         nb_samples_pretrigger = int(args.nb_samples_pretrigger)
-    if args.save_filter:
-        save_filter = True
-    if args.is_negative_pulse:
-        is_negative_pulse = True
-    if args.facility:
-        facility = args.facility
-
-    #if args.rise_time:
-    #    rise_time = float(args.rise_time) * 1e-6
-    #if args.fall_time:
-    #    fall_time = float(args.fall_time) * 1e-6
+    if args.chan_to_trigger:
+        chan_to_trigger = args.chan_to_trigger
+    if args.threshold:
+        threshold = args.threshold
     if args.rise_time:
         rise_time = [i*1e-6 for i in args.rise_time]
     if args.fall_time:
         fall_time = [i*1e-6 for i in args.fall_time]
-    if args.threshold:
-        threshold = args.threshold
-    if args.chan_to_trigger:
-        chan_to_trigger = args.chan_to_trigger
+    if args.save_filter:
+        save_filter = True
+    if args.is_negative_pulse:
+        is_negative_pulse = True
     if args.pileup_window:
         pileup_window = args.pileup_window * 1e-6
     if args.coincident_window:
         coincident_window = args.coincident_window * 1e-6
 
 
-    # input directory
+
+    # ------------------
+    # config file
+    # ------------------
+    setup_file = None
+    if args.setup_file:
+        setup_file = args.setup_file
+    else:
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        setup_file = this_dir + '/../pytesdaq/config/setup.ini'
+
+    if not os.path.isfile(setup_file):
+        print('ERROR: Setup file "' + setup_file + '" not found!')
+        exit()
+
+    
+    config = settings.Config(setup_file=setup_file)
+
+
+    # facility
+    facility = config.get_facility_num()
+
+    if not facility or facility is None:
+        print('ERROR: No facility available in setup file!')
+        exit(0)
+
+    
+    # ------------------
+    # input path
+    # ------------------
     input_data_dir = raw_path
     input_data_dir_split = input_data_dir.split('/')
     if series is not None and input_data_dir_split[-1]!=series:
@@ -132,8 +154,10 @@ if __name__ == "__main__":
         exit(0)
 
     
-              
+    # ------------------
     # file list
+    # ------------------
+    
     file_list = []
     file_name_wildcard = '*.hdf5'
     if series is not None:
@@ -148,6 +172,9 @@ if __name__ == "__main__":
         exit(0)
 
 
+    # ------------------
+    # output directory
+    # ------------------
             
     # output name
     now = datetime.now()
@@ -163,10 +190,18 @@ if __name__ == "__main__":
         output_dir = raw_path[0:-len(input_data_dir_split[-1])] + 'trigger_' + series_dir 
            
     if not os.path.isdir(output_dir):
-        os.mkdir(output_dir)
+        try:
+            os.makedirs(output_dir)
+            os.chmod(output_dir, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+        except OSError:
+            print('\nERROR: Unable to create directory "'+ data_path  + '"!\n')
+            exit()
+            
 
-        
-    # set chan_to_trigger
+    # ------------------
+    # trigger channels
+    # ------------------   
+  
     if (chan_to_trigger is not 'all'):
         chan_trigger_check = "".join([chan for chan in chan_to_trigger if chan not in [" ",  "," , "-"]])
         if ("-" in chan_to_trigger and chan_trigger_check.isdigit()):
@@ -175,7 +210,6 @@ if __name__ == "__main__":
             chan_to_trigger_list = chan_to_trigger.replace(" ", "").split(",")
             chan_to_trigger_list = [int(chan) for chan in chan_to_trigger_list]
         else:
-            config = settings.Config()
             con_df = config.get_adc_connections()
             adc_array = con_df.query('detector_channel == @chanlist')["adc_channel"].values
             if(len(adc_array)==0):
@@ -188,12 +222,17 @@ if __name__ == "__main__":
     print(f'threshold = {threshold}')
     print(f'len(threshold) = {len(threshold)}')
     print(f'len(chan_to_trigger_list) = {len(chan_to_trigger_list)}')
+    print('chan_to_trigger_list = ', chan_to_trigger_list)    
 
-
-    print('wap: chan_to_trigger_list = ', chan_to_trigger_list)    
 
     if ((len(threshold) != len(chan_to_trigger_list)) and (chan_to_trigger_list is not 'all')):
         raise ValueError("threshold must be the same size as chan_to_trigger")
+
+
+
+    # ------------------
+    # Launch
+    # ------------------ 
 
 
     

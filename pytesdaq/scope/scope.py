@@ -13,6 +13,9 @@ import time
 from datetime import datetime
 from pytesdaq.config import settings
 from pytesdaq.scope import readout
+from pytesdaq.utils import arg_utils
+
+
 
 class MainWindow(QtWidgets.QMainWindow):
     
@@ -30,8 +33,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self._default_fig_data_dir = './'
         if setup_file is not None:
             config = settings.Config(setup_file=setup_file)
-            self._default_raw_data_dir = config.get_data_path()
-            self._default_fig_data_dir  = config.get_fig_data_path()
+            run = 'run' + str(config.get_fridge_run())
+            base_path = config.get_data_path()
+            self._default_raw_data_dir = base_path + '/' + run + '/raw'
+            if not os.path.isdir(self._default_raw_data_dir):
+                self._default_raw_data_dir  = base_path
+            self._default_fig_data_dir = base_path + '/' + run + '/operation'
+            if not os.path.isdir(self._default_fig_data_dir):
+                self._default_fig_data_dir = base_path
         
 
         # initalize main window

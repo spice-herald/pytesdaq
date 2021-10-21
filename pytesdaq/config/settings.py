@@ -62,79 +62,87 @@ class Config:
         
         
 
-    def get_sequencer_setup(self):
+    def get_sequencer_setup(self, measurement_name, measurement_list=None):
         """
         get sequencer setup
 
         """
 
-        setup = dict()
+        output_setup = dict()
+
+        # measurement list
+        if measurement_list is None:
+            measurement_list = [measurement_name]
+            
         try:
-            setup_configs = self._get_section('sequencer')
-            for config in setup_configs:
+
+            # convert to dictionary
+            config_dict = dict()
+            setup_config = self._get_section(measurement_name)
+            for config in setup_config:
                 if len(config)!=2:
                     continue
+                if config[1].strip() == '':
+                    continue
                 key = config[0]
-                if config[1].strip() != '':
-                    item = [s.strip() for s in config[1].split(',')]
-                    if len(item)==1:
-                        item = item[0]
-                        if item =='true':
-                            item = True
-                        if item =='false':
-                            item = False
+                values = [s.strip() for s in config[1].split(',')]
+                if len(values)==1:
+                    values = values[0]
+                    if values =='true' or values =='True':
+                        values = True
+                    elif values =='false' or values =='False':
+                        values = False
+                    elif values.isdigit():
+                        values = float(values)
+                elif len(values)>1:
+                    for ival in range(len(values)):
+                        if values[ival].isdigit():
+                            values[ival] = float(values[ival])
                         
-                    setup[key] = item
-                                     
+                config_dict[key] = values
+          
+
+                        
+            # case "iv_didv": get other individual sections
+            if measurement_name == 'iv_didv':
+                output_setup['iv_didv'] = config_dict.copy()
+                for name in measurement_list:
+                    # copy setup and update with individual setup
+                    output_setup[name] = config_dict.copy()
+                
+                    if self._has_section(name):
+                        iv_didv_config =  self._get_section(name)
+                        for config in iv_didv_config:
+                            if len(config)!=2:
+                                continue
+                            if config[1].strip() == '':
+                                continue
+                            key = config[0]
+                            values = [s.strip() for s in config[1].split(',')]
+                            if len(values)==1:
+                                values = values[0]
+                                if values =='true' or values =='True':
+                                    values = True
+                                elif values =='false' or values =='False':
+                                    values = False
+                                elif values.isdigit():
+                                    values = float(values)
+                            elif len(values)>1:
+                                for ival in range(len(values)):
+                                    if values[ival].isdigit():
+                                        values[ival] = float(values[ival])
+                            output_setup[name][key] = values
+            else:
+                output_setup[measurement_name] = config_dict
+                          
         except:
-            pass
+            print('WARNING: Problem reading settings file for "'+
+                  measurement_name + '" measurement!')
 
-        return setup
+        return output_setup 
 
 
-
-    def get_iv_didv_setup(self):
-        """
-        Get IV / didv
-        
-        """
-        iv_didv_config = dict()
-
-        if self._has_section('iv'):
-            config_section =  self._get_section('iv')
-            setup_dict = dict()
-            for config in config_section:
-                if len(config)==2 and config[1].strip() != '':
-                    setup_dict[config[0]] = config[1].strip()
-            iv_didv_config['iv'] = setup_dict
-
-        if self._has_section('didv'):
-            config_section =  self._get_section('didv')
-            setup_dict = dict()
-            for config in config_section:
-                if len(config)==2  and config[1].strip() != '':
-                    setup_dict[config[0]] = config[1]
-            iv_didv_config['didv'] = setup_dict
-            iv_didv_config['rp'] = setup_dict.copy()
-            iv_didv_config['rn'] = setup_dict.copy()
-            
-   
-        if self._has_section('rp'):
-            config_section =  self._get_section('rp')
-            for config in config_section:
-                if len(config) == 2 and config[1].strip() != '':
-                    iv_didv_config['rp'][config[0]] = config[1]
-   
-        if self._has_section('rn'):
-            config_section =  self._get_section('rn')
-            for config in config_section:
-                if len(config) == 2 and config[1].strip() != '':
-                    iv_didv_config['rn'][config[0]] = config[1]
-      
-        return iv_didv_config
-
-            
-
+  
     def get_squid_controller(self):
         """
         get SQUID/TES controller device name
@@ -153,20 +161,22 @@ class Config:
 
 
 
-    def get_temperature_controller(self):
+    def get_temperature_controllers(self):
         """
-        get temperature controller device name
+        get temperature controller device names
+        (comma separated)
             
         Returns:
-            str - no type conversion happens here!
+            list of strings - no type conversion happens here!
         """
-        controller=str()
+        controllers=list()
+        
         try:
-            controller =  self._get_setting('setup','temperature_controller')
+            controllers =  self._get_comma_separated_setting('setup','temperature_controllers')
         except:
             pass
         
-        return controller
+        return controllers
 
 
 
@@ -234,15 +244,6 @@ class Config:
         
         return data_path
 
-    
-    def get_fig_data_path(self):
-        data_path = './'
-        try:
-            data_path =  str(self._get_setting('setup','fig_data_path'))
-        except:
-            pass
-        
-        return data_path
 
     def get_fridge_run(self):
         fridge_run = []
@@ -485,7 +486,21 @@ class Config:
                        
         return detector_config 
 
-
+    def get_visa_library(self):
+        """
+        get VISA Library
+        
+        Returns:
+            str - no type conversion happens here!
+        """
+        library_path = None
+        try:
+            if self._has_setting('setup','visa_library'):
+                library_path =  self._get_setting('setup','visa_library')
+        except:
+            pass
+    
+        return library_path
 
     
     def get_feb_address(self):
@@ -602,7 +617,7 @@ class Config:
         return info
 
 
-    def get_signal_generator_address(self, device_name):
+    def get_signal_generator_visa_address(self, device_name):
         """
         get function generators
         
@@ -610,7 +625,7 @@ class Config:
             str - no type conversion happens here!
         """
 
-        key = device_name + '_address'
+        key = device_name + '_visa_address'
         
         address=str()
         try:
@@ -621,27 +636,60 @@ class Config:
         return address
 
 
-    def get_temperature_controller_address(self, device_name):
+    def get_temperature_controller_setup(self, device_name):
         """
         get function generators
-        
+    
+        Args:
+            devic_name = "lakeshore" or "macrt"
+
         Returns:
             str - no type conversion happens here!
         """
 
-        key = device_name + '_address'
-        
-        address=str()
+        # get all items in sectiob
+        items = None
+
         try:
-            address =  self._get_setting('temperature_controllers',key)
+            items = self._get_section('temperature_controllers')
         except:
-            pass
-    
-        return address
+            return items
+
+
+        # initialize dictionary
+        output_dict = dict()
+
+        try:
+            
+            for item in items:
+            
+                # extract device name
+                device = item[0][0:item[0].find('_')]
+                device = device.strip()
+                device_param = item[0][item[0].find('_')+1:]
+                device_param = device_param.strip()
+
+                # check if selected device
+                if device  != device_name:
+                    continue
+                output_dict[device_param] = dict()
+
+                # get parameters
+                params = item[1].split(',')
+                for param in params:
+                    param_name = str(param.split(':')[0]).strip()
+                    param_val = str(param.split(':')[1]).strip()
+                    output_dict[device_param][param_name] = param_val
+            
+        except:
+            raise ValueError('ERROR: Unknown temperature_controllers format!')
+                
+        
+        return output_dict
     
 
     
-    def _get_ini_path(self,ini_filename):
+    def _get_ini_path(self, ini_filename):
         """
         Get the path where the ini files live. ini files
         should be placed in the same directory as the settings.py module.
@@ -658,7 +706,7 @@ class Config:
         return os.path.abspath(os.path.join(this_dir, ini_filename))
 
 
-    def _get_section(self,section):
+    def _get_section(self, section):
         """
         Get all items from section
         

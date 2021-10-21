@@ -768,7 +768,8 @@ class Readout:
         
         # Instantiate instrument
         if self._instrument is None:
-            self._instrument = instrument.Control(dummy_mode=False)
+            self._instrument = instrument.Control(setup_file=self._setup_file,
+                                                  dummy_mode=False)
 
 
         # Read normalization
@@ -828,7 +829,7 @@ class Readout:
                 bias = float(self._instrument.get_tes_bias(adc_id=self._adc_name,
                                                            adc_channel=chan))
                 tes_bias_list.append(bias*1e-6)
-            self._analyzer.set_config('tes_bias_list', tes_bias_list)
+            self._analyzer.set_config('tes_bias', tes_bias_list)
             
             
 
@@ -1022,7 +1023,7 @@ class Readout:
                 settings = self._detector_config['settings'][detector_name]
                 bias = float(self._detector_config['settings'][detector_name]['tes_bias'])
                 tes_bias_list.append(bias)
-            self._analyzer.set_config('tes_bias_list', tes_bias_list)
+            self._analyzer.set_config('tes_bias', tes_bias_list)
 
     
 

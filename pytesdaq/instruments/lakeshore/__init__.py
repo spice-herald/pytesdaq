@@ -1,3 +1,5 @@
 """
-Intruments control and drivers  
+Lakeshore
 """
+from .lakeshore import Lakeshore
+

@@ -1,5 +1,4 @@
-from pytesdaq.instruments.visa_instruments import VisaInstrument
-
+from pytesdaq.instruments.communication import InstrumentComm
 
 if __name__ == "__main__":
 
@@ -7,14 +6,17 @@ if __name__ == "__main__":
     # VISA Address
 
     # TCP
-    visa_address = 'TCPIP::192.168.0.4::5025::SOCKET'
+    #visa_address = 'TCPIP::192.168.0.4::5025::SOCKET'
 
     # RS232
     #visa_address = 'COM1'
 
+    # GPIB
+    visa_address = 'GPIB0::9::INSTR'
+    
     
     # Instantiate instrument
-    myinstrument = VisaInstrument(visa_address, termination='\n')
+    myinstrument = InstrumentComm(visa_address, termination='\n')
 
     # Check device
     idn = myinstrument.get_idn()

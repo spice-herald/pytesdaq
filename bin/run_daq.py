@@ -151,7 +151,7 @@ if __name__ == "__main__":
 
     # ========================
     # Get detector config
-    # ======================== 
+    # ========================
     detector_config = dict()
     if not disable_control:
         myinstrument = instrument.Control(setup_file=setup_file, dummy_mode=False, verbose=verbose)
@@ -164,8 +164,6 @@ if __name__ == "__main__":
             config_dict = adc_config[adc_name]
             detector_config[adc_name] = config.get_detector_config(adc_id=adc_name,
                                                                    adc_channel_list=config_dict['channel_list'])
-            
-        
 
     # ========================
     # Data path
@@ -174,32 +172,32 @@ if __name__ == "__main__":
     fridge_run = 'run' + str(config.get_fridge_run())
     if data_path.find(fridge_run)==-1:
         data_path += '/' + fridge_run
+    arg_utils.make_directories(data_path)
+    data_path += '/raw'
+    arg_utils.make_directories(data_path)
 
     dir_prefix = 'continuous'  
     if trigger_type[0]==2 or trigger_type[0]==4:
         dir_prefix = 'trigger'
-
-
+    elif trigger_type[0]==3:
+        dir_prefix = 'random'
     now = datetime.now()
     series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
     series_time = now.strftime('%H') + now.strftime('%M')
     data_path += '/' + dir_prefix + '_' + series_day + '_' + series_time
-
-    try:
-        os.makedirs(data_path)
-        os.chmod(data_path, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
-    except OSError:
-        print('\nERROR: Unable to create directory "'+ data_path  + '"!\n')
-        exit()
-    
+    arg_utils.make_directories(data_path)
+ 
     # ========================
     # Data prefix
     # ========================
     data_prefix = 'cont'
     if trigger_type[0]==2:
         data_prefix = 'exttrig'
+    elif trigger_type[0]==3:
+        data_prefix = 'rand'
     elif trigger_type[0]==4:
         data_prefix = 'threshtrig'
+    
         
     
     # ========================

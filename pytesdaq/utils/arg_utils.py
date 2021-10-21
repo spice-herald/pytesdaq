@@ -1,5 +1,6 @@
 import os
 import sys
+import stat
 
 
 def build_range_str(data_list):
@@ -41,3 +42,26 @@ def hyphen_range(data_str):
 
     data_list.sort()
     return data_list
+
+
+
+def make_directories(directories):
+    """
+    Create directory
+    """
+    
+    if not isinstance(directories, list):
+        directories = [directories]
+        
+
+    for dir_name in directories:
+        if not os.path.isdir(dir_name):
+            try:
+                os.makedirs(dir_name)
+                os.chmod(dir_name,
+                         stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+            except OSError:
+                raise ValueError('\nERROR: Unable to create directory "'
+                                 + dir_name + '"!\n')
+              
+          

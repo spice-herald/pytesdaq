@@ -93,7 +93,8 @@ if __name__ == "__main__":
     is_signal_gen = False
     if (args.signal_gen_on or args.signal_gen_off
         or args.signal_gen_voltage is not None
-        or args.signal_gen_frequency is not None):
+        or args.signal_gen_frequency is not None
+        or args.signal_gen_shape is not None):
         is_signal_gen = True
 
 

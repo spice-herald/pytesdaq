@@ -10,13 +10,13 @@ class MACRTModule(InstrumentComm):
     MGC3: Module Générateur de Courant 3 voies (heaters control)
     """
 
-    def __init__(self, module_type, module_name, ip_address, module_num = None,
+    def __init__(self, module_type, module_name, ip_address, module_number=None,
                  protocol='udp', verbose=True):
         super().__init__(protocol=protocol, termination='\n', raise_errors=True,
                          verbose=verbose)
         
         # debug
-        self._debug = True
+        self._debug = False
         
       
         # port/IP address
@@ -33,23 +33,24 @@ class MACRTModule(InstrumentComm):
         
         # module name and type
         self._module_name = module_name
-        self._module_num =  module_num
+        self._module_number =  module_number
         self._module_type = module_type.upper()
         if self._module_type not in ['MMR3', 'MGC3']:
             raise ValueError('ERROR: Module type should be MMR3 or MGC3')
 
 
-        # module identification
-        self._module_idn = None
+        # module identity
+        self._module_identity = None
         try:
             result  = self.query('*IDN', coding='ascii')
-            self._module_idn = result[0:result.rfind('_')]
+            self._module_identity = result[0:result.rfind('_')]
         except:
             raise ValueError('ERROR: Unable to get module identification!')
 
 
         if self._verbose:
-            print('INFO: Creating module "' + self._module_idn + '" (' + self._ip_address + ')')
+            print('INFO: Creating module "' + self._module_identity
+                  + '" (' + self._ip_address + ')')
         
         
         # Measure/Control parameters      
@@ -78,12 +79,12 @@ class MACRTModule(InstrumentComm):
 
         # channels
         self._channel_table = None
-        self._channel_list = None
         self._channel_names = None
-        self._global_channel_nums = None
-        self._channel_properties = ['module_name', 'module_type', 'module_num',
-                                    'module_address', 'channel_num', 'global_channel_num',
-                                    'channel_name', 'device_type', 'device_serial']
+        self._global_channel_numbers = None
+        self._channel_property_list = None
+        self._channel_property_names = ['instrument_name', 'module_name', 'module_type', 'module_number',
+                                        'module_address', 'channel_number', 'global_channel_number',
+                                        'channel_name', 'device_type', 'device_serial']
         
         
     @property
@@ -95,12 +96,12 @@ class MACRTModule(InstrumentComm):
         return self._module_name
 
     @property
-    def idn(self):
-        return self._module_idn
+    def identity(self):
+        return self._module_identity
       
     @property
-    def num(self):
-        return self._module_num
+    def number(self):
+        return self._module_number
 
     @property
     def ip_address(self):
@@ -112,11 +113,11 @@ class MACRTModule(InstrumentComm):
         return self._channel_names
 
     @property
-    def global_channel_nums(self):
-        return self._global_channel_nums
+    def global_channel_numbers(self):
+        return self._global_channel_numbers
 
 
-    def add_channels(self, channel_nums, channel_names, global_channel_nums=None,
+    def add_channels(self, channel_numbers, channel_names, global_channel_numbers=None,
                      device_types=None, device_serials=None, replace=False):
         """`
         Add channel
@@ -132,17 +133,17 @@ class MACRTModule(InstrumentComm):
         
 
         # convert arguments to list
-        if not isinstance(channel_nums, list):
-            channel_nums = [channel_nums]
-        nb_channels = len(channel_nums)
+        if not isinstance(channel_numbers, list):
+            channel_numbers = [channel_numbers]
+        nb_channels = len(channel_numbers)
             
         if not isinstance(channel_names, list):
             channel_names = [channel_names]
 
-        if global_channel_nums is None:
-            global_channel_nums = [None]*nb_channels
-        elif not isinstance(global_channel_nums, list):
-            global_channel_nums = [global_channel_nums]
+        if global_channel_numbers is None:
+            global_channel_numbers = [None]*nb_channels
+        elif not isinstance(global_channel_numbers, list):
+            global_channel_numbers = [global_channel_numbers]
 
         if device_types is None:
             device_types = [None]*nb_channels
@@ -156,48 +157,50 @@ class MACRTModule(InstrumentComm):
         
             
         # check length
-        if not all(param_len==nb_channels for param_len in [len(channel_names), len(global_channel_nums),
-                                                        len(device_types), len(device_serials)]):
+        if not all(param_len==nb_channels for param_len in [len(channel_names), len(global_channel_numbers),
+                                                            len(device_types), len(device_serials)]):
             raise ValueError('ERROR in add_channels: all the parameters should have same length!')
 
         
         # initialize list if needed:
-        if self._channel_list is None:
-            self._channel_list = list()
+        if self._channel_property_list is None:
+            self._channel_property_list = list()
             self._channel_names = list()
-            self._global_channel_nums = list()
+            self._global_channel_numbers = list()
 
             
         # loop channels and add to list
-        for ichan in range(len(channel_nums)):
+        for ichan in range(len(channel_numbers)):
 
             #  build list of channel properties
-            channel_index = None
-            channel_properties = [self._module_name, self._module_type, self._module_num , self._ip_address,
-                               channel_nums[ichan], global_channel_nums[ichan],
-                               channel_names[ichan], device_types[ichan], device_serials[ichan]]
+            channel_property_values = ['macrt', self._module_name, self._module_type, self._module_number,
+                                       self._ip_address, channel_numbers[ichan],
+                                       global_channel_numbers[ichan], channel_names[ichan],
+                                       device_types[ichan], device_serials[ichan]]
             
             # check if channel exist
             channel_index = None
-            for ind in range(len(self._channel_list)):
-                if self._channel_list[ind][0]==channel_nums[ichan]:
+            for ind in range(len(self._channel_property_list)):
+                if self._channel_property_list[ind][4]==channel_numbers[ichan]:
                     channel_index = ind
 
             if channel_index is None:
-                self._channel_list.append(channel_properties)
+                self._channel_property_list.append(channel_property_values)
                 self._channel_names.append(channel_names[ichan])
-                self._global_channel_nums.append(global_channel_nums[ichan])
+                self._global_channel_numbers.append(global_channel_numbers[ichan])
             else:
                 if replace:
-                    self._channel_list[channel_index] = channel_properties
-                    self._channel_names[han_index] = channel_names[ichan]
-                    self._global_channel_nums[channel_index] = global_channel_nums[ichan]
+                    self._channel_property_list[channel_index] = channel_property_values
+                    self._channel_names[channel_index] = channel_names[ichan]
+                    self._global_channel_numbers[channel_index] = global_channel_numbers[ichan]
                 else:
-                    raise ValueError('ERROR: channel ' + str(channel_nums[ichan]) + 'already exists!')
+                    raise ValueError('ERROR: channel ' + str(channel_numbers[ichan])
+                                     + ' already exists!')
                 
 
         # rebuild table
-        self._channel_table = pd.DataFrame(self._channel_list, columns = self._channel_properties)
+        self._channel_table = pd.DataFrame(self._channel_property_list,
+                                           columns=self._channel_property_names)
 
 
 
@@ -216,39 +219,47 @@ class MACRTModule(InstrumentComm):
             print('No Channels available')
 
                 
-    def get_info(self):
+    def get_channel_table(self):
         """
         """
         return self._channel_table
 
-    def get_channel_num(self, channel_name=None, global_channel_num=None):
+
+    
+    def get_channel_number(self, channel_name=None, global_channel_number=None):
         """
-        Get channel number (0,1, or 2) 
+        Get channel number: MMR3 = (1, 2, or 3), MGC3 = (0, 1, 2)
         """
 
-        channel_num = None
-
-        # get channel num
+        
+        # query string
+        query_string = str()
         if channel_name is not None:
-            channel_num = self._channel_table.query('channel_name == @channel_name')['channel_num'].values
-        elif global_channel_num is not None:
-            channel_num = self._channel_table.query('global_channel_num == @global_channel_num')['channel_num'].values
-            
+            query_string = 'channel_name == @channel_name'
+        elif global_channel_number is not None:
+            query_string = 'global_channel_number == @global_channel_number'
+        else:
+            raise ValueError('ERROR: channel name or number needs to be provided!')
+
+        # query
+        channel_number = self._channel_table.query(query_string)['channel_number'].values
+        
         # check length
-        if len(channel_num)>1:
-            raise ValueError('ERROR: Multiple channel numbers found for same name or global channel number')
-        elif len(channel_num)==1:
-            channel_num = channel_num[0]
+        if len(channel_number)>1:
+            raise ValueError('ERROR: Multiple channel numbers found!')
+        elif len(channel_number)==1:
+            channel_number = channel_number[0]
         else:
             raise ValueError('ERROR: No device found. Please check setup with info()!')
            
 
-        return channel_num
+        return channel_number
 
     
         
 
-    def get(self, param_name, channel_num=None, global_channel_num=None, channel_name=None):
+    def get(self, param_name, channel_number=None,
+            global_channel_number=None, channel_name=None):
         """
         Read parameter
         
@@ -262,7 +273,8 @@ class MACRTModule(InstrumentComm):
         """
 
         # get index paramter
-        idx = self._extract_param_index(param_name, channel_num, global_channel_num,channel_name)
+        idx = self._extract_param_index(param_name, channel_number,
+                                        global_channel_number, channel_name)
 
         # build command
         cmd = self._get_cmd.format(param_idx=idx)
@@ -281,7 +293,8 @@ class MACRTModule(InstrumentComm):
 
     
 
-    def set(self, param_name, param_val, channel_num=None, global_channel_num=None,
+    def set(self, param_name, param_val, channel_number=None,
+            global_channel_number=None,
             channel_name=None):
         
         """
@@ -295,7 +308,7 @@ class MACRTModule(InstrumentComm):
         ----------
 
         """
-
+        
         # check if parameter writable
         if not self._is_writable(param_name):
             print('WARNING: paramter "' + param_name + '" is not writable!')
@@ -303,9 +316,13 @@ class MACRTModule(InstrumentComm):
         
         
         # get index paramter
-        idx = self._extract_param_index(param_name, channel_num, global_channel_num, channel_name)
+        idx = self._extract_param_index(param_name, channel_number,
+                                        global_channel_number, channel_name)
 
+        
         # build command
+        if isinstance(param_val, str):
+            param_val = '"' + param_val + '"'
         cmd = self._set_cmd.format(param_idx=idx, value=param_val)
 
         if self._debug:
@@ -320,7 +337,8 @@ class MACRTModule(InstrumentComm):
 
         
 
-    def _extract_param_index(self, param_name, channel_num=None, global_channel_num=None,
+    def _extract_param_index(self, param_name, channel_number=None,
+                             global_channel_number=None,
                              channel_name=None):
         """
         Extract parameter index
@@ -329,18 +347,22 @@ class MACRTModule(InstrumentComm):
         
         # check if channel available
         if (self._channel_table is None and
-            (channel_name is not None or channel_num is not None)):
+            (channel_name is not None or channel_number is not None)):
             raise ValueError('ERROR: No channel available for the ' +
                              self._module_type + ' module!')
 
         
         # get channel number
-        if channel_name is not None or global_channel_num is not None:
-            channel_num = self.get_channel_num(channel_name=channel_name,
-                                               global_channel_num=global_channel_num)
-        elif channel_num is None:
+        if channel_name is not None or global_channel_number is not None:
+            channel_number = self.get_channel_number(channel_name=channel_name,
+                                                     global_channel_number=global_channel_number)
+        elif channel_number is None:
             raise ValueError('ERROR: A channel number needs to be provided!')
 
+
+        # module type MMR3 are labeled 1-3, convert to index 0-2
+        if  self._module_type=='MMR3':
+            channel_number -= 1
        
              
         # get property index
@@ -353,7 +375,7 @@ class MACRTModule(InstrumentComm):
                 param_idx += len(items[0])*channel_mult
                 continue
             else:
-                channel_mult = channel_num if items[1] else 0
+                channel_mult = channel_number if items[1] else 0
                 param_idx += channel_mult*len(items[0])
                 param_idx += idx[0]
                 is_valid = True
@@ -367,8 +389,8 @@ class MACRTModule(InstrumentComm):
 
         if self._debug:
             print('DEBUG: Parameter: ' + param_name)
-            if channel_num is not None:
-                print('DEBUG: Channel index: ' + str(channel_num))
+            if channel_number is not None:
+                print('DEBUG: Channel index: ' + str(channel_number))
             print('DEBUG: Command value: ' + str(param_idx))
             
 
