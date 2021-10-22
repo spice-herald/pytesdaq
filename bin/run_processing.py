@@ -210,8 +210,9 @@ if __name__ == "__main__":
             chan_to_trigger_list = chan_to_trigger.replace(" ", "").split(",")
             chan_to_trigger_list = [int(chan) for chan in chan_to_trigger_list]
         else:
+            chan_to_trigger_list_temp = chan_to_trigger.split(',')
             con_df = config.get_adc_connections()
-            adc_array = con_df.query('detector_channel == @chanlist')["adc_channel"].values
+            adc_array = con_df.query('detector_channel == @chan_to_trigger_list_temp')["adc_channel"].values
             if(len(adc_array)==0):
                 print("chan_to_trigger input does not match any channel names. Check input or config/setup file")
             chan_to_trigger_list = list(adc_array.astype(np.int))
