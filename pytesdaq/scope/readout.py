@@ -502,12 +502,20 @@ class Readout:
 
                 
             # Do analysis
-            self._selected_data_array, self._didv_data_dict = self._analyzer.process(
+            self._selected_data_array, self._didv_data_dict, nb_avg = self._analyzer.process(
                 selected_data_array,
                 self._adc_config
             )
-            
- 
+
+            # display running avg
+            if self._is_qt_ui:
+                if nb_avg>0:
+                    self._status_bar.showMessage('Running average: '
+                                                 + str(nb_avg)
+                                                 + ' events')
+                else:
+                    self._status_bar.showMessage('Running...')
+                
 
             # check if fit done
             resistance_type = self._analyzer.get_config('didv_measurement')

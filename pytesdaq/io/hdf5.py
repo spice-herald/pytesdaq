@@ -57,8 +57,38 @@ def extract_series_num(series_name):
     series_num = np.uint64(float(series_num))
 
     return series_num
-        
-        
+
+
+def extract_series_name(series_num):
+    """
+    Extract series name from series number
+
+    Format:
+    Series name:  Ix_Dyyyymmdd_Thhmmss
+    Series num: xyyyymmddhhmmss 
+  
+    Arguments:
+    ----------
+    series_num: int
+
+    Return:
+    
+    serie_num [np.uint64] 
+    (format xyyyymmddhhmmss)
+    """
+
+    series_num_str = str(series_num)
+    series_time = 'T' + series_num_str[-6:]
+    series_day = 'D' + series_num_str[-14:-6]
+    series_inst = 'I' + series_num_str[:-14]
+    series_name = series_inst + '_' +  series_day + '_' + series_time
+
+    return series_name
+    
+    
+    
+    
+       
 
 def extract_dump_num(file_name):
     """
