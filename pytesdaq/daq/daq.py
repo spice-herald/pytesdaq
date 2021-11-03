@@ -188,8 +188,8 @@ class DAQ:
             # run config
             run_config = dict()
             run_config['facility']= facility_num
-            run_config['comment'] = run_comment
-            run_config['run_purpose'] = run_purpose 
+            run_config['comment'] = '"' + run_comment + '"'
+            run_config['run_purpose'] = '"' + run_purpose  + '"'
             run_config['run_type'] = run_type
             prefix = data_path + '/'
             if data_prefix:
