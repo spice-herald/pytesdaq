@@ -201,7 +201,7 @@ class PolarisTask:
     def clear(self):
         return
 
-    def run(self,run_time=60, run_comment=str(), write_config=True, debug=False):
+    def run(self, run_time=60, run_comment=str(), write_config=True, debug=False):
         
         """
         Run Polaris

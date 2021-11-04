@@ -19,17 +19,19 @@ class DAQ:
            
       
         # run purpose dict 
-        self._run_purpose_dict = {1:'Test', 2:'LowBg', 3:'Calibration',4:'Noise',
-                                  100:'Rp',101:'Rn',102: 'IV Sweep', 103: 'dIdV Sweep'}
+        self._run_purpose_dict = {1:'Test', 2:'LowBg', 3:'Calibration', 4:'Noise',
+                                  100:'Rp',101:'Rn',102: 'IV', 103:'dIdV'}
         
       
         # Configuration
         self._config = settings.Config(setup_file=setup_file)
-                  
+      
 
         # instantiate driver 
         self._instantiate_driver()
 
+      
+        
           
             
     @property
@@ -157,8 +159,10 @@ class DAQ:
         
 
 
-    def run(self,run_time=60, run_type=1, run_comment='No comment', 
-            data_prefix='raw', data_path=None, write_config=True, debug=False):
+    def run(self, run_time=60, run_type=1, run_comment='No comment',
+            group_name='None', group_comment='No comment',
+            data_prefix='raw', data_path=None,
+            write_config=True, debug=False):
         
         success = False
 
@@ -167,9 +171,9 @@ class DAQ:
         if run_type in self._run_purpose_dict:
             run_purpose = self._run_purpose_dict[run_type]
         
-        # facilty
+        # facilty, fridge run
         facility_num = self._config.get_facility_num()
-        
+        fridge_run = self._config.get_fridge_run()
         
         # data path
         if data_path is None:
@@ -187,10 +191,14 @@ class DAQ:
 
             # run config
             run_config = dict()
-            run_config['facility']= facility_num
+            run_config['facility'] = facility_num
+            run_config['fridge_run'] = fridge_run
             run_config['comment'] = '"' + run_comment + '"'
-            run_config['run_purpose'] = '"' + run_purpose  + '"'
+            run_config['run_purpose'] = run_purpose
             run_config['run_type'] = run_type
+            run_config['group_name'] = group_name
+            run_config['group_comment'] = '"' + group_comment + '"'
+            
             prefix = data_path + '/'
             if data_prefix:
                 prefix =  prefix + data_prefix
@@ -211,7 +219,7 @@ class DAQ:
         return success
 
 
-    def read_single_event(self,data_array, do_clear_task=False):
+    def read_single_event(self, data_array, do_clear_task=False):
 
         # only for "pydaqmx"
         if not self._driver_name=='pydaqmx':

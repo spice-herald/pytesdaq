@@ -525,7 +525,8 @@ class H5Reader:
                     event_nums[ievent] = event_nums[ievent] + (file_name,)
                     if len(event_nums[ievent])>2:
                         raise ValueError('ERROR: Multiple files found for event number '
-                                         + str(event_num) + '! You may need to add "series_nums" argument!')
+                                         + str(event_num)
+                                         + '! You may need to add "series_nums" argument!')
                     
                     nb_events_tot += 1
                     
@@ -1149,7 +1150,7 @@ class H5Reader:
 
         # file matadata
         metadata_dict = self._extract_metadata(self._current_file.attrs)
-            
+      
     
         # group/dataset metadata
         metadata_dict['group_list'] = list()
@@ -1157,33 +1158,29 @@ class H5Reader:
         metadata_dict['groups'] = dict()
            
         # Loop groups
-        for key_name in list(self._current_file.keys()):
-            
+        for key, group in self._current_file.items():
+       
             # update list
-            metadata_dict['group_list'].append(key_name)
-            if key_name[0:3]=='adc':
-                metadata_dict['adc_list'].append(key_name)
-                    
-            # get group 
-            group = self._current_file[key_name]
-            
+            metadata_dict['group_list'].append(key)
+            if key[0:3]=='adc':
+                metadata_dict['adc_list'].append(key)
+                                
             # save metadata
-            metadata_dict['groups'][key_name] = dict()
-            metadata_dict['groups'][key_name] =  self._extract_metadata(group.attrs)
-
+            metadata_dict['groups'][key] = dict()
+            metadata_dict['groups'][key] =  self._extract_metadata(group.attrs)
+        
             # datasets
             dataset_list = list(group.keys())
-            metadata_dict['groups'][key_name]['dataset_list'] = dataset_list
-            metadata_dict['groups'][key_name]['nb_datasets'] = len(dataset_list)
+            metadata_dict['groups'][key]['dataset_list'] = dataset_list
+            metadata_dict['groups'][key]['nb_datasets'] = len(dataset_list)
                 
 
             if include_dataset_metadata and len(dataset_list)>0:
                     
                 # Loop datasets and add metadata
-                metadata_dict['groups'][key_name]['datasets'] = dict()
-                for dataset_key_name in list(group.keys()):
-                    dataset = group[dataset_key_name]
-                    metadata_dict['groups'][key_name]['datasets'][dataset_key_name] = self._extract_metadata(dataset.attrs)
+                metadata_dict['groups'][key]['datasets'] = dict()
+                for dataset_key, dataset in group.items():
+                    metadata_dict['groups'][key]['datasets'][dataset_key] = self._extract_metadata(dataset.attrs)
                     
 
                         
@@ -1199,13 +1196,15 @@ class H5Reader:
 
     def _extract_metadata(self, attributes):   
         metadata_dict = dict()
-        for key in attributes.keys():
-            value = attributes[key]
-            if isinstance(value,bytes):
+        for key,value in attributes.items():
+            if isinstance(value, bytes):
                 value = value.decode()
             elif isinstance(value, np.ndarray):
                 if value.dtype == np.object:
                     value = value.astype(str)
+                # a few particular cases
+                if key == 'run_purpose':
+                    value = ' '.join(list(value))                    
             metadata_dict[key] = value
         return metadata_dict
         
