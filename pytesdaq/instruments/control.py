@@ -932,7 +932,7 @@ class Control:
                                                 tes_channel=tes_channel,
                                                 detector_channel=detector_channel,
                                                 adc_id=adc_id, adc_channel=adc_channel)
-            
+          
         except:
             print('ERROR getting signal generator connection')
             
@@ -1119,15 +1119,17 @@ class Control:
                                                              adc_id=adc_id, adc_channel=adc_channel)
                 )
 
+                
                 if is_connected_to_tes and is_connected_to_feedback:
                     print('WARNING: Signal generator connected to both TES AND Feedback!')
                     
                 if is_connected_to_tes:
                     output_dict['source'] = 'tes'
-
-                if is_connected_to_feedback:
+                elif is_connected_to_feedback:
                     output_dict['source'] = 'feedback'
-
+                else:
+                    output_dict['source'] = 'none'
+            
             else:
                 # FIXME: default to tes if not FEB
                 output_dict['source'] = 'tes'
@@ -1498,7 +1500,7 @@ class Control:
             sig_gen_dict = self.get_signal_gen_params(signal_gen_num=1, tes_channel=tes_chan,
                                                       detector_channel=detector_chan, 
                                                       adc_id=adc_chan_id, adc_channel=adc_chan)
-
+          
             onoff = self.get_signal_gen_onoff(signal_gen_num=1, tes_channel=tes_chan,
                                               detector_channel=detector_chan, 
                                               adc_id=adc_chan_id, adc_channel=adc_chan)
@@ -1656,6 +1658,7 @@ class Control:
                         param_val = self._readout_inst.is_signal_generator_feedback_connected(
                             subrack, slot,controller_channel
                         )
+                    
 
                     elif param_name == 'signal_gen_tes_connection':
                         param_val = self._readout_inst.is_signal_generator_tes_connected(
