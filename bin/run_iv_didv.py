@@ -15,6 +15,8 @@ if __name__ == "__main__":
     parser.add_argument('--enable-didv',dest='enable_didv',action='store_true')
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
     parser.add_argument('--enable-rn',dest='enable_rn',action='store_true')
+    parser.add_argument('--comment', dest='comment',
+                        type = str, help = 'Comment (use quotes "")  [default: "No comment"]')
     parser.add_argument('--relock', dest='relock',action='store_true')
     parser.add_argument('--zero', '--zero_offset', dest='zero_offset',action='store_true')
     parser.add_argument('--snap', '--zap_tes', dest='zap_tes',action='store_true')
@@ -31,7 +33,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
+    comment = 'No comment'
+    if args.comment:
+        comment = args.comment
 
+    
     dummy_mode = False
     if args.dummy_mode:
         dummy_mode = True
@@ -130,6 +136,7 @@ if __name__ == "__main__":
                             iv=enable_iv, didv=enable_didv,
                             rp=enable_rp, rn=enable_rn,
                             temperature_sweep=enable_temperature_sweep,
+                            comment=comment,
                             do_relock=do_relock,
                             do_zero=do_zero,
                             do_zap=do_zap,
