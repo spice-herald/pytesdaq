@@ -23,9 +23,15 @@ if __name__ == "__main__":
     parser.add_argument('--run_time_sec', type = float,
                         help = 'Run time in seconds')
     parser.add_argument('--run_type', type = str,
-                        help = 'Run type [default: 1 = "Test"]')  
+                        help = 'Run type [default: 1 = "Test"]')
+    parser.add_argument('--group_prefix', type = str,
+                        help = 'Group prefix [Default depends of data type]')
+    parser.add_argument('--group_name', type = str,
+                        help = 'Group name (if exist already)')  
     parser.add_argument('--comment', '--run_comment', dest='comment',
                         type = str, help = 'Comment (use quotes "")  [default: "No comment"]')
+    parser.add_argument('--group_comment',
+                        type = str, help = 'Group comment (use quotes "")  [default: same as run_comment')
     parser.add_argument('--daq_driver',help='DAQ driver ("polaris","pydaqmx", "tektronix","midas") [default "polaris"]')
     parser.add_argument('--log_file', help='Log file name [default: no log file]')
     parser.add_argument('--verbose', action="store_true", help='Screen output')
@@ -58,6 +64,9 @@ if __name__ == "__main__":
     # hardcoded default
     run_time_seconds = 60
     comment = 'No comment'
+    group_comment = 'No comment'
+    group_name = None
+    group_prefix = None
     run_type = 1
     daq_driver = 'polaris'
     log_file = str()
@@ -102,6 +111,12 @@ if __name__ == "__main__":
         run_type = int(args.run_type)
     if args.comment:
         comment = args.comment
+    if args.group_comment:
+        group_comment = args.group_comment
+    else:
+        group_comment = comment
+    if args.group_prefix:
+        group_prefix = args.group_prefix
     if args.daq_driver:
         daq_driver = args.daq_driver
     if args.log_file:
@@ -112,11 +127,14 @@ if __name__ == "__main__":
         verbose = True
     if args.disable_control:
         disable_control = True
+    if args.group_name:
+        group_name = args.group_name
     
     # nb of runs
     nb_runs = int(round(duration/run_time_seconds))
     if nb_runs<1:
         nb_runs = 1
+
 
         
     
@@ -183,22 +201,29 @@ if __name__ == "__main__":
     data_path += '/raw'
     arg_utils.make_directories(data_path)
 
-    dir_prefix = 'continuous'  
-    if trigger_type[0]==2:
-        dir_prefix = 'exttrigger'
-    elif trigger_type[0]==4:
-        dir_prefix = 'threshtrigger'
-    elif trigger_type[0]==3:
-        dir_prefix = 'random'
-    now = datetime.now()
-    series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
-    series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
-    group_name = dir_prefix + '_I' + facility + '_D' + series_day + '_T' + series_time
-    data_path += '/' + group_name
-    arg_utils.make_directories(data_path)
 
-
-
+    if group_name is None:
+        if group_prefix is None:
+            group_prefix = 'continuous'  
+            if trigger_type[0]==2:
+                group_prefix = 'exttrigger'
+            elif trigger_type[0]==4:
+                group_prefix = 'threshtrigger'
+            elif trigger_type[0]==3:
+                group_prefix = 'random'
+                
+        now = datetime.now()
+        series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+        series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
+        group_name = group_prefix + '_I' + facility + '_D' + series_day + '_T' + series_time
+        data_path += '/' + group_name
+        arg_utils.make_directories(data_path)
+    else:
+        data_path += '/' + group_name
+        if not os.path.isdir(data_path):
+            print('ERROR: Group does not exist: ' + data_path)
+            exit(0)
+            
     print('INFO: Data taking group = ' + group_name)
     print('INFO: Directory = ' +  data_path)
     print('INFO: Number of runs = ' + str(nb_runs)
@@ -245,7 +270,7 @@ if __name__ == "__main__":
                             run_type=run_type,
                             run_comment=comment,
                             group_name= group_name,
-                            group_comment=comment,
+                            group_comment=group_comment,
                             data_prefix=data_prefix,
                             data_path=data_path)
         if not success:
