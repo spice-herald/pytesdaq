@@ -16,11 +16,22 @@ if __name__ == "__main__":
     # ========================
     parser = argparse.ArgumentParser(description="Launch DAQ")
 
-    parser.add_argument('--run_time', type = str, help = 'Run time in minutes [default = 1 min]')
-    parser.add_argument('--run_type', type = str, help = 'Run type [default: 1 = "Test"]')
-    parser.add_argument('--run_comment', type = str, help = 'Run comment (use quotes "")  [default: "No comment"]')
-    parser.add_argument('--total_duration', '--duration', dest='duration', type = str,
-                        help = 'Total duration of data taking in hours (nb runs = duration/run time)  [default = run time]')
+    parser.add_argument('--total_duration', '--duration', dest='duration', type=float,
+                        help = 'Total duration of data taking in hours [default same as run time]')
+    parser.add_argument('--run_time','--run_time_min', dest='run_time_min', type = float,
+                        help = 'Run time in minutes')
+    parser.add_argument('--run_time_sec', type = float,
+                        help = 'Run time in seconds')
+    parser.add_argument('--run_type', type = str,
+                        help = 'Run type [default: 1 = "Test"]')
+    parser.add_argument('--group_prefix', type = str,
+                        help = 'Group prefix [Default depends of data type]')
+    parser.add_argument('--group_name', type = str,
+                        help = 'Group name (if exist already)')  
+    parser.add_argument('--comment', '--run_comment', dest='comment',
+                        type = str, help = 'Comment (use quotes "")  [default: "No comment"]')
+    parser.add_argument('--group_comment',
+                        type = str, help = 'Group comment (use quotes "")  [default: same as run_comment')
     parser.add_argument('--daq_driver',help='DAQ driver ("polaris","pydaqmx", "tektronix","midas") [default "polaris"]')
     parser.add_argument('--log_file', help='Log file name [default: no log file]')
     parser.add_argument('--verbose', action="store_true", help='Screen output')
@@ -35,8 +46,8 @@ if __name__ == "__main__":
     parser.add_argument('--voltage_min',help='Minimum ADC voltage [default from configuration setup file] ')
     parser.add_argument('--voltage_max',help='Maximum ADC voltage [default from configuration setup file] ')
     parser.add_argument('--adc_channels', '--channels', dest='adc_channels', type = str,
-                        help='ADC channels number/index (same all devices!), format="a,b,c-d" [default from configuration setup file] ')
-    parser.add_argument('--devices', help='ADC Devices number. Format="a,b,c-d" [default from configuration setup file] ')
+                        help='ADC channels number/index, format="a,b,c-d" [default from setup file] ')
+    parser.add_argument('--adc_devices', help='ADC Devices number, format="a,b,c-d" [default from setup file] ')
     parser.add_argument('--disable-lock', dest="disable_lock",action="store_true",help='Disable daq process lock')
     parser.add_argument('--disable-control', dest="disable_control", action="store_true",
                         help='Disable instrument control. Require "detector_config" field in setup.ini!')
@@ -52,7 +63,10 @@ if __name__ == "__main__":
     
     # hardcoded default
     run_time_seconds = 60
-    run_comment = 'No comment'
+    comment = 'No comment'
+    group_comment = 'No comment'
+    group_name = None
+    group_prefix = None
     run_type = 1
     daq_driver = 'polaris'
     log_file = str()
@@ -79,17 +93,30 @@ if __name__ == "__main__":
     for adc_name in adc_list:
         adc_config[adc_name] =  config.get_adc_setup(adc_name)
 
-
+   
     # ------------------
     # Parse arguments 
     # ------------------
-
-    if args.run_time:
-        run_time_seconds = float(args.run_time)*60
+            
+    if args.run_time_min:
+        run_time_seconds = float(args.run_time_min)*60
+    elif args.run_time_sec:
+        run_time_seconds = float(args.run_time_sec)
+    if args.duration:
+        duration = float(args.duration)*60*60
+    else:
+        duration = run_time_seconds
+        
     if args.run_type:
         run_type = int(args.run_type)
-    if args.run_comment:
-        run_comment = args.run_comment
+    if args.comment:
+        comment = args.comment
+    if args.group_comment:
+        group_comment = args.group_comment
+    else:
+        group_comment = comment
+    if args.group_prefix:
+        group_prefix = args.group_prefix
     if args.daq_driver:
         daq_driver = args.daq_driver
     if args.log_file:
@@ -100,22 +127,19 @@ if __name__ == "__main__":
         verbose = True
     if args.disable_control:
         disable_control = True
+    if args.group_name:
+        group_name = args.group_name
     
     # nb of runs
-    nb_runs = 1
-    if args.duration:
-        duration_seconds =  float(args.duration)*60*60
-        if duration_seconds>0:
-            nb_runs = int(round(duration_seconds/run_time_seconds))
+    nb_runs = int(round(duration/run_time_seconds))
+    if nb_runs<1:
+        nb_runs = 1
 
-    if nb_runs>1:
-        print('INFO: Data taking: Number of runs = ' + str(nb_runs)
-              + ' (' + str(int(duration_seconds)) + ' seconds each). Total duration = '
-              + str(args.duration) + ' hours!')
 
+        
     
     # ADC configuration
-    if args.devices:
+    if args.adc_devices:
         adc_list = list()
         adc_config = dict()
         adc_num_list =  arg_utils.hyphen_range(args.devices)
@@ -167,26 +191,46 @@ if __name__ == "__main__":
 
     # ========================
     # Data path
-    # ======================== 
+    # ========================
+    facility = str(config.get_facility_num())
     data_path = config.get_data_path()
-    fridge_run = 'run' + str(config.get_fridge_run())
+    fridge_run  = 'run' + str(config.get_fridge_run())
     if data_path.find(fridge_run)==-1:
         data_path += '/' + fridge_run
     arg_utils.make_directories(data_path)
     data_path += '/raw'
     arg_utils.make_directories(data_path)
 
-    dir_prefix = 'continuous'  
-    if trigger_type[0]==2 or trigger_type[0]==4:
-        dir_prefix = 'trigger'
-    elif trigger_type[0]==3:
-        dir_prefix = 'random'
-    now = datetime.now()
-    series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
-    series_time = now.strftime('%H') + now.strftime('%M')
-    data_path += '/' + dir_prefix + '_' + series_day + '_' + series_time
-    arg_utils.make_directories(data_path)
- 
+
+    if group_name is None:
+        if group_prefix is None:
+            group_prefix = 'continuous'  
+            if trigger_type[0]==2:
+                group_prefix = 'exttrigger'
+            elif trigger_type[0]==4:
+                group_prefix = 'threshtrigger'
+            elif trigger_type[0]==3:
+                group_prefix = 'random'
+                
+        now = datetime.now()
+        series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+        series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
+        group_name = group_prefix + '_I' + facility + '_D' + series_day + '_T' + series_time
+        data_path += '/' + group_name
+        arg_utils.make_directories(data_path)
+    else:
+        data_path += '/' + group_name
+        if not os.path.isdir(data_path):
+            print('ERROR: Group does not exist: ' + data_path)
+            exit(0)
+            
+    print('INFO: Data taking group = ' + group_name)
+    print('INFO: Directory = ' +  data_path)
+    print('INFO: Number of runs = ' + str(nb_runs)
+          + ' (' + str(int(run_time_seconds)) + ' seconds each)')
+    
+
+    
     # ========================
     # Data prefix
     # ========================
@@ -224,7 +268,9 @@ if __name__ == "__main__":
     for irun in range(nb_runs):
         success = mydaq.run(run_time=run_time_seconds,
                             run_type=run_type,
-                            run_comment=run_comment,
+                            run_comment=comment,
+                            group_name= group_name,
+                            group_comment=group_comment,
                             data_prefix=data_prefix,
                             data_path=data_path)
         if not success:

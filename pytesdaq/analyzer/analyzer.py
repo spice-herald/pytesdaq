@@ -126,7 +126,7 @@ class Analyzer:
                 if (self._analysis_config['enable_pileup_rejection']
                     and self._cut_buffer is not None):
                     pileup_mask = self._calc_pileup_mask()
-                
+                               
                 # get running average
                 data_array = self._calc_running_avg(pileup_mask)
                         
@@ -146,19 +146,12 @@ class Analyzer:
             # check if prior results available
             #if self._didv_fit_results is not None:
             #    didv_data_dict['prior_results'] = self._didv_fit_results
-
-            # convert to amps
-            norm_amps = 1
-            if self._analysis_config['unit']!='uAmps':
-                norm_amps = 1e6
-            elif self._analysis_config['unit']!='pAmps':
-                norm_amps = 1e12
-                
-            data_buffer = self._data_buffer/norm_amps
-            data_buffer = np.moveaxis(self._data_buffer,2,0)
-            data_array, didv_data_dict = self.fit_didv(data_buffer, 
-                                                       sample_rate=adc_config['sample_rate'],
-                                                       mask=pileup_mask)
+           
+            data_array, didv_data_dict = self.fit_didv( 
+                sample_rate=adc_config['sample_rate'],
+                mask=pileup_mask,
+                unit=self._analysis_config['unit']
+            )
             
             
             # save results
@@ -173,7 +166,7 @@ class Analyzer:
             data_array = np.sqrt(data_array)
         
             
-        return data_array, didv_data_dict
+        return data_array, didv_data_dict, self._nb_events_running_avg
     
 
 
@@ -280,8 +273,8 @@ class Analyzer:
 
     
             
-    def fit_didv(self, data_array, sample_rate, unit=None,
-                 mask=None, fit_config=None):
+    def fit_didv(self, data_array=None, sample_rate=None, unit='Amps',
+                 mask=None, fit_config=None, add_autocuts=True):
         
         """
         dIdV fit:  1 pole (SC, Normal TES) or 2/3 poles (TES in transition)
@@ -342,6 +335,12 @@ class Analyzer:
 
         """
 
+
+        # use internal buffer if needed
+        if data_array is None:
+            data_array = np.moveaxis(self._data_buffer,2,0)
+
+        
         # check array
         if data_array.ndim != 2 and data_array.ndim != 3:
             raise ValueError('Fit dIdV: Expecting 3D data darray!')
@@ -355,10 +354,6 @@ class Analyzer:
         elif unit=='pAmps':
             norm = 1e12
                 
-        data_array = data_array/norm
-
-
-
         
         # number of channels
         nb_channels = 1
@@ -367,7 +362,7 @@ class Analyzer:
             
 
         # check configuration configuration
-        analysis_config = self._analysis_config
+        analysis_config = self._analysis_config.copy()
         if fit_config is not None:
             for key,val in fit_config.items():
                 analysis_config[key] = val
@@ -399,8 +394,6 @@ class Analyzer:
                                  + ' of channels!')
         
             
-
-                
                    
         # initialize
         data_array_truncated = []
@@ -413,16 +406,16 @@ class Analyzer:
         for ichan in range(0, nb_channels):
 
             # channel traces
-            traces = data_array
+            traces = data_array/norm
             if data_array.ndim == 3:
-                traces = data_array[:,ichan,:]
+                traces = data_array[:,ichan,:]/norm
 
 
             # apply cut if provided
             if mask is not None:
                 cut = mask[ichan,:]
                 traces = traces[cut,:]
-        
+                
             # channel parameters
             dutycycle = 0.5
             do_fit_1pole = analysis_config['didv_1pole'][ichan]
@@ -436,16 +429,24 @@ class Analyzer:
             dt = analysis_config['dt'][ichan]
             add180phase=analysis_config['add_180phase'][ichan]
 
+            if add_autocuts:
+                cut = qp.autocuts(
+                    traces,
+                    fs=sample_rate,
+                    is_didv=True,
+                    sgfreq=sg_freq,
+                )
+                traces = traces[cut]
 
-            
+
             # instantiate DIDV
             didv_inst = qp.DIDV(traces,
                                 sample_rate,
                                 sg_freq,
                                 sg_current,
                                 rshunt,
-                                r0,
-                                rp,
+                                r0=r0,
+                                rp=rp,
                                 dutycycle=dutycycle,
                                 add180phase=add180phase,
                                 dt0=dt)

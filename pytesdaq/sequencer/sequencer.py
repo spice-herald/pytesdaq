@@ -17,6 +17,7 @@ class Sequencer:
 
      def __init__(self, measurement_name,
                   measurement_list=None,
+                  comment='No comment',
                   detector_channels=None,
                   tc_channels=None,
                   sequencer_file=None, setup_file=None,
@@ -36,13 +37,16 @@ class Sequencer:
           # initialize some parameters
           # can be overwritten by config and class property
           self._verbose = verbose
+          self._comment = comment
           self._online_analysis = False
           self._enable_redis = False
           self._daq_driver = 'polaris'
           self._dummy_mode = dummy_mode
           self._facility = 1
           self._save_raw_data = True
-
+          self._group_name = 'None'
+          self._fridge_run = None
+          
 
           # default data path
           self._base_raw_data_path = './'
@@ -148,9 +152,10 @@ class Sequencer:
           data_path = self._config.get_data_path()
           
           # append run#
-          fridge_run = 'run' + str(self._config.get_fridge_run())
-          if data_path.find(fridge_run)==-1:
-               data_path += '/' + fridge_run
+          self._fridge_run = self._config.get_fridge_run()
+          fridge_run_name = 'run' + str(self._fridge_run)
+          if data_path.find(fridge_run_name)==-1:
+               data_path += '/' + fridge_run_name
           self._base_raw_data_path =  data_path + '/raw'
           self._base_automation_data_path  =  data_path + '/automation'
           arg_utils.make_directories([data_path, self._base_raw_data_path,
@@ -360,23 +365,22 @@ class Sequencer:
                         
           # date/time
           now = datetime.now()
-          series = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
-          series += '_' +  now.strftime('%H') + now.strftime('%M') 
-          if base_name is not None:
-               base_name = base_name + '_' + series
-          else:
-               base_name = series
-
-               
+          series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+          series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
+          series = 'I' + str(self._facility) + '_D' + series_day + '_T' + series_time
+          if base_name is None:
+               base_name = 'measurement'
+          self._group_name = base_name + '_' + series
+                        
           # raw data
-          self._raw_data_path = self._base_raw_data_path  + '/' + base_name
+          self._raw_data_path = self._base_raw_data_path  + '/' + self._group_name 
           if self._save_raw_data and self._detector_channels is not None:
                arg_utils.make_directories(self._raw_data_path)
                              
           # tc data
-          self._automation_data_path = self._base_automation_data_path + '/' + base_name
+          self._automation_data_path = self._base_automation_data_path + '/' + self._group_name 
           if self._tc_channels is not None:
-               arg_utils.make_directories(self._automation_data_path + '/' + base_name)
+               arg_utils.make_directories(self._automation_data_path + '/' + self._group_name )
             
 
           # update automation data

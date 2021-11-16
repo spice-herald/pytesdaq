@@ -9,8 +9,10 @@ import pprint as pprint
 
 class IV_dIdV(Sequencer):
     
-    def __init__(self, iv =False, didv =False, rp=False, rn=False, 
-                 temperature_sweep=False, detector_channels=None,
+    def __init__(self, iv =False, didv =False, rp=False, rn=False,
+                 temperature_sweep=False,
+                 comment='No comment',
+                 detector_channels=None,
                  sequencer_file=None, setup_file=None, sequencer_pickle_file=None,
                  dummy_mode=False,
                  do_relock=False, do_zero=False, do_zap=False,
@@ -41,6 +43,7 @@ class IV_dIdV(Sequencer):
         # base class for sequencer/automation
         super().__init__('iv_didv',
                          measurement_list=measurement_list,
+                         comment=comment,
                          detector_channels=detector_channels,
                          sequencer_file=sequencer_file,
                          setup_file=setup_file,
@@ -172,8 +175,6 @@ class IV_dIdV(Sequencer):
                             
             
         for istep in range(nb_temperature_steps):
-
-
             
             # change temperature
             temperature = None
@@ -395,6 +396,8 @@ class IV_dIdV(Sequencer):
                     success = self._daq.run(run_time=int(iv_config['run_time']),
                                             run_type=102,
                                             run_comment=run_comment,
+                                            group_name=self._group_name,
+                                            group_comment=self._comment,
                                             data_path=self._raw_data_path,
                                             data_prefix='iv')
 
@@ -474,6 +477,8 @@ class IV_dIdV(Sequencer):
                             success = self._daq.run(run_time=int(didv_config['run_time']),
                                                     run_type=103,
                                                     run_comment=run_comment,
+                                                    group_name=self._group_name,
+                                                    group_comment=self._comment,
                                                     data_path=self._raw_data_path,
                                                     data_prefix='didv')
                            
@@ -514,8 +519,12 @@ class IV_dIdV(Sequencer):
 
 
                         print('INFO: Starting dIdV data takibg with TES bias = ' + str(bias) + 'uA!')
-                        success = self._daq.run(run_time=int(didv_config['run_time']), run_type=103,
-                                                run_comment=run_comment, data_path=self._raw_data_path,
+                        success = self._daq.run(run_time=int(didv_config['run_time']),
+                                                run_type=103,
+                                                run_comment=run_comment,
+                                                group_name=self._group_name,
+                                                group_comment=self._comment,
+                                                data_path=self._raw_data_path,
                                                 data_prefix='didv')
 
                         if not success:
@@ -651,8 +660,12 @@ class IV_dIdV(Sequencer):
                  
 
                     # take data
-                    success = self._daq.run(run_time=int(config_dict['run_time']), run_type=run_type,
-                                            run_comment=run_comment, data_path=self._raw_data_path,
+                    success = self._daq.run(run_time=int(config_dict['run_time']),
+                                            run_type=run_type,
+                                            run_comment=run_comment,
+                                            group_name=self._group_name,
+                                            group_comment=self._comment,
+                                            data_path=self._raw_data_path,
                                             data_prefix=measurement.lower())
                     if not success:
                         print('ERROR taking data! Stopping sequencer')
@@ -685,6 +698,8 @@ class IV_dIdV(Sequencer):
                 success = self._daq.run(run_time=int(config_dict['run_time']),
                                         run_type=run_type,
                                         run_comment=run_comment,
+                                        group_name=self._group_name,
+                                        group_comment=self._comment,
                                         data_path=self._raw_data_path,
                                         data_prefix=measurement.lower())
                 
