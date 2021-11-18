@@ -1,7 +1,7 @@
 import os
 import sys
 import stat
-
+import re
 
 def build_range_str(data_list):
     """ 
@@ -35,8 +35,9 @@ def hyphen_range(data_str):
 
     for x in data_str.split('_'):
         t=x.split('-')
-        if len(t) not in [1,2]: raise SyntaxError("hash_range is given its arguement as "+data_str.replace('_',',')+
-                                                  " which seems not correctly formated!")
+        if len(t) not in [1,2]: raise SyntaxError('hash_range is given its arguement as '
+                                                  + data_str.replace('_',',')
+                                                  + ' which seems not correctly formated!')
         r.add(int(t[0])) if len(t)==1 else r.update(set(range(int(t[0]),int(t[1])+1)))
         data_list=list(r)
 
@@ -65,3 +66,25 @@ def make_directories(directories):
                                  + dir_name + '"!\n')
               
           
+
+def extract_list(arg_list):
+    """
+    Extract input list,
+    separations are comma and space
+    """
+
+    # check if list
+    if not isinstance(arg_list, list):
+        arg_list = [arg_list]
+
+    output_list = list()
+    for item in arg_list:
+        item_list = re.split('\s|,|;', item.strip())
+        for item_split in item_list:
+            if item_split:
+                output_list.append(item_split)
+                
+    return output_list
+        
+    
+    

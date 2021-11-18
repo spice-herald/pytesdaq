@@ -17,6 +17,7 @@ class SeriesGroup:
 
 
         # initialize group info
+        self._is_data_filled = False
         self._nb_series = 0
         self._nb_events = 0
         self._group_comment = None
@@ -28,6 +29,7 @@ class SeriesGroup:
         self._fridge_run = None
         self._timestamp = None
         self._series_info = dict()
+
         
     @property
     def group_name(self):
@@ -89,23 +91,29 @@ class SeriesGroup:
         info: dictionary
 
         """
+
+        # check if information extracted from file
+        if not self._is_data_filled:
+            self.fill_info_from_disk()
+
+        
         group_info_dict = dict()
-        group_info_dict['Group name'] = self._group_name
-        group_info_dict['Facility'] = self._facility
-        group_info_dict['Fridge run'] = self._fridge_run
-        group_info_dict['Nb series'] = self._nb_series
-        group_info_dict['Nb events'] = self._nb_events
-        group_info_dict['Duration (min)'] = self._duration
+        group_info_dict['group_name'] = self._group_name
+        group_info_dict['facility'] = self._facility
+        group_info_dict['fridge_run'] = self._fridge_run
+        group_info_dict['nb_series'] = self._nb_series
+        group_info_dict['nb events'] = self._nb_events
+        group_info_dict['duration_min'] = self._duration
         devices = ', '.join(self._devices)
-        group_info_dict['Devices'] =  devices
+        group_info_dict['devices'] =  devices
         data_types = ', '.join(str(item) for item in self._data_types)
-        group_info_dict['Data types'] =  data_types
+        group_info_dict['data_types'] =  data_types
         data_purposes = ', '.join(self._data_purposes)
-        group_info_dict['Data purposes'] =  data_purposes
+        group_info_dict['data_purposes'] =  data_purposes
         comment = 'None'
         if self._group_comment is not None:
             comment = self._group_comment
-            group_info_dict['Group comment'] = comment
+            group_info_dict['group_comment'] = comment
 
         group_info_dict['Timestamp'] = self._timestamp
             
@@ -113,9 +121,9 @@ class SeriesGroup:
         if include_series_info:
             for series in self._series_info.values():
                  series_info_dict[series.series_name] = series.get_general_info()
-                 series_info_dict[series.series_name]['ADC config'] = series.get_adc_info()
-                 series_info_dict[series.series_name]['Detector config'] = series.get_detector_info()
-         
+                 series_info_dict[series.series_name]['ADC_config'] = series.get_adc_info()
+                 series_info_dict[series.series_name]['detector_config'] = series.get_detector_info()
+                 series_info_dict[series.series_name]['connection_table'] = series.connection_table
             
         return group_info_dict, series_info_dict
     
@@ -124,7 +132,8 @@ class SeriesGroup:
         """
         Display group info
         """
-             
+
+        
         # get dictionaries
         group_info, series_info = self.get_group_info(
             include_series_info=include_series_info)
@@ -214,7 +223,7 @@ class SeriesGroup:
 
                 
         self._duration = round(self._duration*100)/100
-        
+        self._is_data_filled = True
 
 
 class Series:
@@ -258,7 +267,8 @@ class Series:
         self._adc_info = None
         self._detector_info = None
                 
-
+        # pandas chanel map
+        self._connection_table = None
     
     @property
     def series_name(self):
@@ -328,26 +338,28 @@ class Series:
     @property
     def last_event_timestamp(self):
         return self._last_event_timestamp
-        
-        
+
+    @property
+    def connection_table(self):
+        return self._connection_table
 
     def get_general_info(self):
         """
         Get Series info
         """
         info_dict = dict()
-        info_dict['Group name'] = str(self._group_name)
-        info_dict['Group comment'] = str(self._group_comment)
-        info_dict['Facility'] = self._facility
-        info_dict['Fridge run'] = self._fridge_run
-        info_dict['Devices'] = ', '.join(self._devices)
-        info_dict['Comment'] = str(self._comment)
-        info_dict['Nb of dumps'] = self._nb_dumps
-        info_dict['Nb of events'] = self._nb_events
-        info_dict['Data type'] = self._data_type
-        info_dict['Data purpose'] = self._data_purpose
-        info_dict['Duration [min]'] = self._duration
-        info_dict['Timestamp'] = self._first_event_timestamp
+        info_dict['group_name'] = str(self._group_name)
+        info_dict['group_comment'] = str(self._group_comment)
+        info_dict['facility'] = self._facility
+        info_dict['fridge_run'] = self._fridge_run
+        info_dict['devices'] = ', '.join(self._devices)
+        info_dict['comment'] = str(self._comment)
+        info_dict['nb_dumps'] = self._nb_dumps
+        info_dict['nb_events'] = self._nb_events
+        info_dict['data_type'] = self._data_type
+        info_dict['data_purpose'] = self._data_purpose
+        info_dict['duration_min'] = self._duration
+        info_dict['timestamp'] = self._first_event_timestamp
         return info_dict
 
         
@@ -441,6 +453,10 @@ class Series:
         if self._comment is None and 'comment' in metadata:
             self._comment = metadata['comment']
 
+
+        if self._connection_table is None:
+            self._connection_table = hdf5.get_connection_table(metadata=metadata)
+            
             
         # ADC/Detector info 
         for adc_id in metadata['adc_list']:
@@ -454,9 +470,12 @@ class Series:
             if self._adc_info is not None and self._detector_info is not None:
                 break
             
-            # connection dictionary
+            # connection dictionary and table
             connections = hdf5.get_connection_dict(adc_name=adc_id,
                                                    metadata=metadata)
+
+
+            
             adc_map = dict()
             for ichan, chan in enumerate(connections['adc_chans']):
                 adc_map[chan] = connections['detector_chans'][ichan]
