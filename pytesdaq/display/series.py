@@ -102,7 +102,7 @@ class SeriesGroup:
         group_info_dict['facility'] = self._facility
         group_info_dict['fridge_run'] = self._fridge_run
         group_info_dict['nb_series'] = self._nb_series
-        group_info_dict['nb events'] = self._nb_events
+        group_info_dict['nb_events'] = self._nb_events
         group_info_dict['duration'] = self._duration
         devices = ', '.join(self._devices)
         group_info_dict['devices'] =  devices
