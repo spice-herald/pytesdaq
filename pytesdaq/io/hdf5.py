@@ -1035,11 +1035,13 @@ class H5Reader:
 
     
 
-    def get_connection_table(self, file_name=None):
+    def get_connection_table(self, file_name=None, metadata=None):
         """
         Get connection table
         """
-        metadata = self.get_metadata(file_name=file_name)
+        
+        if metadata is None:
+            metadata = self.get_metadata(file_name=file_name)
         
         # check adc list exist 
         if 'adc_list' not in metadata:
