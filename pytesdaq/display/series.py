@@ -348,6 +348,8 @@ class Series:
         Get Series info
         """
         info_dict = dict()
+        info_dict['series_name'] = str(self._series_name)
+        info_dict['series_num'] = self._series_num
         info_dict['group_name'] = str(self._group_name)
         info_dict['group_comment'] = str(self._group_comment)
         info_dict['facility'] = self._facility

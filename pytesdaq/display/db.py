@@ -132,7 +132,7 @@ class MySQLCore:
         insert_cmd =  insert_cmd[0:len(insert_cmd)-1]
         insert_cmd += ');'
 
-        print(insert_cmd)
+        #print(insert_cmd)
 
         # insert database
         cursor = self._cnx.cursor()
