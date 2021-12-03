@@ -87,4 +87,3 @@ def extract_list(arg_list):
     return output_list
         
     
-    

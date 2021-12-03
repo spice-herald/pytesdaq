@@ -2,46 +2,36 @@ import argparse
 import numpy as np
 import os
 from math import log10, floor
-import datetime
+from datetime import datetime
 from glob import glob
 import stat
 import pickle
 import qetpy as qp
 import rqpy as rq
 import pytesdaq.io.hdf5 as h5io
+from pytesdaq.utils import arg_utils
 
 class ContinuousData:
     
-    def __init__(self, file_list,
-                 nb_events_randoms=500,
-                 nb_events_trigger=-1,
+    def __init__(self, input_data_path, input_series=None,
+                 output_group_prefix=None, 
+                 output_group_comment=None,
+                 output_base_path=None,
+                 output_group_name=None,
+                 trigger_channels='all',
                  trace_length_ms=None,
                  pretrigger_length_ms=None,
                  nb_samples=None,
                  nb_samples_pretrigger=None,
-                 chan_to_trigger='all',
-                 threshold=10,
-                 series_name = None,
-                 data_path = '/sdata/raw',
-                 negative_pulse = True,
-                 save_filter=False,
-                 pileup_window=0,
-                 coincident_window=50e-6):
+                 negative_pulse=False,
+                 filter_file=None):
         
         
         # file list
-        self._file_list = file_list
+        self._file_list = self._get_file_list(input_data_path,
+                                              series=input_series)
 
-        # path
-        self._data_path = data_path
-
-        # series name/num
-        self._series_name = series_name
-            
-        # number of  events
-        self._nb_events_randoms = nb_events_randoms
-        self._nb_events_trigger = nb_events_trigger
-     
+        
         # negative pulse
         self._is_negative_pulse = negative_pulse
             
@@ -53,24 +43,47 @@ class ContinuousData:
         # instanciate data reader
         self._h5reader = h5io.H5Reader()
 
+        # and get some metadata informations
+        metadata = self._h5reader.get_metadata(file_name=self._file_list[0])
+        self._facility = metadata['facility']
+        if output_group_comment is not None:
+            self._group_comment =  output_group_comment
+        elif 'group_comment' in metadata:
+            self._group_comment = 'Group extracted from continuous data:  ' + metadata['group_comment']
+        self._connection_table = self._h5reader.get_connection_table(metadata=metadata)
 
-        # Instantiate data writer
-        self._h5writer = h5io.H5Writer()
-        self._h5writer.initialize(series_name=self._series_name,
-                                  data_path=self._data_path)
+        
+        # create output directory
+        self._output_path = None
+              
+        if output_base_path is None:
+            input_path = Path(input_path)
+            output_base_path = str(input_path.parent)
 
+        if output_group_name is not None:
+            self._output_path = output_base_path + '/' + output_group_name
+            if not os.path.isdir(self._output_path):
+                raise ValueError('ERROR: Directory "'
+                                 + self._output_path
+                                 + '" not found!')
+        else:
+            self._output_path = self._create_output_dir(output_base_path,
+                                                        output_group_prefix)
+            
+    
 
         # get sample rate and number of continuous samples
-        rate, samples  = self._get_adc_config()
-        if rate is None:
+        self._adc_config  = self._get_adc_config()
+        if 'sample_rate' not in self._adc_config:
             raise ValueError('ERROR: Unable to find sample rate from metadata')
+        else:
+            self._sample_rate  = float(self._adc_config['sample_rate'])
         
-        if samples is None:
+        if 'nb_samples' not in self._adc_config:
             raise ValueError('ERROR: Unable to find number samples from metadata')
-
-        self._sample_rate  = rate
-        self._nb_samples_continuous  = samples
-
+        else:
+            self._nb_samples_continuous =  int(self._adc_config['nb_samples'])
+            
 
         # trace length triggered data
         if nb_samples is not None:
@@ -87,33 +100,31 @@ class ContinuousData:
         else:
             self._nb_samples_pretrigger = int(floor(self._nb_samples/2))
 
-              
-        
-        # set metadata
-        self._set_metadata()
-
-
-        # channels to trigger on (same implementation as RQpy)
-        self._chan = chan_to_trigger
-        
-        
-        # threshold
-        self._threshold = threshold
+            
+        # channels to trigger on 
+        self._chan = self._extract_adc_channels(trigger_channels)
+        self._chan_array_ind = self._convert_adc_to_index(self._chan)
+        if not isinstance(self._chan_array_ind, list):
+            self._chan_array_ind = [self._chan_array_ind]
+        self._nb_chan_to_trig = len(self._chan_array_ind)
         
         
-        # noise calculation
-        self._randoms_buffer = None
-        self._noise_psd = None
-
         # filter file
-        self._filter_dict = dict()
-        self._save_filter = save_filter
-        self._filter_file_name = self._data_path + '/' + self._series_name  + '_filter.pickle'
+        self._filter_dict = None
+        if filter_file is None:
+            self._filter_dict = dict()
+            self._filter_dict['adc_chan_to_trig'] = self._chan
+            series_name = self._create_series_name()
+            self._filter_file_name = self._output_path + '/' + series_name  + '_filter.pickle'
+        else:
+            with open(filter_file, 'rb') as f:
+                self._filter_dict = pickle.load(f)
+                if self._filter_dict['adc_chan_to_trig'] != self._chan:
+                    raise ValueError('ERROR: "adc_chan_to_trig" in filter file ' +
+                                     'is different than input channels or ' +
+                                     'does not exist!')
+                    
         
-        # pileup and coincidence windows
-        self._pileup_window = pileup_window
-        self._coincident_window = coincident_window
-
     def create_template(self, rise_time, fall_time):
         """
         Create template
@@ -123,9 +134,21 @@ class ContinuousData:
         
         if self._nb_samples is None or self._nb_samples_pretrigger is None:
             raise ValueError('ERROR: No trace length  available!')
+
+
+        if not isinstance(rise_time, list):
+            rise_time = [rise_time]
+        if not isinstance(fall_time, list):
+            fall_time = [fall_time]
         
+        if self._nb_chan_to_trig>1:
+            if len(rise_time)==1:
+                rise_time *= self._nb_chan_to_trig
+            if len(fall_time)==1:
+                fall_time *= self._nb_chan_to_trig
         
-        trace_time = 1.0/self._sample_rate *(np.arange(1,self._nb_samples+1)-self._nb_samples_pretrigger)
+        trace_time = 1.0/self._sample_rate *(np.arange(1,self._nb_samples+1)
+                                             -self._nb_samples_pretrigger)
         lgc_b0 = trace_time < 0.0
 
         self._template = []
@@ -136,18 +159,33 @@ class ContinuousData:
             self._template.append(template)
 
         self._filter_dict['template'] = self._template
-
+              
         
         
-    def acquire_randoms(self, save_psd=False, verbose=True):
+    def acquire_randoms(self, nb_events=500, verbose=True):
         """
         Function for acquiring random traces from continuous data
         """
         
         if verbose:
+            print('')
             print('INFO: Checking continuous data files')
 
-            
+
+        # Instantiate data writer
+        series_name = self._create_series_name()
+        h5writer = h5io.H5Writer()
+        h5writer.initialize(series_name=series_name,
+                            data_path=self._output_path)
+        
+
+        # write overall metadata
+        output_metadata = self._fill_metadata()
+        h5writer.set_metadata(file_metadata=output_metadata['file_metadata'],
+                              detector_config=output_metadata['detector_config'],
+                              adc_config=output_metadata['adc_config'])
+
+        
         # get number of possible randoms in each continuous data file
         # then store dictionary {file_index: chunk_index} in a list, which
         # will be randomly shuffled
@@ -157,7 +195,8 @@ class ContinuousData:
             nb_events_file = metadata['groups'][self._adc_name]['nb_events']
             nb_samples_file = metadata['groups'][self._adc_name]['nb_samples']
             if nb_samples_file != self._nb_samples_continuous:
-                raise ValueError('ERROR: All the files should have the same number of samples per event!')
+                raise ValueError('ERROR: All the files should have '
+                                 + 'the same number of samples per event!')
             nb_random_chunks = int(nb_events_file* nb_samples_file/self._nb_samples)
             for ichunk in range(nb_random_chunks):
                 choice_events.append({ifile: ichunk})
@@ -165,13 +204,13 @@ class ContinuousData:
 
         # shuffle
         if verbose:
-            print('INFO: Randomly selecting ' + str(self._nb_events_randoms) + ' traces out of '
+            print('INFO: Randomly selecting ' + str(nb_events) + ' traces out of '
                   + str(len(choice_events)) + ' possible choices')
 
         np.random.shuffle(choice_events)
 
         # take only the number of events needed
-        choice_events = choice_events[:self._nb_events_randoms]
+        choice_events = choice_events[:nb_events]
       
         
         # let's group chunck indicies for same file in a dictionary {file_index: list of chunk index)
@@ -195,11 +234,7 @@ class ContinuousData:
         if verbose:
             print('INFO: Acquiring randoms!')
 
-        # this is a list, length of self._chans, that
-        # should store the ndarrays randoms
-        trace_buffer = None
-
-
+     
         event_counter = 0
         for ifile, chunk_indices in event_dict.items():
                    
@@ -232,47 +267,14 @@ class ContinuousData:
                 # truncate
                 traces = traces[:,bin_start:bin_start+self._nb_samples]
 
-                if trace_buffer is None:
-                    trace_buffer =  np.expand_dims(traces, axis=0)
-                else:
-                    trace_buffer = np.append(trace_buffer,
-                                             np.expand_dims(traces, axis=0),
-                                             axis=0)
-
-
-                # wap: lots of the following pt_trace lines
-                # can be removed 
-                # pt trace (channel sum determined by self._chan)
-                if self._chan == "all":
-                    pt_trace = traces.sum(axis=0)
-                elif np.any(np.atleast_1d(self._chan) > traces.shape[0]):
-                    raise ValueError(
-                        '`chan_to_trigger` was set to a value greater than the number of channels.',
-                    )
-                elif np.isscalar(self._chan):
-                    pt_trace = traces[self._chan]
-                else:
-                    pt_trace = np.sum(traces[self._chan],axis=0)
-
-                if pt_trace.shape[0] != self._nb_samples:
-                    continue
-
-                pt_trace = np.expand_dims(pt_trace, axis=0)
-                
                 # dataset metadata
                 dataset_metadata = dict()
                 dataset_metadata['event_time'] = float(info['event_time']) + bin_start/self._sample_rate
 
                 
                 # write new file
-                self._h5writer.write_event(traces, prefix='noise', data_mode = 'rand',
-                                           dataset_metadata=dataset_metadata)
-
-
-                if self._randoms_buffer is None:
-                    self._randoms_buffer =  pt_trace
-                else:
-                    self._randoms_buffer = np.append(self._randoms_buffer, pt_trace, axis=0)
+                h5writer.write_event(traces, prefix='rand', data_mode='rand',
+                                     dataset_metadata=dataset_metadata)
 
 
                 #  event_counter
@@ -282,54 +284,218 @@ class ContinuousData:
 
 
         # cleanup
-        self._h5writer.close()
-
+        h5writer.close()
+        
         # verbose
         if verbose:
             print('INFO: Done acquiring randoms!')
 
 
-        # check buffer 
-        if self._randoms_buffer.shape[0]<1:
-            raise ValueError('ERROR: No noise traces found!')
-
-     
-        # calc psd
-        if verbose:
-            print('INFO: Calculating PSD for optimal filter trigger')
-
-        self._noise_psd = []
-        for ichan, chan in enumerate(self._chan):
-            chans_to_sum = self._chan[ichan]
-
-            if np.isscalar(chans_to_sum):
-                traces_red = trace_buffer[:,chans_to_sum]
-            else:
-                # if chan_to_sum has multiple entries (i.e. 1,2)
-                # then it trace_buffer[:, chans_to_sum] has shape
-                # 20,2,62500
-                traces_red = np.sum(trace_buffer[:,chans_to_sum], axis=1)
-
-            cut = qp.autocuts(traces_red, fs=self._sample_rate)
-            print(f'PSD for channel/combination {chan}. Autocuts efficiency={np.sum(cut)/len(cut)}')
-            f, psd = qp.calc_psd(traces_red[cut], fs=self._sample_rate, folded_over=False)
-            f_fold, psd_fold = qp.foldpsd(psd, fs=self._sample_rate)
-
-            self._noise_psd.append(psd)
+        
 
         
-        # save psd
-        if self._save_filter:
-            self._filter_dict['f'] = f
-            self._filter_dict['psd'] = psd
-            self._filter_dict['f_fold'] = f_fold
-            self._filter_dict['psd_fold'] = psd_fold
+    def calc_psd(self, nb_events=-1,
+                 save_filter=False,
+                 verbose=True):
+        """
+        Calculate PSD, assume randoms have 
+        been generated already
+        """
+
+        if verbose:
+            print('')
+            print('INFO: Starting PSD processing')
+
+
+        
+        # Get data
+        if self._output_path is None:
+            raise ValueError('ERROR: No base path and/or group name provided!'
+                             + ' Unable to find raw data for calcularing PSD.')
+
+        file_list = glob(self._output_path + '/' + 'rand_*.hdf5')
+        if len(file_list)<1:
+            raise ValueError('ERROR: Unable to find randoms file in directory '
+                             + self._output_path + '. Please check path or '
+                             + 'generate randoms (--acquire-rand)')
+        
+        trace_buffer = None
+        for file_name in file_list:
+        
+            traces, info = self._h5reader.read_many_events(filepath=file_name,
+                                                           output_format=2,
+                                                           include_metadata=True)
+
+            channels = info[0]['detector_chans']
             
-        # cleanup
-        self._randoms_buffer = None
+            if trace_buffer is None:
+                trace_buffer = traces
+            else:   
+                trace_buffer =  np.append(trace_buffer,
+                                          traces,
+                                          axis=0)
+
+            if  nb_events>-1 and int(trace_buffer.shape[0])>=nb_events:
+                trace_buffer = trace_buffer[0:nb_events,:,:]
+                break
+                
+
+        # calculate PSD        
+        self._filter_dict['f'] = list()
+        self._filter_dict['psd'] = list()
+        self._filter_dict['f_fold'] = list()
+        self._filter_dict['psd_fold'] = list()
+                 
+        for ichan, chan_ind in enumerate(self._chan_array_ind):
+           
+            # extract traces for trigger channel(s)
+            if np.isscalar(chan_ind):
+                traces_red = trace_buffer[:,chan_ind]
+            else:
+                traces_red = np.sum(trace_buffer[:,chan_ind], axis=1)
+
+            # autocut
+            cut = qp.autocuts(traces_red, fs=self._sample_rate)
+            adc_chan = self._chan[ichan]
+            if verbose:
+                print(f'INFO: PSD for ADC channel/combination {adc_chan}.'
+                      + f' Autocuts efficiency={np.sum(cut)/len(cut)}')
+            
+            # calc PSD
+            f, psd = qp.calc_psd(traces_red[cut], fs=self._sample_rate, folded_over=False)
+            f_fold, psd_fold = qp.foldpsd(psd, fs=self._sample_rate)
+            self._filter_dict['f'].append(f)
+            self._filter_dict['f_fold'].append(f_fold)
+            self._filter_dict['psd'].append(psd)
+            self._filter_dict['psd_fold'].append(psd_fold)
+        
+        # save psd
+        if save_filter:
+            print('INFO: Saving filter file "' + self._filter_file_name +'"')
+            with open(self._filter_file_name, 'wb') as handle:
+                pickle.dump(self._filter_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+                
+    def _convert_adc_to_index(self, adc_channels):
+        """
+        Convert ADC channel number to array index
+    
+        Arguments
+        ---------
+          adc_channels: int, list of (list) int 
+        
+        Return
+        ------
+          indices: same format as input
+        """
 
 
-    def find_close_times(self, pulsetimes, timethresh):
+        # available adc channels
+        adc_list = self._adc_config['adc_channel_indices']
+        if isinstance(adc_list, np.ndarray):
+            adc_list = adc_list.tolist()
+        elif not isinstance(adc_list, list):
+            adc_list = [int(adc_list)]
+
+            
+        # case single value
+        if isinstance(adc_channels, int):
+            index = adc_list.index(adc_channels)
+            return index
+
+        chan_indices = list()
+        # loop array
+        for chan in adc_channels:
+            if isinstance(chan, int):
+                chan_indices.append(adc_list.index(chan))
+            else:
+                chan_sum_indices = list()
+                for chan_sum in chan:
+                    if isinstance(chan_sum, int):
+                        chan_sum_indices.append(adc_list.index(chan_sum))
+                    else:
+                        raise ValueError('ERROR: ADC channel format unknown "'
+                                         + str(chan_sum) + '": ' + str(type(chan_sum)))
+
+                
+                chan_indices.append(chan_sum_indices)
+
+
+        return chan_indices
+        
+    
+
+            
+    def _extract_adc_channels(self, channels):
+        """ 
+        Extract ADC channels from detector channel name
+
+        """
+        adc_channels = list()
+
+        # case all
+        if channels == 'all':
+            adc_channels = self._adc_config['adc_channel_indices']
+            if isinstance(adc_channels, np.ndarray):
+                adc_channels = adc_channels.tolist()
+            elif not isinstance(adc_channels, list):
+                adc_channels = [adc_channels]
+            adc_channels = [adc_channels]
+            return adc_channels
+        
+        # case individual channels
+        if not isinstance(channels, list):
+            channels = [channels]
+
+        for chan in channels:
+
+            # check if sum of channels
+            ischannel_sum = isinstance(chan, list) or '+' in chan
+
+            # convert to list
+            chan_list = list()
+            if isinstance(chan, list):
+                chan_list = chan
+            elif '+' in chan:
+                chan_list = chan.split('+')
+            else:
+                chan_list = [chan]
+                
+            # loop sublist
+            adc_channels_sublist = list()
+            for chan_sum in chan_list:
+
+                # check if ADC channels
+                chan_trigger_check = chan_sum.replace('-','')
+                if chan_trigger_check.isdigit():
+                    adc_channels_sublist.extend(arg_utils.hyphen_range(chan_sum))
+                else:
+                    if self._connection_table is None:
+                        raise ValueError('ERROR: Unable to find connection table in raw data!' +
+                                         ' Use ADC channels for chan_to_trigger argument instead')
+                    
+                    adc_channel = self._connection_table.query(
+                        'detector_channel == @chan_sum')["adc_channel"].values
+
+                    if(len(adc_channel)!=1):
+                        raise ValueError('ERROR: chan_to_trigger input does not match ' + 
+                                         'an ADC channel. Check input or config/setup file')
+                
+                    adc_channels_sublist.append(int(adc_channel.astype(np.int)))
+
+            if  ischannel_sum:
+                adc_channels.append(adc_channels_sublist)
+            else:
+                adc_channels.extend(adc_channels_sublist)
+
+                    
+        return adc_channels
+        
+        
+
+
+        
+    def _find_close_times(self, pulsetimes, timethresh):
 
         piledup_bool = np.diff(pulsetimes) < timethresh
         piledup_bool = np.concatenate(([0], piledup_bool , [0]))
@@ -345,11 +511,11 @@ class ContinuousData:
         return ranges
 
 
-    def find_pileup(self, pulsetimes, pulseamps, timethresh, chantrig=None):
+    def _find_pileup(self, pulsetimes, pulseamps, timethresh, chantrig=None):
         """
         Function to find pileup
         """
-        ranges = self.find_close_times(pulsetimes, timethresh)
+        ranges = self._find_close_times(pulsetimes, timethresh)
 
         lgc_verbose = False
 
@@ -403,7 +569,7 @@ class ContinuousData:
 
 
 
-    def remove_triggers(self, filt, inds_to_remove):
+    def _remove_triggers(self, filt, inds_to_remove):
         """
         Remove certain triggers from OptimumFilt object which
         requires deleting elements from the following lists:
@@ -452,7 +618,7 @@ class ContinuousData:
 
         return filt
 
-    def combine_sort_triggers(self, filt_list):
+    def _combine_sort_triggers(self, filt_list):
 
         # make list of filt.chan for each filter
         # and combine into single long list for filters
@@ -483,10 +649,10 @@ class ContinuousData:
 
         # make new OptimumFilt object
         filtcomb = rq.process.OptimumFilt(self._sample_rate,
-                                                self._template[0],
-                                                self._noise_psd,
-                                                self._nb_samples,
-                                                lgcoverlap=True)
+                                          self._filter_dict['template'][0],
+                                          self._filter_dict['psd'][0],
+                                          self._nb_samples,
+                                          lgcoverlap=True)
         filtcomb.evttraces = evttracescomb
         filtcomb.pulseamps = pulseampscomb
         filtcomb.pulsetimes = pulsetimescomb
@@ -497,14 +663,36 @@ class ContinuousData:
         return filtcomb, chancomb
 
         
-    def acquire_trigger(self, template=None, noise_psd=None, verbose=True):
+    def acquire_trigger(self, nb_events=-1,
+                        template=None, noise_psd=None,
+                        threshold=10,
+                        pileup_window=0,
+                        coincident_window=50e-6,            
+                        verbose=True,
+                        debug=False):
         """
         Function to acquire trigger from continuous data
         """
         
         if verbose:
+            print('')
             print('INFO: Acquiring triggers!')
 
+
+        # Instantiate data writer
+        series_name = self._create_series_name()
+        h5writer = h5io.H5Writer()
+        h5writer.initialize(series_name=series_name,
+                            data_path=self._output_path)
+        
+
+        # write overall metadata
+        output_metadata = self._fill_metadata()
+        h5writer.set_metadata(file_metadata=output_metadata['file_metadata'],
+                              detector_config=output_metadata['detector_config'],
+                              adc_config=output_metadata['adc_config'])
+
+            
         # noise PSD (overwrite calculated PSD)
         if noise_psd is not None:
             self._noise_psd  = noise_psd
@@ -513,13 +701,16 @@ class ContinuousData:
         if template is not None:
             self._template = template
 
+        # threshold
+        if np.isscalar(threshold):
+            threshold = [threshold]
+        if self._nb_chan_to_trig>1 and len(threshold)==1:
+            threshold *= self._nb_chan_to_trig
 
-        # save filter file
-        if self._save_filter:
-            with open(self._filter_file_name, 'wb') as handle:
-                pickle.dump(self._filter_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                
-   
+        if len(threshold) != self._nb_chan_to_trig:
+            raise ValueError('ERROR: unexpected "threshold" vector length!')
+        
+            
 
         # set file list to IO reader
         self._h5reader.clear()
@@ -553,71 +744,80 @@ class ContinuousData:
             traces = np.expand_dims(traces, axis=0)
 
             # loop over channels to trigger
-            # make filters for channel and store in list
+            # make OF filters for channel and store in list
             filt_list = []
-            for ichan, chan in enumerate(self._chan):
-                print(f'OF on channel {chan}')
+
+            for ichan, chan_ind in enumerate(self._chan_array_ind):
+
+                if debug:
+                    print(f'INFO: Finding OF triggers on ADC channel(s) {self._chan[ichan]}')
+                
                 # find triggers
+                if np.isscalar(chan_ind):
+                    chan_ind = [chan_ind]
+                    
                 filt = rq.process.OptimumFilt(self._sample_rate,
-                                              self._template[ichan],
-                                              self._noise_psd[ichan],
+                                              self._filter_dict['template'][ichan],
+                                              self._filter_dict['psd'][ichan],
                                               self._nb_samples,
-                                              chan_to_trigger=[chan],
+                                              chan_to_trigger=chan_ind,
                                               lgcoverlap=True)
 
                 filt.filtertraces(traces, time_array)
-                filt.eventtrigger(self._threshold[ichan], positivepulses=True)
+                filt.eventtrigger(threshold[ichan], positivepulses=True)
                 filt_list.append(filt)
 
 
             # remove pileup
-            for ichan, chan in enumerate(self._chan):
+            for ichan, chan_ind in enumerate(self._chan_array_ind):
 
-                piledup_ind, _, _ = self.find_pileup(filt_list[ichan].pulsetimes,
-                                                     filt_list[ichan].pulseamps,
-                                                     self._pileup_window)
+                piledup_ind, _, _ = self._find_pileup(filt_list[ichan].pulsetimes,
+                                                      filt_list[ichan].pulseamps,
+                                                      pileup_window)
+                chan = self._chan[ichan]
+                if debug:
+                    print(f'INFO: Pileup on ADC channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
 
-                print(f'Pileup on channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
-
-                lgc_verbose = False
-                if lgc_verbose:
                     import inspect
                     import pprint
-                    attributes = inspect.getmembers(filt_list[ichan], lambda a:not(inspect.isroutine(a)))
+                    attributes = inspect.getmembers(filt_list[ichan],
+                                                    lambda a:not(inspect.isroutine(a)))
                     print('\n\n')
-                    pprint.pprint([(a[0], type(a[1]), np.shape(a[1])) for a in attributes if not(a[0].startswith('__') and a[0].endswith('__'))])
+                    pprint.pprint([(a[0], type(a[1]), np.shape(a[1]))
+                                   for a in attributes if not(a[0].startswith('__')
+                                                              and a[0].endswith('__'))])
                     print('\n\n')
 
-                filt_list[ichan] = self.remove_triggers(filt_list[ichan], piledup_ind)
+                filt_list[ichan] = self._remove_triggers(filt_list[ichan], piledup_ind)
 
             # combine and sort the multiple
             # filt_list objects into a single one
-            filtcomb, chancomb= self.combine_sort_triggers(filt_list)
-
-            print('Combining Triggers')
+            filtcomb, chancomb = self._combine_sort_triggers(filt_list)
+            if debug:
+                print('INFO: Combining Triggers')
             
             # find:
             # (1) coincidence triggers
             # (2) which triggers have had other channels merged into them
             # (3) which channels have been merged into the merged triggers
-            coinc_ind, inds_merged, chancomb_merged = self.find_pileup(filtcomb.pulsetimes,
+            coinc_ind, inds_merged, chancomb_merged = self._find_pileup(filtcomb.pulsetimes,
                                                                         filtcomb.pulseamps,
-                                                                        self._coincident_window,
+                                                                        coincident_window,
                                                                         chancomb)
 
             for i, ind in enumerate(inds_merged):
                 chancomb[ind] = chancomb_merged[i]
 
             # remove the coincidence triggers from filtcomb
-            filtcomb = self.remove_triggers(filtcomb, coinc_ind)
+            filtcomb = self._remove_triggers(filtcomb, coinc_ind)
 
             # remove coincident triggers from chancomb
             for ind in sorted(coinc_ind, reverse=True):
                 del chancomb[ind]
 
-
-            print(f'Number of events with merged triggers = {len(inds_merged)}')
-            print(f'Final number of events in this continuous data chunk = {len(chancomb)} \n')
+            if debug:
+                print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
+                print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)} \n')
             
             # loop triggers
             for itrig in range(len(filtcomb.pulsetimes)):
@@ -627,16 +827,26 @@ class ContinuousData:
                 dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
                 dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
                 dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
-                dataset_metadata['trigger_channel'] = chancomb[itrig]
+                                 
+                trigger_channels = list()
+                for trig_chan in chancomb[itrig]:
+                    if isinstance(trig_chan, list):
+                        trigger_channels.extend(trig_chan)
+                    else:
+                        trigger_channels.append(trig_chan)
+                dataset_metadata['trigger_channel'] = trigger_channels
                 
                 # write new file
-                self._h5writer.write_event(filtcomb.evttraces[itrig], prefix='trigger',
-                                           data_mode = 'threshold',
+                if debug:
+                    print(filtcomb.evttraces[itrig])
+                    print(dataset_metadata)
+                h5writer.write_event(filtcomb.evttraces[itrig], prefix='threshtrig',
+                                           data_mode='threshold',
                                            dataset_metadata=dataset_metadata)
-
+                
                 # event counter
                 trigger_counter += 1
-                if self._nb_events_trigger>0 and trigger_counter>=self._nb_events_trigger:
+                if nb_events>0 and trigger_counter>=nb_events:
                     do_continue_loop = False
                     break
 
@@ -645,16 +855,93 @@ class ContinuousData:
                     print('INFO: Number of triggers = ' + str(trigger_counter))
                     
 
+    def _get_file_list(self, file_path, series=None):
+        """
+        Get file list from directory
+        path
+        """
+        # initialize
+        file_list = []
+   
 
+        # loop file path
+        if not isinstance(file_path, list):
+            file_path = [file_path]
+            
+        for a_path in file_path:
+            if os.path.isdir(a_path):
+                if series is not None:
+                    for serie in series:
+                        file_name_wildcard = '*'+serie+'_*.hdf5'
+                        file_list.extend(glob(a_path + '/' + file_name_wildcard))
+                else:
+                    file_list = glob(a_path + '/*.hdf5')
+            elif os.path.exists(a_path):
+                if a_path.find('.hdf5') != -1:
+                    if series is not None:
+                        for serie in series:
+                            if a_path.find(serie) != -1:
+                                file_list.append(a_path)
+                    else:
+                        file_list.append(a_path) 
+    
+        if not file_list:
+            raise ValueError('ERROR: No raw input data found. Check arguments!')
+        else:
+            file_list.sort()
+
+        return file_list
+
+
+    def _create_series_name(self):
+        """
+        Create series name
+    
+        Return
+          Series name: string
+        """
+
+
+        now = datetime.now()
+        series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+        series_time = now.strftime('%H') + now.strftime('%M')
+        series_name = 'I' + str(self._facility) +'_D' + series_day + '_T' +  series_time + now.strftime('%S')
+
+        return series_name
+        
+
+    
+    
+    def _create_output_dir(self, base_path, prefix=None):
+        """
+        Create output directory
+        """
+
+        # output name
+        series_name = self._create_series_name()
+        
+        # output directory
+        if prefix is None:
+            prefix = 'threshtrigger'
+            
+        output_dir = base_path + '/' + prefix + '_' + series_name
+        
+        if not os.path.isdir(output_dir):
+            try:
+                os.makedirs(output_dir)
+                os.chmod(output_dir, stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+            except OSError:
+                raise ValueError('\nERROR: Unable to create directory "'+ output_dir  + '"!\n')
+                
+        return output_dir
+        
                 
     def _get_adc_config(self):
         """
-        Get sample rate and number of continuous samples
-        from metadata
+        Get ADC configuration 
         
         Return:
-        
-        sample_rate and nb_samples
+           dictionary
         """
 
 
@@ -662,19 +949,16 @@ class ContinuousData:
         file_name = self._file_list[0]
         metadata = self._h5reader.get_metadata(file_name=file_name)
 
-        # find sample rate / nb samples
-        sample_rate = None
-        nb_samples = None
 
+        #
+        output_dict = dict()
         if self._adc_name in metadata['groups']:
-            sample_rate = float(metadata['groups'][self._adc_name]['sample_rate'])
-            nb_samples = int(metadata['groups'][self._adc_name]['nb_samples'])
-             
-        return sample_rate, nb_samples
-        
+            output_dict  = metadata['groups'][self._adc_name]
 
+        return output_dict
+    
         
-    def _set_metadata(self):
+    def _fill_metadata(self):
         """
         Get file metadata and detector config 
         from first file and set to hdf5 file 
@@ -684,6 +968,9 @@ class ContinuousData:
         norm_array: numpy array with volt to amps normalization
         """
 
+        output_metadata = dict()
+
+        
         file_name = self._file_list[0]
         file_metadata = dict()
         detector_config = dict()
@@ -724,11 +1011,13 @@ class ContinuousData:
             if 'nb_datasets' in adc_config[key]:
                 adc_config[key].pop('nb_datasets')
 
-        # set to h5 writer
-        self._h5writer.set_metadata(file_metadata=file_metadata,
-                                    detector_config=detector_config,
-                                    adc_config=adc_config)
+        # output dictionary
+        output_metadata['file_metadata'] = file_metadata
+        output_metadata['detector_config'] = detector_config
+        output_metadata['adc_config'] = adc_config
 
+        return output_metadata
+        
 
         
     

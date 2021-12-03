@@ -1269,7 +1269,8 @@ class H5Writer:
 
 
         # create new directory
-        self._series_path = data_path + '/' + series_name
+        #self._series_path = data_path + '/' + series_name
+        self._series_path = data_path
         
         if not os.path.isdir(self._series_path):
             os.mkdir(self._series_path)
