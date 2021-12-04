@@ -41,7 +41,7 @@
       </li>
       <li class="nav-item">
         <a class="nav-link" href="/group">Data</a>
-      </li>
+      </li> 
        <li class="nav-item">
         <a class="nav-link" href="#">About Us</a>
       </li>
