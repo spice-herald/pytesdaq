@@ -34,6 +34,14 @@ setup(name='pytesdaq',
           'pdoc3', 
           'mkdocs', 
           'mysql-connector-python', 
+          'mysql-connector',
+          'mysql-connector-python-rf',
           'mariadb'
       ],
+
+      entry_points = {
+        'paste.app_factory': [
+            'main = pytesdaq.display:main',
+        ],
+      }
 )

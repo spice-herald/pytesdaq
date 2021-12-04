@@ -1,0 +1,28 @@
+<%def name="settings_tab()">
+<div class="row-fluid">
+<div class="span12">
+<div class="container">
+
+<h3>Settings</h3>
+
+<p>Some pyramid_debugtoolbar panels can be activated (this enables additional features).</p>
+<p>NOTE: These settings are tracked in a cookie on a per-request basis. If you want to enable options for other requests such as via curl or a non-browser client then you should turn them on by default in your settings via the <code>debugtoolbar.active_panels</code> setting, or by setting the <code>pdtb_active</code> cookie on the client.</p>
+
+<h4>Panel Settings</h4>
+% for panel in panels:
+	% if panel.user_activate:
+		<h5>${panel.nav_title}</h5>
+		% if panel.name in default_active_panels:
+			<span>Enabled: </span> <span class="switch default-active" title="Panel is active by default."></span>
+		% else:
+			<span>Enabled: </span> <span id="${panel.dom_id}-switch" data-pdtb-panel="${panel.name}" class="switch switchable ${'active' if panel.is_active else 'inactive'}" title="Enable or disable the panel"></span>
+		% endif
+		<hr/>
+	% endif
+% endfor
+
+
+</div>
+</div>
+</div>
+</%def>
