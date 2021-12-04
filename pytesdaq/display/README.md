@@ -31,6 +31,9 @@ Getting Started – Installation of tools and packages for Pyramid
     `env/bin/pserve development.ini`
 
 
+IN ONE COMMAND, FROM pytesdaq directory:
+`cd pytesdaq/display/; python3 -m venv env; env/bin/pip install --upgrade pip setuptools; pip install . --user; cd ../..; pytesdaq/display/env/bin/pip install -e ".[testing]"; cd pytesdaq/display/; env/bin/pserve development.ini`
+
 Database Access
 -----------------
 

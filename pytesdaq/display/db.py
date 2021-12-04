@@ -42,7 +42,7 @@ class MySQLCore:
         return True
 
     def connect_test(self): # localhost database for now, update with actual database later
-        self.connect_manual(host='localhost', port=3306, user='daquser_hdf5', password='RznY_23')
+        self.connect_manual(host='sequoia.dyn.berkeley.edu', port=3306, user='daquser_hdf5', password='RznY_23')
 #192.168.1.177
 
     def disconnect(self):

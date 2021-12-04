@@ -27,3 +27,6 @@ __pycache__/
 */*/__pycache__/
 */*/*/__pycache__/
 */*/*/*/__pycache__/
+
+# ignore env folders in display when running website
+pytesdaq/display/env/

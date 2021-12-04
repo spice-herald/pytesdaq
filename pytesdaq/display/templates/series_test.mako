@@ -4,7 +4,7 @@
     <meta name="description" content="">
     <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
     <meta name="generator" content="Jekyll v4.0.1">
-    <title>Series Info </title>
+    <title>Group Info </title>
 
   
     <style>

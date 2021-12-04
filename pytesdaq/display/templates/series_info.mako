@@ -43,6 +43,7 @@
 <main role="main" class="container">
 
     <h2>Series Info for ${this_series['series_num']}</h2>
+    <h3> In group <a  href="/group/${this_series['group_name']}">${this_series['group_name']}</a></h3>
 
   <div>
      <table id="series_table" class="table table-hover table-sm table-responsive table-bordered table-striped" style="font-size: 0.8rem;">

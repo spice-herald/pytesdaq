@@ -1,0 +1,67 @@
+Metadata-Version: 2.1
+Name: iminuit
+Version: 1.5.4
+Summary: Jupyter-friendly Python frontend for MINUIT2 in C++
+Home-page: http://github.com/scikit-hep/iminuit
+Author: Piti Ongmongkolkul and the iminuit team
+Maintainer: Hans Dembinski
+Maintainer-email: hans.dembinski@gmail.com
+License: UNKNOWN
+Project-URL: Documentation, https://iminuit.readthedocs.io
+Project-URL: Source Code, http://github.com/scikit-hep/iminuit
+Platform: UNKNOWN
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: C++
+Classifier: Programming Language :: Cython
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Topic :: Scientific/Engineering :: Physics
+Classifier: Topic :: Scientific/Engineering :: Mathematics
+Classifier: Intended Audience :: Science/Research
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)
+Classifier: License :: OSI Approved :: MIT License
+Requires-Python: >=3.5
+Description-Content-Type: text/x-rst
+Requires-Dist: numpy (>=1.11.3)
+
+*iminuit* is a Jupyter-friendly Python frontend to the *MINUIT2* C++ library.
+
+It can be used as a general robust function minimisation method,
+but is most commonly used for likelihood fits of models to data,
+and to get model parameter error estimates from likelihood profile analysis.
+
+- Supported CPython versions: 3.5+
+- Supported PyPy versions: 3.5, 3.6
+- Supported platforms: Linux, OSX and Windows.
+
+* PyPI: https://pypi.org/project/iminuit
+* Documentation: http://iminuit.readthedocs.org
+* Source: https://github.com/scikit-hep/iminuit
+* Gitter: https://gitter.im/Scikit-HEP/community
+* License: *MINUIT2* is LGPL and *iminuit* is MIT
+* Citation: https://doi.org/10.5281/zenodo.3949207
+
+In a nutshell
+-------------
+
+.. code-block:: python
+
+    from iminuit import Minuit
+
+    def f(x, y, z):
+        return (x - 2) ** 2 + (y - 3) ** 2 + (z - 4) ** 2
+
+    m = Minuit(f)
+
+    m.migrad()  # run optimiser
+    print(m.values)  # {'x': 2,'y': 3,'z': 4}
+
+    m.hesse()   # run covariance estimator
+    print(m.errors)  # {'x': 1,'y': 1,'z': 1}
+
+

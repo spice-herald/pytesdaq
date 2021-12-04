@@ -40,7 +40,7 @@
         <a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" href="/series_test">Series Info</a>
+        <a class="nav-link" href="/group">Data</a>
       </li>
        <li class="nav-item">
         <a class="nav-link" href="#">About Us</a>
