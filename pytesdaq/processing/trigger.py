@@ -8,8 +8,11 @@ import stat
 import pickle
 import qetpy as qp
 import rqpy as rq
+import math
 import pytesdaq.io.hdf5 as h5io
 from pytesdaq.utils import arg_utils
+from multiprocessing import Pool
+from itertools import repeat
 
 class ContinuousData:
     
@@ -40,18 +43,19 @@ class ContinuousData:
         self._adc_name = 'adc1'
         self._detector_config_name = 'detconfig1'
 
-        # instanciate data reader
-        self._h5reader = h5io.H5Reader()
-
+        
         # and get some metadata informations
-        metadata = self._h5reader.get_metadata(file_name=self._file_list[0])
+        h5reader = h5io.H5Reader()
+        metadata = h5reader.get_metadata(file_name=self._file_list[0])
+            
         self._facility = metadata['facility']
         if output_group_comment is not None:
             self._group_comment =  output_group_comment
         elif 'group_comment' in metadata:
             self._group_comment = 'Group extracted from continuous data:  ' + metadata['group_comment']
-        self._connection_table = self._h5reader.get_connection_table(metadata=metadata)
+        self._connection_table = h5reader.get_connection_table(metadata=metadata)
 
+        h5reader.clear()
         
         # create output directory
         self._output_path = None
@@ -172,6 +176,9 @@ class ContinuousData:
             print('INFO: Checking continuous data files')
 
 
+        # Instantial data reader
+        h5reader = h5io.H5Reader()  
+
         # Instantiate data writer
         series_name = self._create_series_name()
         h5writer = h5io.H5Writer()
@@ -191,7 +198,7 @@ class ContinuousData:
         # will be randomly shuffled
         choice_events = list()
         for ifile in range(len(self._file_list)):
-            metadata = self._h5reader.get_metadata(file_name=self._file_list[ifile])
+            metadata = h5reader.get_metadata(file_name=self._file_list[ifile])
             nb_events_file = metadata['groups'][self._adc_name]['nb_events']
             nb_samples_file = metadata['groups'][self._adc_name]['nb_samples']
             if nb_samples_file != self._nb_samples_continuous:
@@ -254,9 +261,9 @@ class ContinuousData:
                 event_index = int(bin_start_global/nb_samples_file) + 1
                 
                 # get traces for all channels
-                traces, info = self._h5reader.read_single_event(event_index,
-                                                                file_name=file_name,
-                                                                include_metadata=True)
+                traces, info = h5reader.read_single_event(event_index,
+                                                          file_name=file_name,
+                                                          include_metadata=True)
 
 
                 # invert if negative pulse
@@ -285,6 +292,7 @@ class ContinuousData:
 
         # cleanup
         h5writer.close()
+        h5reader.clear()
         
         # verbose
         if verbose:
@@ -318,11 +326,16 @@ class ContinuousData:
             raise ValueError('ERROR: Unable to find randoms file in directory '
                              + self._output_path + '. Please check path or '
                              + 'generate randoms (--acquire-rand)')
+
+        # Instantial data reader
+        h5reader = h5io.H5Reader()  
+
+
         
         trace_buffer = None
         for file_name in file_list:
         
-            traces, info = self._h5reader.read_many_events(filepath=file_name,
+            traces, info = h5reader.read_many_events(filepath=file_name,
                                                            output_format=2,
                                                            include_metadata=True)
 
@@ -375,6 +388,73 @@ class ContinuousData:
             with open(self._filter_file_name, 'wb') as handle:
                 pickle.dump(self._filter_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        # clean up 
+        h5reader.clear()
+
+        
+    def acquire_trigger(self,
+                        nb_events=-1,
+                        template=None, noise_psd=None,
+                        threshold=10,
+                        pileup_window=0,
+                        coincident_window=50e-6,
+                        nb_cores_max=1,
+                        verbose=True,
+                        debug=False):
+
+
+        if  nb_cores_max==1:
+            self._acquire_trigger(file_list=self._file_list,
+                                  nb_events=nb_events,
+                                  template=template,
+                                  noise_psd=noise_psd,
+                                  threshold=threshold,
+                                  pileup_window= pileup_window,
+                                  coincident_window=coincident_window,
+                                  verbose=verbose,
+                                  debug=debug)
+
+        else:
+            nb_files = len(self._file_list)
+            nb_cores = 0
+            file_list = list()
+            if nb_files <= nb_cores_max:
+                nb_cores = nb_files
+                file_list = self._file_list
+            else:
+                nb_cores = nb_cores_max
+                file_list = np.array_split(self._file_list, nb_cores)
+
+            if nb_events>0:
+                nb_events = math.ceil(nb_events/nb_cores)
+
+            # series name
+            series_name = self._create_series_name()
+            series_list = list()
+            for iproc in range(nb_cores):
+                series_list.append(series_name[:-2] + str(10+iproc))
+                
+            print('')
+            print('INFO: Starting trigger processing!')
+            print(f'INFO: Total number of files to be processed = {nb_files}')
+            print(f'INFO: Processing with be split on {nb_cores} cores!')
+            pool = Pool(processes=nb_cores)
+            pool.starmap(self._acquire_trigger,
+                         zip(file_list,
+                             series_list,
+                             repeat(nb_events),
+                             repeat(template),
+                             repeat(noise_psd),
+                             repeat(threshold),
+                             repeat(pileup_window),
+                             repeat(coincident_window),
+                             repeat(verbose),
+                             repeat(debug)))
+            
+            print('INFO: Processing done!')
+            pool.close()
+            pool.join()
+            
                 
     def _convert_adc_to_index(self, adc_channels):
         """
@@ -662,25 +742,32 @@ class ContinuousData:
 
         return filtcomb, chancomb
 
-        
-    def acquire_trigger(self, nb_events=-1,
-                        template=None, noise_psd=None,
-                        threshold=10,
-                        pileup_window=0,
-                        coincident_window=50e-6,            
-                        verbose=True,
-                        debug=False):
+
+
+
+    
+    def _acquire_trigger(self,file_list,
+                         series_name=None,
+                         nb_events=-1,
+                         template=None,
+                         noise_psd=None,
+                         threshold=10,
+                         pileup_window=0,
+                         coincident_window=50e-6,            
+                         verbose=True,
+                         debug=False):
         """
         Function to acquire trigger from continuous data
         """
+
+
+        # Instanciate data reader
+        h5reader = h5io.H5Reader()
+
         
-        if verbose:
-            print('')
-            print('INFO: Acquiring triggers!')
-
-
         # Instantiate data writer
-        series_name = self._create_series_name()
+        if series_name is None:
+            series_name = self._create_series_name()
         h5writer = h5io.H5Writer()
         h5writer.initialize(series_name=series_name,
                             data_path=self._output_path)
@@ -713,18 +800,16 @@ class ContinuousData:
             
 
         # set file list to IO reader
-        self._h5reader.clear()
-        self._h5reader.set_files(self._file_list)
-        
-
+        h5reader.set_files(file_list)
+       
         # loop events
         do_continue_loop = True
         trigger_counter = 0
         while(do_continue_loop):
 
             # read next event
-            traces, info = self._h5reader.read_event(include_metadata=True,
-                                                     adc_name=self._adc_name)
+            traces, info = h5reader.read_event(include_metadata=True,
+                                               adc_name=self._adc_name)
 
             # check if successful
             if info['read_status'] != 0:
@@ -817,7 +902,7 @@ class ContinuousData:
 
             if debug:
                 print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
-                print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)} \n')
+                print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)}')
             
             # loop triggers
             for itrig in range(len(filtcomb.pulsetimes)):
@@ -853,7 +938,9 @@ class ContinuousData:
                 # display
                 if (verbose and trigger_counter % 50 == 0):
                     print('INFO: Number of triggers = ' + str(trigger_counter))
-                    
+
+        # cleanup
+        h5reader.clear()
 
     def _get_file_list(self, file_path, series=None):
         """
@@ -905,7 +992,8 @@ class ContinuousData:
         now = datetime.now()
         series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
         series_time = now.strftime('%H') + now.strftime('%M')
-        series_name = 'I' + str(self._facility) +'_D' + series_day + '_T' +  series_time + now.strftime('%S')
+        series_name = ('I' + str(self._facility) +'_D' + series_day + '_T'
+                       + series_time + now.strftime('%S'))
 
         return series_name
         
@@ -946,11 +1034,11 @@ class ContinuousData:
 
 
         # get metadata
+        h5reader = h5io.H5Reader()  
         file_name = self._file_list[0]
-        metadata = self._h5reader.get_metadata(file_name=file_name)
-
-
-        #
+        metadata = h5reader.get_metadata(file_name=file_name)
+        h5reader.clear()
+        
         output_dict = dict()
         if self._adc_name in metadata['groups']:
             output_dict  = metadata['groups'][self._adc_name]
@@ -976,7 +1064,10 @@ class ContinuousData:
         detector_config = dict()
 
         # get metadata from file
-        metadata = self._h5reader.get_metadata(file_name=file_name)
+        h5reader = h5io.H5Reader()  
+        metadata = h5reader.get_metadata(file_name=file_name)
+        h5reader.clear()
+        
         file_metadata = dict()
         detector_config = dict()
         adc_config = dict()

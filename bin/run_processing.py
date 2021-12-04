@@ -33,8 +33,9 @@ if __name__ == "__main__":
                               'space or comma seperated)' 
                               '[Default: all series]'))
 
-    parser.add_argument('--nb_randoms', type=float, help='Number random events [Default=500]')
-    parser.add_argument('--nb_triggers', type=float,
+    parser.add_argument('--nb_randoms', type=int,
+                        help='Number random events [Default=500]')
+    parser.add_argument('--nb_triggers', type=int,
                         help='Number trigger events [Default=all available]')
 
     parser.add_argument('--trace_length_ms', type=float, help='Trace length [ms]')
@@ -108,6 +109,8 @@ if __name__ == "__main__":
     parser.add_argument('--processing_setup', type=str,
                         help='Processing setup file (full path if not in pytesdaq/config)')
                         
+    parser.add_argument('--nb_cores_max', type=int,
+                        help='Maximum number of cores used for trigger processing [Default=1]')
     
     args = parser.parse_args()
 
@@ -155,6 +158,7 @@ if __name__ == "__main__":
     output_group_comment = None
     output_base_path = None
     filter_file = None
+    nb_cores_max = 1
                         
     # ------------------
     # Parse arguments 
@@ -207,6 +211,9 @@ if __name__ == "__main__":
         calc_filter = True
     if args.filter_file:
         filter_file = args.filter_file
+    if args.nb_cores_max:
+        nb_cores_max = args.nb_cores_max
+
     # ------------------
     # input/output path
     # ------------------
@@ -285,7 +292,8 @@ if __name__ == "__main__":
         data_inst.acquire_trigger(nb_events=nb_triggers,
                                   threshold=threshold,
                                   pileup_window=pileup_window,
-                                  coincident_window=coincident_window)
+                                  coincident_window=coincident_window,
+                                  nb_cores_max=nb_cores_max)
                                   
    
             
