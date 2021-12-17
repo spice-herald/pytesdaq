@@ -91,14 +91,14 @@ class ContinuousData:
 
         # trace length triggered data
         if nb_samples is not None:
-            self._nb_samples = nb_samples
+            self._nb_samples = int(nb_samples)
         elif trace_length_ms is not None:
             self._nb_samples = int(floor(trace_length_ms*self._sample_rate/1000))
         else:
             raise ValueError('ERROR: Trace length not available!')
 
         if nb_samples_pretrigger is not None:
-            self._nb_samples_pretrigger = nb_samples_pretrigger
+            self._nb_samples_pretrigger = int(nb_samples_pretrigger)
         elif pretrigger_length_ms is not None:
             self._nb_samples_pretrigger =  int(floor(pretrigger_length_ms*self._sample_rate/1000))
         else:
@@ -139,7 +139,7 @@ class ContinuousData:
         if self._nb_samples is None or self._nb_samples_pretrigger is None:
             raise ValueError('ERROR: No trace length  available!')
 
-
+        
         if not isinstance(rise_time, list):
             rise_time = [rise_time]
         if not isinstance(fall_time, list):
@@ -150,6 +150,12 @@ class ContinuousData:
                 rise_time *= self._nb_chan_to_trig
             if len(fall_time)==1:
                 fall_time *= self._nb_chan_to_trig
+
+
+        # convert to seconds
+        rise_time = [item * 1e-6 for item in rise_time]
+        fall_time = [item * 1e-6 for item in fall_time]
+        
         
         trace_time = 1.0/self._sample_rate *(np.arange(1,self._nb_samples+1)
                                              -self._nb_samples_pretrigger)
@@ -256,7 +262,8 @@ class ContinuousData:
                 # Bin start
                 bin_start_global = chunk_index * self._nb_samples
                 bin_start = bin_start_global % self._nb_samples_continuous
-
+                bin_start_sec = bin_start/self._sample_rate
+                
                 # event number 
                 event_index = int(bin_start_global/nb_samples_file) + 1
                 
@@ -276,7 +283,7 @@ class ContinuousData:
 
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['event_time'] = float(info['event_time']) + bin_start/self._sample_rate
+                dataset_metadata['event_time'] = float(info['event_time']) + bin_start_sec
 
                 
                 # write new file
@@ -397,32 +404,41 @@ class ContinuousData:
                         template=None, noise_psd=None,
                         threshold=10,
                         pileup_window=0,
-                        coincident_window=50e-6,
-                        nb_cores_max=1,
+                        coincident_window=50,
+                        nb_cores=1,
                         verbose=True,
                         debug=False):
 
+        """
+        Acquire trigger
+        
+        Arguments
+        ---------
+        
+        
 
-        if  nb_cores_max==1:
+
+        """
+
+
+        if  nb_cores==1:
             self._acquire_trigger(file_list=self._file_list,
                                   nb_events=nb_events,
                                   template=template,
                                   noise_psd=noise_psd,
                                   threshold=threshold,
-                                  pileup_window= pileup_window,
+                                  pileup_window=pileup_window,
                                   coincident_window=coincident_window,
                                   verbose=verbose,
                                   debug=debug)
 
         else:
             nb_files = len(self._file_list)
-            nb_cores = 0
             file_list = list()
-            if nb_files <= nb_cores_max:
+            if nb_files <= nb_cores:
                 nb_cores = nb_files
                 file_list = self._file_list
             else:
-                nb_cores = nb_cores_max
                 file_list = np.array_split(self._file_list, nb_cores)
 
             if nb_events>0:
@@ -753,7 +769,7 @@ class ContinuousData:
                          noise_psd=None,
                          threshold=10,
                          pileup_window=0,
-                         coincident_window=50e-6,            
+                         coincident_window=50,            
                          verbose=True,
                          debug=False):
         """
@@ -797,7 +813,12 @@ class ContinuousData:
         if len(threshold) != self._nb_chan_to_trig:
             raise ValueError('ERROR: unexpected "threshold" vector length!')
         
-            
+
+        # convert windows to sec
+        pileup_window = float(pileup_window) * 1e-6
+        coincident_window = float(coincident_window) * 1e-6
+        
+        
 
         # set file list to IO reader
         h5reader.set_files(file_list)
