@@ -103,7 +103,8 @@ class SeriesGroup:
         group_info_dict['fridge_run'] = self._fridge_run
         group_info_dict['nb_series'] = self._nb_series
         group_info_dict['nb events'] = self._nb_events
-        group_info_dict['duration_min'] = self._duration
+        group_info_dict['duration'] = self._duration
+
         devices = ', '.join(self._devices)
         group_info_dict['devices'] =  devices
         data_types = ', '.join(str(item) for item in self._data_types)
@@ -115,7 +116,7 @@ class SeriesGroup:
             comment = self._group_comment
             group_info_dict['group_comment'] = comment
 
-        group_info_dict['Timestamp'] = self._timestamp
+        group_info_dict['timestamp'] = self._timestamp
             
         series_info_dict = dict()
         if include_series_info:
@@ -358,7 +359,7 @@ class Series:
         info_dict['nb_events'] = self._nb_events
         info_dict['data_type'] = self._data_type
         info_dict['data_purpose'] = self._data_purpose
-        info_dict['duration_min'] = self._duration
+        info_dict['duration'] = self._duration
         info_dict['timestamp'] = self._first_event_timestamp
         return info_dict
 
