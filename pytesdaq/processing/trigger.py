@@ -13,6 +13,8 @@ import pytesdaq.io.hdf5 as h5io
 from pytesdaq.utils import arg_utils
 from multiprocessing import Pool
 from itertools import repeat
+from pathlib import Path
+
 
 class ContinuousData:
     
@@ -61,7 +63,7 @@ class ContinuousData:
         self._output_path = None
               
         if output_base_path is None:
-            input_path = Path(input_path)
+            input_path = Path(input_data_path)
             output_base_path = str(input_path.parent)
 
         if output_group_name is not None:
@@ -117,17 +119,34 @@ class ContinuousData:
         self._filter_dict = None
         if filter_file is None:
             self._filter_dict = dict()
-            self._filter_dict['adc_chan_to_trig'] = self._chan
+            self._filter_dict['trigger_channels'] = trigger_channels
             series_name = self._create_series_name()
             self._filter_file_name = self._output_path + '/' + series_name  + '_filter.pickle'
         else:
             with open(filter_file, 'rb') as f:
                 self._filter_dict = pickle.load(f)
-                if self._filter_dict['adc_chan_to_trig'] != self._chan:
-                    raise ValueError('ERROR: "adc_chan_to_trig" in filter file ' +
-                                     'is different than input channels or ' +
-                                     'does not exist!')
+                if 'trigger_channels' not in self._filter_dict:
+                    raise ValueError('ERROR: "trigger_channels" not found in filter file!')
+                else:
+                    adc_chans = self._extract_adc_channels(self._filter_dict('trigger_channels'))
+                    if adc_chans != self._chan:
+                        raise ValueError('ERROR: "trigger_channels" in filter file ' +
+                                         'is different than input channels or ' +
+                                         'does not exist!')
                     
+                
+    def get_psd_data(self):
+        """
+        Get PSD and template data
+        
+        Return:
+        ------
+           dictionary
+        """
+        return self._filter_dict
+
+
+                
         
     def create_template(self, rise_time, fall_time):
         """
@@ -798,7 +817,14 @@ class ContinuousData:
             
         # noise PSD (overwrite calculated PSD)
         if noise_psd is not None:
-            self._noise_psd  = noise_psd
+            if not isinstance(noise_psd, list):
+                noise_psd = [noise_psd]
+            if len(noise_psd) != self._nb_chan_to_trig:
+                raise ValueError('ERROR: Unexpected length of '
+                                 + 'noise psd. It should match number '
+                                 + 'of trigger channels')
+            
+            self._filter_dict['psd']  = noise_psd
 
         # template (overwrite calculated PSD)
         if template is not None:
