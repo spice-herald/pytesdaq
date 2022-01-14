@@ -2,10 +2,10 @@
 TBD
 """
 import numpy as np
-import pytesdaq.config.settings as config
 import walrus as wsredis
 import struct
 
+import pytesdaq.config.settings as config
 
 class RedisCore:
     """

@@ -4,13 +4,14 @@ import pickle
 from PyQt5.QtCore import QCoreApplication
 from matplotlib import pyplot as plt
 import pandas as pd
+
 import pytesdaq.daq as daq
 import pytesdaq.instruments.control as instrument
 import pytesdaq.config.settings as settings
 import pytesdaq.io.redis as redis
 import pytesdaq.io.hdf5 as hdf5
-from pytesdaq.analyzer import analyzer
 from pytesdaq.utils import  arg_utils
+from pytesdaq.analyzer import analyzer
 
 
 

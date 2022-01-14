@@ -1,0 +1,84 @@
+[processing]
+
+# Input data path, including group name continuous data
+input_group_path =  /sdata/runs/run11/raw/continuous_20211014_2040
+
+# Series within continous data group to be processed [Default: all]
+# input_series = ...
+
+# Filter file if already created (full path)
+# filter_file = ....
+
+# Output data files informations:
+
+# Group base path [Default: same as input path]
+# output_base_path = /sdata/runs/run11/raw/
+
+# Group name prefix [Default: threshtrigger]
+output_group_prefix = testproc
+
+# Group name if already exist [Default: create new group]
+# output_group_name = testproc_I2_D20211203_T201921
+
+# Group comment [Default: use comment from continuous raw data]
+output_group_comment = No comment
+
+
+
+# Number of events saved
+# For triggers: -1 -> all available triggers
+nb_randoms = 500
+nb_triggers = 100
+
+
+# Trace and pre-trigger length:
+# in millisec or number of samples
+
+trace_length_ms = 20
+pretrigger_length_ms = 10
+# nb_samples = 25000
+# nb_samples_pretrigger = 12500
+
+
+
+
+# Trigger informations
+# 
+#  chan_to_trigger (optional): channels to do trigger
+#        either detector channel name or ADC channel number
+#        (range such as 0-3 can be used)
+#	 Default: trigger sum of all channels
+#
+#  threshold (optional): 
+#       single value if same all channels 
+#       otherwise one value per channels following chan_to_trigger order
+#
+#  template risetime/falltime in usec
+#       single value if same all channels
+#       otherwise one value per channels following chan_to_trigger order
+#
+#  coincident_window:
+#     Window in usec for merging coincident events on channels
+#     from chan_to_trigger 
+# 
+#  pileup_window
+#     Window in usec for removing pileup on individual channels
+
+chan_to_trigger = TES100x400_W2,TES100x400_W1+TES200x800_W2, TES200x800_W1
+#chan_to_trigger = 0, 2-3
+rise_time = 20, 20, 25
+fall_time = 30, 35, 30
+threshold = 10
+pileup_window = 0
+coincident_window = 10
+
+# Misc settings
+# Negative traces
+is_negative_pulse = true
+
+# save filter file
+save_filter = false
+
+# number cores used [Default = 1]
+nb_cores = 4
+

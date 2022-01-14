@@ -1,11 +1,13 @@
+import numpy as np
+import time
+from math import nan
+
 from pytesdaq.daq import daq
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.sequencer.sequencer import Sequencer
 from pytesdaq.utils import connection_utils
-import numpy as np
-import time
-from math import nan
+
 
 class Tc(Sequencer):
     

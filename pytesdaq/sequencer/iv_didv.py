@@ -1,11 +1,12 @@
+import numpy as np
+import time
+import pprint as pprint
+
 from pytesdaq.daq import daq
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.sequencer.sequencer import Sequencer
 from pytesdaq.utils import connection_utils
-import numpy as np
-import time
-import pprint as pprint
 
 class IV_dIdV(Sequencer):
     

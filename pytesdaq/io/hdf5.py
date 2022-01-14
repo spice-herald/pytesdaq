@@ -4,10 +4,10 @@ import os
 import numpy as np
 import pandas as pd
 from glob import glob
-from pytesdaq.utils import connection_utils
 import stat
 
 
+from pytesdaq.utils import connection_utils
 
 
 def extract_series_num(series_name):
@@ -1269,7 +1269,8 @@ class H5Writer:
 
 
         # create new directory
-        self._series_path = data_path + '/' + series_name
+        #self._series_path = data_path + '/' + series_name
+        self._series_path = data_path
         
         if not os.path.isdir(self._series_path):
             os.mkdir(self._series_path)
