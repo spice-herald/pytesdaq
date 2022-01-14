@@ -451,7 +451,8 @@ class OptimumFilt(object):
 
 class ContinuousData:
     
-    def __init__(self, input_data_path, input_series=None,
+    def __init__(self, input_data_path,
+                 input_series=None,
                  output_group_prefix=None, 
                  output_group_comment=None,
                  output_base_path=None,
@@ -1436,19 +1437,35 @@ class ContinuousData:
             file_path = [file_path]
             
         for a_path in file_path:
+            
+            # case path is a directory
             if os.path.isdir(a_path):
                 if series is not None:
-                    for serie in series:
-                        file_name_wildcard = '*'+serie+'_*.hdf5'
-                        file_list.extend(glob(a_path + '/' + file_name_wildcard))
+                    if series == 'even' or series == 'odd':
+                        file_name_wildcard = series + '_*.hdf5'
+                        file_list = glob(a_path + '/' + file_name_wildcard)
+                    else:
+                        if not isinstance(series, list):
+                            series = [series]
+                        for serie in series:
+                            file_name_wildcard = '*' + serie + '_*.hdf5'
+                            file_list.extend(glob(a_path + '/' + file_name_wildcard))
                 else:
                     file_list = glob(a_path + '/*.hdf5')
+                    
+            # case file
             elif os.path.exists(a_path):
                 if a_path.find('.hdf5') != -1:
                     if series is not None:
-                        for serie in series:
-                            if a_path.find(serie) != -1:
+                        if series == 'even' or series == 'odd':
+                            if a_path.find(series) != -1:
                                 file_list.append(a_path)
+                        else:
+                            if not isinstance(series, list):
+                                series = [series]
+                            for serie in series:
+                                if a_path.find(serie) != -1:
+                                    file_list.append(a_path)
                     else:
                         file_list.append(a_path) 
     
@@ -1457,6 +1474,7 @@ class ContinuousData:
         else:
             file_list.sort()
 
+     
         return file_list
 
 

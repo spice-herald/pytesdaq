@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--input_group_path', '--raw_path', dest='input_group_path', type=str,
                         help='Path to continuous raw data group (including group name)')
-    parser.add_argument('-s', '--series''--input_series', dest='input_series', nargs='+', type=str, 
+    parser.add_argument('-s', '--series', '--input_series', dest='input_series', nargs='+', type=str, 
                         help=('Continous data series name(s) (format string Ix_Dyyyymmdd_Thhmmss,'
                               'space or comma seperated)' 
                               '[Default: all series]'))
