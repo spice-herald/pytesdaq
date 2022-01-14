@@ -278,19 +278,22 @@ if __name__ == "__main__":
 
     # run
     for irun in range(nb_runs):
-
+        
+        series_prefix = data_prefix
+        
         if split_series:
+            
             if (irun % 2):
-                data_prefix =+ 'even_'
+                series_prefix = 'even_' + series_prefix
             else:
-                data_prefix =+ 'odd_'
+                series_prefix = 'odd_' + series_prefix
                 
         success = mydaq.run(run_time=run_time_seconds,
                             run_type=run_type,
                             run_comment=comment,
                             group_name= group_name,
                             group_comment=group_comment,
-                            data_prefix=data_prefix,
+                            data_prefix=series_prefix,
                             data_path=data_path)
         if not success:
             print('ERROR: Data taking error. Exiting!')
