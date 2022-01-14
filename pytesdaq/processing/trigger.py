@@ -175,7 +175,9 @@ class OptimumFilt(object):
         self.chan = chan_to_trigger
         
         # calculate the time-domain optimum filter
-        self.phi = ifft(fft(self.template)/self.noisepsd).real
+        phi_freq = fft(self.template) / self.noisepsd
+        phi_freq[0] = 0 #ensure we do not use DC information
+        self.phi = ifft(phi_freq).real
         # calculate the normalization of the optimum filter
         self.norm = np.dot(self.phi, self.template)
         
