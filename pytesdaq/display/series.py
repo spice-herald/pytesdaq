@@ -2,12 +2,12 @@ import time
 import os
 import numpy as np
 from glob import glob
-import pytesdaq.io.hdf5 as h5io
-from pytesdaq.utils import  arg_utils
 from pprint import pprint
 from pathlib import Path
 import json
 
+import pytesdaq.io.hdf5 as h5io
+from pytesdaq.utils import  arg_utils
 
 class SeriesGroup:
     def __init__(self, group_name, group_path):

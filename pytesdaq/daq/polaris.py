@@ -3,6 +3,7 @@ import os
 import time
 from datetime import datetime
 import fcntl
+
 from nidaqmx.utils import flatten_channel_string
 from pytesdaq.utils import arg_utils
 

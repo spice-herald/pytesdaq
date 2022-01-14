@@ -1,7 +1,8 @@
 import time
 import numpy as np
-import qetpy as qp
 from astropy.stats import sigma_clip as clip
+
+import qetpy as qp
 
 
 class Analyzer:
