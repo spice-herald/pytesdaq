@@ -41,17 +41,24 @@ if __name__ == "__main__":
     # arguments with default value in configuration file
     parser.add_argument('--trigger_type',
                         help='1=continuous, 2=ext trigger, 3=randoms, 4=threshold [default from configuration setup file] ')
-    parser.add_argument('--sample_rate',help='Sample rate [default from configuration setup file] ')
-    parser.add_argument('--nb_samples',help='Number of samples [default from configuration setup file] ')
-    parser.add_argument('--voltage_min',help='Minimum ADC voltage [default from configuration setup file] ')
-    parser.add_argument('--voltage_max',help='Maximum ADC voltage [default from configuration setup file] ')
+    parser.add_argument('--sample_rate',
+                        help='Sample rate [default from configuration setup file] ')
+    parser.add_argument('--nb_samples',
+                        help='Number of samples [default from configuration setup file] ')
+    parser.add_argument('--voltage_min',
+                        help='Minimum ADC voltage [default from configuration setup file] ')
+    parser.add_argument('--voltage_max',
+                        help='Maximum ADC voltage [default from configuration setup file] ')
     parser.add_argument('--adc_channels', '--channels', dest='adc_channels', type = str,
                         help='ADC channels number/index, format="a,b,c-d" [default from setup file] ')
-    parser.add_argument('--adc_devices', help='ADC Devices number, format="a,b,c-d" [default from setup file] ')
-    parser.add_argument('--disable-lock', dest="disable_lock",action="store_true",help='Disable daq process lock')
+    parser.add_argument('--adc_devices',
+                        help='ADC Devices number, format="a,b,c-d" [default from setup file] ')
+    parser.add_argument('--disable-lock', dest='disable_lock', action='store_true',
+                        help='Disable daq process lock')
     parser.add_argument('--disable-control', dest="disable_control", action="store_true",
                         help='Disable instrument control. Require "detector_config" field in setup.ini!')
-    
+    parser.add_argument('--split-series', '--split_series', dest='split_series', action='store_true',
+                        help='Split series into even/odd data')
     
     args = parser.parse_args()
 
@@ -73,6 +80,8 @@ if __name__ == "__main__":
     disable_lock = False
     disable_control = False
     verbose = False
+    split_series = False
+    
        
     # Setup file:
     setup_file = None
@@ -129,7 +138,10 @@ if __name__ == "__main__":
         disable_control = True
     if args.group_name:
         group_name = args.group_name
-    
+    if args.split_series:
+        split_series=True
+
+        
     # nb of runs
     nb_runs = int(round(duration/run_time_seconds))
     if nb_runs<1:
@@ -266,6 +278,13 @@ if __name__ == "__main__":
 
     # run
     for irun in range(nb_runs):
+
+        if split_series:
+            if (irun % 2):
+                data_prefix =+ 'even_'
+            else:
+                data_prefix =+ 'odd_'
+                
         success = mydaq.run(run_time=run_time_seconds,
                             run_type=run_type,
                             run_comment=comment,
