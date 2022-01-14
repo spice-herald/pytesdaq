@@ -11,6 +11,7 @@ from glob import glob
 import os
 import time
 from datetime import datetime
+
 from pytesdaq.config import settings
 from pytesdaq.scope import readout
 from pytesdaq.utils import arg_utils

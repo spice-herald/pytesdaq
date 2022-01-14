@@ -59,7 +59,16 @@ class Config:
         self._cached_config = None
         self._cached_config = configparser.RawConfigParser()
         self._cached_config.read([self._setup_file, self._sequencer_file])
+
+
         
+    def get_processing_setup(self):
+        """
+        Get sequencer processing setup
+        """
+       
+        return self._get_section_dict('processing')
+                  
         
 
     def get_sequencer_setup(self, measurement_name, measurement_list=None):
@@ -822,3 +831,39 @@ class Config:
 
 
     
+    def _get_section_dict(self, section):
+        """
+        Get section and store 
+        in dictionary
+        """
+        output_dict = dict()
+
+        
+        try:
+            section_config = self._get_section(section)
+            for config in section_config:
+                if len(config)!=2:
+                    continue
+                if config[1].strip() == '':
+                    continue
+                key = config[0]
+                values = [s.strip() for s in config[1].split(',')]
+                if len(values)==1:
+                    values = values[0]
+                    if values =='true' or values =='True':
+                        values = True
+                    elif values =='false' or values =='False':
+                        values = False
+                    elif values.isdigit():
+                        values = float(values)
+                elif len(values)>1:
+                    for ival in range(len(values)):
+                        if values[ival].isdigit():
+                            values[ival] = float(values[ival])
+                        
+                output_dict[key] = values
+
+        except:
+            return None
+
+        return output_dict

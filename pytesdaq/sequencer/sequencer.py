@@ -3,12 +3,14 @@ import time
 from datetime import datetime
 import os
 import shutil
+import stat
+
+
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.utils import connection_utils
 from pytesdaq.utils import arg_utils
 from pytesdaq.daq import daq
-import stat
 
 class Sequencer:
      """
