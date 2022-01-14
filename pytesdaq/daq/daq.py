@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import struct
+
 from pytesdaq.config import settings
 from pytesdaq.daq import polaris
 from pytesdaq.daq import nidaqtask

@@ -4,10 +4,10 @@ import os
 import numpy as np
 import pandas as pd
 from glob import glob
-from pytesdaq.utils import connection_utils
 import stat
 
 
+from pytesdaq.utils import connection_utils
 
 
 def extract_series_num(series_name):

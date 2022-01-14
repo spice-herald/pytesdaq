@@ -9,6 +9,7 @@ from nidaqmx.task import Task
 from nidaqmx.stream_readers import (
     AnalogUnscaledReader, AnalogSingleChannelReader, AnalogMultiChannelReader)
 import time
+
 import pytesdaq.instruments.niadc as niadc
 from pytesdaq.utils import arg_utils
 
