@@ -465,12 +465,19 @@ class ContinuousData:
                  negative_pulse=False,
                  filter_file=None):
         
-        
+
+        # input series
+        self._input_series = input_series
+        if (input_series is not None
+            and isinstance(input_series, list)):
+            if (input_series[0]=='even'
+                or input_series[0]=='odd'):
+                self._input_series =  input_series[0]
+                        
         # file list
         self._file_list = self._get_file_list(input_data_path,
-                                              series=input_series)
-
-        
+                                              series=self._input_series)
+              
         # negative pulse
         self._is_negative_pulse = negative_pulse
             
@@ -738,9 +745,14 @@ class ContinuousData:
                 dataset_metadata = dict()
                 dataset_metadata['event_time'] = float(info['event_time']) + bin_start_sec
 
-                
+                # file prefix
+                file_prefix = 'rand'
+                if (self._input_series == 'even'
+                    or  self._input_series == 'odd'):
+                    file_prefix = self._input_series + '_'+ file_prefix
+                            
                 # write new file
-                h5writer.write_event(traces, prefix='rand', data_mode='rand',
+                h5writer.write_event(traces, prefix=file_prefix, data_mode='rand',
                                      dataset_metadata=dataset_metadata)
 
 
@@ -774,14 +786,18 @@ class ContinuousData:
             print('')
             print('INFO: Starting PSD processing')
 
-
         
         # Get data
         if self._output_path is None:
             raise ValueError('ERROR: No base path and/or group name provided!'
                              + ' Unable to find raw data for calcularing PSD.')
 
-        file_list = glob(self._output_path + '/' + 'rand_*.hdf5')
+        file_prefix = 'rand'
+        if (self._input_series == 'even'
+            or  self._input_series == 'odd'):
+            file_prefix = self._input_series + '_' + file_prefix
+        
+        file_list = glob(self._output_path + '/' + file_prefix + '_*.hdf5')
         if len(file_list)<1:
             raise ValueError('ERROR: Unable to find randoms file in directory '
                              + self._output_path + '. Please check path or '
@@ -872,7 +888,12 @@ class ContinuousData:
 
 
         """
-
+        
+        # number of files
+        nb_files = len(self._file_list)
+        print('')
+        print('INFO: Starting trigger processing!')
+        print(f'INFO: Total number of files to be processed = {nb_files}')
 
         if  nb_cores==1:
             self._acquire_trigger(file_list=self._file_list,
@@ -903,9 +924,6 @@ class ContinuousData:
             for iproc in range(nb_cores):
                 series_list.append(series_name[:-2] + str(10+iproc))
                 
-            print('')
-            print('INFO: Starting trigger processing!')
-            print(f'INFO: Total number of files to be processed = {nb_files}')
             print(f'INFO: Processing with be split on {nb_cores} cores!')
             pool = Pool(processes=nb_cores)
             pool.starmap(self._acquire_trigger,
@@ -1401,12 +1419,19 @@ class ContinuousData:
                     else:
                         trigger_channels.append(trig_chan)
                 dataset_metadata['trigger_channel'] = trigger_channels
+
+                # file prefix
+                file_prefix = 'threshtrig'
+                if (self._input_series == 'even'
+                    or  self._input_series == 'odd'):
+                    file_prefix = self._input_series + '_' + file_prefix
+
                 
                 # write new file
                 if debug:
                     print(filtcomb.evttraces[itrig])
                     print(dataset_metadata)
-                h5writer.write_event(filtcomb.evttraces[itrig], prefix='threshtrig',
+                h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
                                            data_mode='threshold',
                                            dataset_metadata=dataset_metadata)
                 
@@ -1474,7 +1499,6 @@ class ContinuousData:
         else:
             file_list.sort()
 
-     
         return file_list
 
 
