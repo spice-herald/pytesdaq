@@ -49,7 +49,7 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
     lowpassgain: int
         The value of fix low pass filter driver gain (DCRC RevD = 2,
         DCRC RevE = 4).
-    autoresample_didv : bool, optional
+    autoresample_didv : bool
         If True, the DIDV code will automatically resample
         the DIDV data so that `fs` / `sgfreq` is an integer, which
         ensures that an arbitrary number of signal-generator
