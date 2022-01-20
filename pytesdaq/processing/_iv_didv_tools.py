@@ -10,7 +10,7 @@ from scipy import constants
 from scipy.signal import savgol_filter
 from lmfit import Model
 
-import pytesdaq.processing._iv_didv_tools_plotting as plot
+from pytesdaq.processing import _iv_didv_tools_plotting as plot
 import qetpy as qp
 from qetpy import IBIS, DIDV, Noise, didvinitfromdata, autocuts
 from qetpy.sim import TESnoise, loadfromdidv, energy_res_estimate
