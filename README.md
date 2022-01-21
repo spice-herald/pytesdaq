@@ -1,6 +1,6 @@
 # `pytesdaq`
 
-[![Python 3.6](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/release/python-360/)
+[![PyPI](https://img.shields.io/pypi/v/pytesdaq)](https://pypi.org/project/pytesdaq/) [![Python 3.6](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/release/python-360/)
 
 `pytesdaq` contains python data acquisition and data handling code for TES detector related R&D and dark matter searches.
 
