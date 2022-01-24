@@ -19,7 +19,8 @@ __all__ = [
 
 
 def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
-                    rshunt, rbias, lowpassgain, autoresample_didv, lgcverbose):
+                    rshunt, rbias, lowpassgain, autoresample_didv, dutycycle,
+                    lgcverbose):
     """
     Helper function to process data from noise or dIdV series as part
     of an IV/dIdV sweep. See Notes for more details on what parameters
@@ -55,6 +56,9 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
         ensures that an arbitrary number of signal-generator
         periods can fit in an integer number of time bins. See
         `qetpy.utils.resample_data` for more info.
+    dutycycle : float
+        The duty cycle of the signal generator, should be a float
+        between 0 and 1.
     lgcverbose : bool
         If True, the series number being processed will be displayed.
 
@@ -87,6 +91,7 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
         The boolean cut mask,
         A boolean saying whether or not the auto cuts were successful
             or not.
+        dutycycle of the square wave
 
     """
 
@@ -260,6 +265,7 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
                 cut_eff,
                 cut,
                 cut_pass,
+                dutycycle,
             ]
             data_list.append(data)
 
@@ -304,6 +310,7 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
                 sgamp,
                 rshunt,
                 autoresample=autoresample_didv,
+                dutycycle=dutycycle,
             )
             didvobj.processtraces()
 
@@ -333,6 +340,7 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
                 cut_eff,
                 cut,
                 cut_pass,
+                dutycycle,
             ]
             data_list.append(data)
 
@@ -342,8 +350,8 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
 def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
                     loopgain=2.4, binstovolts=65536/8, rshunt=0.005,
                     rbias=20000, lowpassgain=4, autoresample_didv=False,
-                    lgcverbose=False, lgcsave=True, nprocess=1,
-                    savepath='', savename='IV_dIdV_DF'):
+                    dutycycle=0.5, lgcverbose=False, lgcsave=True,
+                    nprocess=1, savepath='', savename='IV_dIdV_DF'):
     """
     Function to process data for an IV/dIdV sweep. See Notes for
     more details on what parameters are calculated.
@@ -380,6 +388,9 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
         ensures that an arbitrary number of signal-generator
         periods can fit in an integer number of time bins. See
         `qetpy.utils.resample_data` for more info.
+    dutycycle : float, optional
+        The duty cycle of the signal generator, should be a float
+        between 0 and 1.
     lgcverbose : bool, optional
         If True, the series number being processed will be displayed.
     lgcsave : bool, optional
@@ -429,6 +440,7 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
         The boolean cut mask,
         A boolean saying whether or not the auto cuts were successful
             or not.
+        duty cycle of the square wave
 
     """
 
@@ -456,6 +468,7 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
                 rbias,
                 lowpassgain,
                 autoresample_didv,
+                dutycycle,
                 lgcverbose,
             ))
     else:
@@ -474,6 +487,7 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
                     rbias,
                     lowpassgain,
                     autoresample_didv,
+                    dutycycle,
                     lgcverbose,
                 ),
             ),
@@ -502,6 +516,7 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
             "cut_eff",
             "cut",
             "cut_pass",
+            "dutycycle",
         ],
     )
 
