@@ -34,5 +34,6 @@ setup(name='pytesdaq',
           'scipy',
           'seaborn',
           'astropy',
+          'lmfit',
       ],
 )
