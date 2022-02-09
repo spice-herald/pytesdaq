@@ -4,6 +4,7 @@ from pyramid.view import (
     )
 
 from pytesdaq.display import db
+from pytesdaq.display.series import *
 
 server = db.MySQLCore()
 
