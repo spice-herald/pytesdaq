@@ -36,7 +36,7 @@
 
   </head>
 
-  <%include file="/header.mako" /> 
+  <%include file="header.mako" /> 
   <body>
   
 

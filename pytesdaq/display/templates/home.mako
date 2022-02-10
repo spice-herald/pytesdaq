@@ -36,7 +36,7 @@
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
 
   </head>
-  <%include file="/header.mako" /> 
+  <%include file="header.mako" /> 
   <body>
    
 
