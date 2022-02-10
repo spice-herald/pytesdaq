@@ -64,7 +64,7 @@ class MainViews:
         return {'name': str(group_name), 'this_group': ind_group, 'group_series_list': serieslist}
 
 
-    @view_config(route_name='groups', renderer='../templates/groups.mako')
+    @view_config(route_name='groups', renderer='../templates/group.mako')
     def series_test(self):
 
         def search(dic):
