@@ -54,7 +54,7 @@ class MainViews:
 
         server.connect_test()
 
-        serieslist = server.query('series', ['group_name', group_name])
+        serieslist = server.query('series', key=["group_name", group_name])
 
         server.disconnect()
 
@@ -74,7 +74,9 @@ class MainViews:
         grouplist.sort(key=search)
         return {'name': 'Groups', 'grouplist': grouplist}
 
-    
+
+
+
 
 
 
