@@ -238,7 +238,7 @@ class MySQLCore:
             
         if key:
             column, rowval = key
-            select_stmt = 'SELECT * from {0} HAVING {1}={2};'.format(table_name, column, rowval)
+            select_stmt = 'SELECT * from {0} WHERE {1}={2};'.format(table_name, column, rowval)
         # access database
         cursor = self._cnx.cursor()
         result = []
