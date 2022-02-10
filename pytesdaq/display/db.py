@@ -222,7 +222,7 @@ class MySQLCore:
 
         cursor.close()
 
-    def query(self, table_name, values=[], key=[]): #key = [column, rowval]
+    def query(self, table_name, values=[], key=[]): #key = ["column_name", rowval]
         
         # sanity checks
         if self._cnx is None:
@@ -238,7 +238,7 @@ class MySQLCore:
             
         if key:
             column, rowval = key
-            select_stmt = 'SELECT * from {0} WHERE {1}={2};'.format(table_name, column, rowval)
+            select_stmt = 'SELECT * from {0} WHERE {1}={2};'.format(table_name, column.strip('"'), rowval)
         # access database
         cursor = self._cnx.cursor()
         result = []
