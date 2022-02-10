@@ -65,7 +65,7 @@ class MainViews:
 
 
     @view_config(route_name='groups', renderer='../templates/group.mako')
-    def series_test(self):
+    def groups(self):
 
         def search(dic):
             return dic['group_name']
@@ -73,6 +73,10 @@ class MainViews:
         grouplist = MainViews.grouplist
         grouplist.sort(key=search)
         return {'name': 'Groups', 'grouplist': grouplist}
+
+    
+
+
 
     
 
