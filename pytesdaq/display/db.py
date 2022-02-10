@@ -2,7 +2,7 @@ from __future__ import print_function
 import mysql.connector as mariadb
 from mysql.connector import errorcode
 import time
-from psycopg2.extensions import AsIs
+
 
 
 class MySQLCore:
@@ -239,7 +239,7 @@ class MySQLCore:
             
         if key:
             column, rowval = key
-            select_stmt = 'SELECT * from {0} WHERE {1}={2};'.format(table_name, AsIs(column), rowval)
+            select_stmt = 'SELECT * from {0} WHERE {1:s}={2};'.format(table_name, column, rowval)
         # access database
         cursor = self._cnx.cursor()
         result = []
