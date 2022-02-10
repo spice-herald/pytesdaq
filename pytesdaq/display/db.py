@@ -239,7 +239,7 @@ class MySQLCore:
             
         if key:
             column, rowval = key
-            select_stmt = 'SELECT * from %s WHERE %s = %;' %(table_name, column, rowval)
+            select_stmt = 'SELECT * from {0} WHERE {1} = {2};'.format(table_name, column, repr(rowval))
         # access database
         cursor = self._cnx.cursor()
         result = []
