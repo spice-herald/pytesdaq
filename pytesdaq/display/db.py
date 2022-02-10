@@ -6,7 +6,7 @@ import time
 
 class MySQLCore:
 
-    def __init__(self, dbname = 'tesdaq'):
+    def __init__(self, dbname = 'pylelab_daq'):
 
         self._dbname = dbname
         self._cnx = None
