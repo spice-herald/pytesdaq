@@ -72,7 +72,7 @@ class MainViews:
 
         grouplist = MainViews.grouplist
         grouplist.sort(key=search)
-        return {'name': 'Groups', 'groups': grouplist}
+        return {'name': 'Groups', 'grouplist': grouplist}
 
     
 
