@@ -32,8 +32,9 @@ class MainViews:
         def search(dic):
             return dic['series_num']
 
-        MainViews.serieslist.sort(key=search)
-        return {'name': 'Series_Test', 'series': MainViews.serieslist}
+        serieslist = MainViews.serieslist
+        serieslist.sort(key=search)
+        return {'name': 'Series_Test', 'series': serieslist}
 
     @view_config(route_name='series_info', renderer='../templates/series_info.mako')
     def series_info(self):
@@ -69,8 +70,9 @@ class MainViews:
         def search(dic):
             return dic['group_name']
 
-        MainViews.grouplist.sort(key=search)
-        return {'name': 'Groups', 'groups': MainViews.grouplist}
+        grouplist = MainViews.grouplist
+        grouplist.sort(key=search)
+        return {'name': 'Groups', 'groups': grouplist}
 
     
 
