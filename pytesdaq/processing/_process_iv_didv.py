@@ -18,8 +18,7 @@ __all__ = [
 ]
 
 
-def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
-                    rshunt, rbias, lowpassgain, autoresample_didv, dutycycle,
+def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
                     lgcverbose):
     """
     Helper function to process data from noise or dIdV series as part
@@ -33,23 +32,6 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
     chans : list
         List containing strings corresponding to the names of all the
         channels of interest.
-    detectorid : str
-        The label of the detector, i.e. Z1, Z2, .. etc.
-    rfb : int
-        The resistance of the feedback resistor in the phonon
-        amplifier.
-    loopgain : float
-        The ratio of number of turns in the squid input coil vs
-        feedback coil.
-    binstovolts : int
-        The bit depth divided by the dynamic range of the ADC in Volts.
-    rshunt : float
-        The value of the shunt resistor in the TES circuit.
-    rbias : int
-        The value of the bias resistor on the test signal line.
-    lowpassgain: int
-        The value of fix low pass filter driver gain (DCRC RevD = 2,
-        DCRC RevE = 4).
     autoresample_didv : bool
         If True, the DIDV code will automatically resample
         the DIDV data so that `fs` / `sgfreq` is an integer, which
@@ -347,11 +329,9 @@ def _process_ivfile(filepath, chans, detectorid, rfb, loopgain, binstovolts,
     return data_list
 
 
-def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
-                    loopgain=2.4, binstovolts=65536/8, rshunt=0.005,
-                    rbias=20000, lowpassgain=4, autoresample_didv=False,
-                    dutycycle=0.5, lgcverbose=False, lgcsave=True,
-                    nprocess=1, savepath='', savename='IV_dIdV_DF'):
+def process_ivsweep(ivfilepath, chans, autoresample_didv=False, dutycycle=0.5,
+                    lgcverbose=False, lgcsave=True, nprocess=1, savepath='',
+                    savename='IV_dIdV_DF'):
     """
     Function to process data for an IV/dIdV sweep. See Notes for
     more details on what parameters are calculated.
@@ -365,23 +345,6 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
     chans : list
         List containing strings corresponding to the names of all the
         channels of interest.
-    detectorid : str, optional
-        The label of the detector, i.e. Z1, Z2, .. etc
-    rfb : int
-        The resistance of the feedback resistor in the phonon
-        amplifier.
-    loopgain : float, optional
-        The ratio of number of turns in the squid input coil vs
-        feedback coil.
-    binstovolts : int, optional
-        The bit depth divided by the dynamic range of the ADC in Volts.
-    rshunt : float, optional
-        The value of the shunt resistor in the TES circuit.
-    rbias : int, optional
-        The value of the bias resistor on the test signal line.
-    lowpassgain: int, optional
-         The value of fix low pass filter driver gain (DCRC RevD = 2,
-         DCRC RevE = 4).
     autoresample_didv : bool, optional
         If True, the DIDV code will automatically resample
         the DIDV data so that `fs` / `sgfreq` is an integer, which
@@ -460,13 +423,6 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
             results.append(_process_ivfile(
                 filepath,
                 chans,
-                detectorid,
-                rfb,
-                loopgain,
-                binstovolts,
-                rshunt,
-                rbias,
-                lowpassgain,
                 autoresample_didv,
                 dutycycle,
                 lgcverbose,
@@ -479,13 +435,6 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
                 files,
                 repeat(
                     chans,
-                    detectorid,
-                    rfb,
-                    loopgain,
-                    binstovolts,
-                    rshunt,
-                    rbias,
-                    lowpassgain,
                     autoresample_didv,
                     dutycycle,
                     lgcverbose,
@@ -494,7 +443,7 @@ def process_ivsweep(ivfilepath, chans, detectorid="Z1", rfb=5000,
         ) 
         pool.close()
         pool.join()
-        
+
     flat_result = [item for sublist in results for item in sublist]
     df = pd.DataFrame(
         flat_result,
