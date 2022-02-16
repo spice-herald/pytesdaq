@@ -245,10 +245,10 @@ class MySQLCore:
         result = []
         try:    
             cursor.execute(select_stmt)
-            for x in cursor:
-                desc = cursor.description
-                column_names = [col[0] for col in desc]
-                result = [dict(zip(column_names, row))  
+            
+            desc = cursor.description
+            column_names = [col[0] for col in desc]
+            result = [dict(zip(column_names, row))  
                     for row in cursor]
         except mariadb.Error as err:
             print (err.msg)
