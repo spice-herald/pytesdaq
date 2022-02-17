@@ -3,6 +3,7 @@ import pytesdaq.daq as daq
 from pytesdaq.config import settings
 from pytesdaq.instruments import control as instrument
 from pytesdaq.utils import arg_utils
+from pytesdaq.utils import connection_utils
 import numpy as np
 import os
 from datetime import datetime
@@ -15,15 +16,18 @@ if __name__ == "__main__":
     # Input arguments
     # ========================
     parser = argparse.ArgumentParser(description="Launch DAQ")
-
-    parser.add_argument('--total_duration', '--duration', dest='duration', type=float,
-                        help = 'Total duration of data taking in hours [default same as run time]')
-    parser.add_argument('--run_time','--run_time_min', dest='run_time_min', type = float,
-                        help = 'Run time in minutes')
+    parser.add_argument('-c','--channels', dest='channels',
+                        nargs= '+', type=str, required=True,
+                        help=('(required) Comma and/or space separated "detector" OR "TES readout" channels'
+                              ' OR ADC index # (format for ADC#: a,b,c-d)'))
+    parser.add_argument('--run_time','--run_time_min', dest='run_time_min', type=float, required=True,
+                        help = 'Time of a single data taking run (in minutes)')
     parser.add_argument('--run_time_sec', type = float,
                         help = 'Run time in seconds')
     parser.add_argument('--run_type', type = str,
                         help = 'Run type [default: 1 = "Test"]')
+    parser.add_argument('--total_duration', '--duration', dest='duration', type=float,
+                        help = 'Total duration of data taking in hours [default same as run time]')
     parser.add_argument('--group_prefix', type = str,
                         help = 'Group prefix [Default depends of data type]')
     parser.add_argument('--group_name', type = str,
@@ -49,8 +53,6 @@ if __name__ == "__main__":
                         help='Minimum ADC voltage [default from configuration setup file] ')
     parser.add_argument('--voltage_max',
                         help='Maximum ADC voltage [default from configuration setup file] ')
-    parser.add_argument('--adc_channels', '--channels', dest='adc_channels', type = str,
-                        help='ADC channels number/index, format="a,b,c-d" [default from setup file] ')
     parser.add_argument('--adc_devices',
                         help='ADC Devices number, format="a,b,c-d" [default from setup file] ')
     parser.add_argument('--disable-lock', dest='disable_lock', action='store_true',
@@ -97,16 +99,17 @@ if __name__ == "__main__":
 
         
     config = settings.Config(setup_file=setup_file)
+
+    # default ADC list
     adc_list = config.get_adc_list()
     adc_config  = dict()
     for adc_name in adc_list:
         adc_config[adc_name] =  config.get_adc_setup(adc_name)
-
-   
+             
     # ------------------
-    # Parse arguments 
+    # Parse other arguments 
     # ------------------
-            
+    
     if args.run_time_min:
         run_time_seconds = float(args.run_time_min)*60
     elif args.run_time_sec:
@@ -148,7 +151,54 @@ if __name__ == "__main__":
         nb_runs = 1
 
 
+    # ------------------
+    # Extract ADC channels
+    # ------------------
+    adc_channels = list()
+    channels = arg_utils.extract_list(args.channels)
+
+    # check if ADC number
+    is_adc_num = True
+    for channel in channels:
+        for digit_str in channel:
+            if not (digit_str.isdigit() or digit_str=='-'):
+                is_adc_num = False
+                break
+ 
+    if is_adc_num:
+        for channel in channels:
+            adc_channels.extend(arg_utils.hyphen_range(channel))
+    else:
+
+        # connection table 
+        connection_table = config.get_adc_connections()
+        connection_dict = connection_utils.get_items(connection_table)
+    
+        for channel in channels:
         
+            channel_type = None
+            if channel in connection_dict['detector_channel']:
+                channel_type = 'detector_channel'
+            elif channel in connection_dict['tes_channel']:
+                channel_type = 'tes_channel'
+
+            if channel_type is  None:
+                print('ERROR: Unable to identify channel type. Use ADC index # instead!')
+                exit()
+
+            # convert to ADC
+            adc_channel = connection_table.query(
+                          channel_type + ' == @channel')['adc_channel'].values
+            if len(adc_channel) !=  1:
+                print('ERROR: Channel ' + channel + ' is not unique or does not exist!'
+                      + 'Please check input or connections map in setup.ini)')
+                
+            adc_channels.append(int(adc_channel[0]))
+                                 
+    
+    # ------------------
+    # ADC configuration
+    # ------------------
     
     # ADC configuration
     if args.adc_devices:
@@ -174,17 +224,15 @@ if __name__ == "__main__":
             config_dict['voltage_min'] = float(args.voltage_min)
         if args.voltage_max:
             config_dict['voltage_max'] = float(args.voltage_max)
-        if args.adc_channels:
-            config_dict['channel_list'] = args.adc_channels
+        if args.channels:
+            config_dict['channel_list'] = adc_channels
         if args.trigger_type:
             config_dict['trigger_type'] = int(args.trigger_type)
 
-        config_dict['channel_list'] =  arg_utils.hyphen_range(config_dict['channel_list'])
         adc_config[adc_name] = config_dict
         trigger_type.append(int(config_dict['trigger_type']))
         
-        
-
+  
     # ========================
     # Get detector config
     # ========================

@@ -13,7 +13,7 @@ class IV_dIdV(Sequencer):
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
                  comment='No comment',
-                 detector_channels=None,
+                 sweep_channels=None, saved_channels=None,
                  sequencer_file=None, setup_file=None, sequencer_pickle_file=None,
                  dummy_mode=False,
                  do_relock=False, do_zero=False, do_zap=False,
@@ -45,7 +45,8 @@ class IV_dIdV(Sequencer):
         super().__init__('iv_didv',
                          measurement_list=measurement_list,
                          comment=comment,
-                         detector_channels=detector_channels,
+                         detector_channels=sweep_channels,
+                         saved_detector_channels=saved_channels,
                          sequencer_file=sequencer_file,
                          setup_file=setup_file,
                          sequencer_pickle_file=sequencer_pickle_file,
@@ -250,84 +251,88 @@ class IV_dIdV(Sequencer):
                 for channel in self._detector_channels:
                     self._instrument.set_tes_bias(bias, detector_channel=channel)
                     
+                # sleep
+                #if tes_bias_change_sleep_time in sweep_config:
+                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
+                time.sleep(sleeptime_s)
 
+
+                
                 # if step 1: tes zap, relock, zero
                 if istep==1:
 
                     # Relock
                     if self._do_relock:
-                        print('INFO: Relocking channel ' + channel) 
-                        self._instrument.relock(detector_channel=channel)
+
+                        # relock each channel
+                        for channel in self._detector_channels:
+                            print('INFO: Relocking channel ' + channel) 
+                            self._instrument.relock(detector_channel=channel)
                         
                     # Zero
                     if self._do_zero_offset:
 
-                        print('INFO: Zeroing offset channel ' + channel) 
+                        # zero once each channel
+                        for channel in self._detector_channels:
+                            print('INFO: Zeroing offset channel ' + channel) 
 
-                        # instantiate nidaq
-                        daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
+                            # instantiate nidaq
+                            daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
 
                         
-                        # setup ADC
-                        adc_id, adc_chan = connection_utils.get_adc_channel_info(
-                            self._detector_connection_table,
-                            detector_channel=channel
-                        )
+                            # setup ADC
+                            adc_id, adc_chan = connection_utils.get_adc_channel_info(
+                                self._detector_connection_table,
+                                detector_channel=channel
+                            )
 
-                        setup_dict = dict()
-                        setup_dict[adc_id] = self._config.get_adc_setup(adc_id).copy()
-                        setup_dict[adc_id]['nb_samples'] = 20000
-                        setup_dict[adc_id]['channel_list'] = [adc_chan]
-                        setup_dict[adc_id]['trigger_type'] = 3
+                            setup_dict = dict()
+                            setup_dict[adc_id] = self._config.get_adc_setup(adc_id).copy()
+                            setup_dict[adc_id]['nb_samples'] = 20000
+                            setup_dict[adc_id]['channel_list'] = [adc_chan]
+                            setup_dict[adc_id]['trigger_type'] = 3
 
-                        daq_online.set_adc_config_from_dict(setup_dict)
+                            daq_online.set_adc_config_from_dict(setup_dict)
 
 
-                        # initialize array
-                        data_array = np.zeros((1,20000), dtype=np.int16)
-                        data_buffer = None
+                            # initialize array
+                            data_array = np.zeros((1,20000), dtype=np.int16)
+                            data_buffer = None
 
-                        for ievent in range(50):
+                            for ievent in range(50):
 
-                            # get event
-                            daq_online.read_single_event(data_array, do_clear_task=False)
+                                # get event
+                                daq_online.read_single_event(data_array, do_clear_task=False)
                          
-                            # normalize to volts
-                            data_array_norm = np.zeros_like(data_array, dtype=np.float64)
-                            cal_coeff = setup_dict[adc_id]['adc_conversion_factor'][0][::-1]
-                            poly = np.poly1d(cal_coeff)
-                            data_array_norm[0,:] = poly(data_array[0,:])
+                                # normalize to volts
+                                data_array_norm = np.zeros_like(data_array, dtype=np.float64)
+                                cal_coeff = setup_dict[adc_id]['adc_conversion_factor'][0][::-1]
+                                poly = np.poly1d(cal_coeff)
+                                data_array_norm[0,:] = poly(data_array[0,:])
+                                
+                                # save in buffer
+                                data_array_norm.shape +=(1,)
             
-                            # save in buffer
-                            data_array_norm.shape +=(1,)
-            
-                            if data_buffer is None:
-                                data_buffer = data_array_norm
-                            else:
-                                data_buffer = np.append(data_buffer, data_array_norm, axis=2)
+                                if data_buffer is None:
+                                    data_buffer = data_array_norm
+                                else:
+                                    data_buffer = np.append(data_buffer, data_array_norm, axis=2)
 
                         
-                        daq_online.clear()
+                            daq_online.clear()
 
-                        # calc offset
-                        data_mean = np.mean(data_buffer, axis=2)
-                        offset = float(np.median(data_mean, axis=1))
+                            # calc offset
+                            data_mean = np.mean(data_buffer, axis=2)
+                            offset = float(np.median(data_mean, axis=1))
 
-                        # zero
-                        driver_gain = self._instrument.get_output_total_gain(detector_channel=channel)
-                        current_offset = self._instrument.get_output_offset(detector_channel=channel)
-                        new_offset = current_offset-offset/driver_gain
-                        self._instrument.set_output_offset(new_offset, detector_channel=channel)
+                            # zero
+                            driver_gain = self._instrument.get_output_total_gain(detector_channel=channel)
+                            current_offset = self._instrument.get_output_offset(detector_channel=channel)
+                            new_offset = current_offset-offset/driver_gain
+                            self._instrument.set_output_offset(new_offset, detector_channel=channel)
                         
 
-                    
-                # sleep
-                #if tes_bias_change_sleep_time in sweep_config:
-                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
-                time.sleep(sleeptime_s)
-                
-
-
+            
                 # get temperature
                 if self._enable_temperature_sweep:
                     temperature = self._instrument.get_temperature(
@@ -369,11 +374,12 @@ class IV_dIdV(Sequencer):
                     
                     # get/set detector config metadata
                     det_config = dict()
-                    adc_channel_dict= connection_utils.get_adc_channel_list(
+                    adc_channel_dict = connection_utils.get_adc_channel_list(
                         self._detector_connection_table,
-                        detector_channel_list=self._detector_channels
+                        detector_channel_list=self._saved_detector_channels
                     )
 
+                                     
                     for adc_name in adc_channel_dict:
                         det_config[adc_name] = self._instrument.read_all(
                             adc_id=adc_name,
@@ -383,8 +389,6 @@ class IV_dIdV(Sequencer):
                         if temperature is not None:
                             det_config[adc_name]['temperature'] = temperature
                             
-                    
-                        
                     self._daq.set_detector_config(det_config)
                     
                     # take data
@@ -453,7 +457,7 @@ class IV_dIdV(Sequencer):
                             det_config = dict()
                             adc_channel_dict = connection_utils.get_adc_channel_list(
                                 self._detector_connection_table,
-                                detector_channel_list=self._detector_channels
+                                detector_channel_list=self._saved_detector_channels
                             )
                             
                             for adc_name in adc_channel_dict:
@@ -499,7 +503,7 @@ class IV_dIdV(Sequencer):
                         det_config = dict()
                         adc_channel_dict= connection_utils.get_adc_channel_list(
                             self._detector_connection_table,
-                            detector_channel_list=self._detector_channels
+                            detector_channel_list=self._saved_detector_channels
                         )
 
                         for adc_name in adc_channel_dict:
