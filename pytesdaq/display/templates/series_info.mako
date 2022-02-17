@@ -42,8 +42,8 @@
 
 <main role="main" class="container">
 
-    <h2>Series Info for ${this_series['series_num']}</h2>
-    <h3> In group <a  href="/group/${this_series['group_name']}">${this_series['group_name']}</a></h3>
+    <h2>Series Info for series ${this_series['series_num']}</h2>
+    <h5> In group <a  href="/group/${this_series['group_name']}">${this_series['group_name']}</a></h5>
 
   <div>
      <table id="series_table" class="table table-hover table-sm table-responsive table-bordered table-striped" style="font-size: 0.8rem;">
@@ -57,6 +57,21 @@
             </tbody>
           </table>
   </div>
+
+  <h5> Detector configuration</a></h5>
+  <script>
+    document.innerHTML += detector_config;
+  </script>
+
+  <h5> ADC configuration</a></h5>
+  <script>
+    document.innerHTML += detector_config;
+  </script>
+
+  <h5> Connection Table</a></h5>
+  <script>
+    document.innerHTML += detector_config;
+  </script>
 
 </main><!-- /.container -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
