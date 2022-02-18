@@ -12,6 +12,7 @@ class IV_dIdV(Sequencer):
     
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
+                 tes_bias_sweep=True,
                  comment='No comment',
                  sweep_channels=None, saved_channels=None,
                  sequencer_file=None, setup_file=None, sequencer_pickle_file=None,
@@ -25,7 +26,8 @@ class IV_dIdV(Sequencer):
         self._enable_rp = rp
         self._enable_rn = rn
         self._enable_temperature_sweep = temperature_sweep
-
+        self._enable_tes_bias_sweep = tes_bias_sweep
+        
         # relock/zap
         self._do_zap_tes = do_zap
         self._do_relock = do_relock
@@ -229,9 +231,13 @@ class IV_dIdV(Sequencer):
             # IV-dIdV:  TES bias loop
             sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
             tes_bias_vect = sweep_config['tes_bias_vect']
+            if not self._enable_tes_bias_sweep:
+                tes_bias_vect = [None]
+                
             nb_steps = len(tes_bias_vect)
             istep = 0
 
+                        
 
             # Instantiate DAQ
             self._daq = daq.DAQ(driver_name=self._daq_driver,
@@ -244,17 +250,18 @@ class IV_dIdV(Sequencer):
 
                 # set bias all channels
                 istep+=1
-                print('INFO: Sequencer step #' + str(istep) + ' out of total '
-                      + str(nb_steps) + ' steps!')
-                print('INFO: Setting TES bias all channels to : '
-                      + str(bias) + 'uA!')
-                for channel in self._detector_channels:
-                    self._instrument.set_tes_bias(bias, detector_channel=channel)
+                if self._enable_tes_bias_sweep:
+                    print('INFO: Sequencer step #' + str(istep) + ' out of total '
+                          + str(nb_steps) + ' steps!')
+                    print('INFO: Setting TES bias all channels to : '
+                          + str(bias) + 'uA!')
+                    for channel in self._detector_channels:
+                        self._instrument.set_tes_bias(bias, detector_channel=channel)
                     
-                # sleep
-                #if tes_bias_change_sleep_time in sweep_config:
-                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
-                time.sleep(sleeptime_s)
+                    # sleep
+                    #if tes_bias_change_sleep_time in sweep_config:
+                    print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
+                    time.sleep(sleeptime_s)
 
 
                 
@@ -392,12 +399,16 @@ class IV_dIdV(Sequencer):
                     self._daq.set_detector_config(det_config)
                     
                     # take data
-                    run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
+                    if self._enable_tes_bias_sweep:
+                        run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
+                        print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                    else:
+                        run_comment = 'IV (bias sweep disabled)'
+                        print('INFO: Starting IV data taking (bias sweep disabled)!')
+
                     if self._enable_temperature_sweep:
                         run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-
-
-                    print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                        
                     success = self._daq.run(run_time=int(iv_config['run_time']),
                                             run_type=102,
                                             run_comment=run_comment,
@@ -428,11 +439,13 @@ class IV_dIdV(Sequencer):
                     
                         # signal generator
                         
-                        self._instrument.set_signal_gen_params(detector_channel=channel,source='tes', 
-                                                               voltage=didv_config['signal_gen_voltage'],
-                                                               current=didv_config['signal_gen_current'],
-                                                               frequency=didv_config['signal_gen_frequency'],
-                                                               shape='square')
+                        self._instrument.set_signal_gen_params(
+                            detector_channel=channel,source='tes', 
+                            voltage=didv_config['signal_gen_voltage'],
+                            current=didv_config['signal_gen_current'],
+                            frequency=didv_config['signal_gen_frequency'],
+                            shape='square'
+                        )
 
 
                     
@@ -473,12 +486,26 @@ class IV_dIdV(Sequencer):
 
                     
                             # take data
-                            run_comment = 'dIdV chan ' + str(channel) + ': TES bias = ' + str(bias) + 'uA'
+                            run_comment = ('dIdV chan ' + str(channel) + ': TES bias = '
+                                           + str(bias) + 'uA')
+                         
+                            if self._enable_tes_bias_sweep:
+                                run_comment = ('dIdV chan ' + str(channel)
+                                               + ': TES bias = ' + str(bias) + 'uA')
+                                print('INFO: Starting dIdV data taking for channel '
+                                      + str(channel)
+                                      + ' with TES bias = ' + str(bias) + 'uA!')
+                            else:
+                                run_comment = ('dIdV chan ' + str(channel)
+                                               + ' (bias sweep disabled)')
+                                print('INFO: Starting dIdV data taking for channel '
+                                      + str(channel)
+                                      + ' (bias sweep disabled)')
+
                             if self._enable_temperature_sweep:
                                 run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-                                
-                            print('INFO: Starting dIdV data taking for channel ' + str(channel)
-                                  + ' with TES bias = ' + str(bias) + 'uA!')
+
+                              
                             success = self._daq.run(run_time=int(didv_config['run_time']),
                                                     run_type=103,
                                                     run_comment=run_comment,
@@ -518,12 +545,16 @@ class IV_dIdV(Sequencer):
 
 
                         # start run
-                        run_comment = 'dIdV: TES bias = ' + str(bias) + 'uA'
-                        if sweep_config['temperature_sweep']:
+                        if self._enable_tes_bias_sweep:
+                            run_comment = 'dIdV: ' + ' TES bias = ' + str(bias) + 'uA'
+                            print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                        else:
+                            run_comment = 'dIdV (bias sweep disabled)'
+                            print('INFO: Starting dIdV data taking (bias sweep disabled)!')
+
+                        if self._enable_temperature_sweep:
                             run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-
-
-                        print('INFO: Starting dIdV data takibg with TES bias = ' + str(bias) + 'uA!')
+                      
                         success = self._daq.run(run_time=int(didv_config['run_time']),
                                                 run_type=103,
                                                 run_comment=run_comment,
