@@ -47,7 +47,7 @@ class Sequencer:
           self._dummy_mode = dummy_mode
           self._facility = 1
           self._save_raw_data = True
-          self._group_name = 'None'
+          self._group_name = None
           self._fridge_run = None
           
 

@@ -202,16 +202,18 @@ class IV_dIdV(Sequencer):
                 
 
             # create sequencer directory
-            basename = str()
-            if self._enable_iv:
-                basename += '_iv'
-            if self._enable_didv:
-                basename += '_didv'
+            if (self._enable_tes_bias_sweep or
+                self._group_name is None):
+                basename = str()
+                if self._enable_iv:
+                    basename += '_iv'
+                if self._enable_didv:
+                    basename += '_didv'
         
-            if basename[0] == '_':
-                basename = basename[1:]
+                if basename[0] == '_':
+                    basename = basename[1:]
 
-            self._create_measurement_directories(basename)
+                self._create_measurement_directories(basename)
         
 
 
