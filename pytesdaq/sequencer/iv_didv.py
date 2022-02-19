@@ -153,9 +153,19 @@ class IV_dIdV(Sequencer):
             thermometer_global_num = None
             if 'thermometer_global_num' in sweep_config:
                 thermometer_global_num = int(sweep_config['thermometer_global_num'])
+                
             thermometer_name = None
             if 'thermometer_name' in sweep_config:
                 thermometer_name = sweep_config['thermometer_name']
+
+            # other thermometer measurement
+            monitoring_thermometer_names = None
+            if 'monitoring_thermometer_names' in sweep_config:
+                monitoring_thermometer_names = sweep_config[
+                    'monitoring_thermometer_names'
+                    ]
+                if not isinstance(monitoring_thermometer_names, list):
+                    monitoring_thermometer_names = [monitoring_thermometer_names]
 
             # heater
             heater_global_num = None
@@ -182,6 +192,8 @@ class IV_dIdV(Sequencer):
             
             # change temperature
             temperature = None
+            monitoring_temperature_list = None
+            
             if self._enable_temperature_sweep:
                 
                 temperature = temperature_vect[istep]/1000
@@ -344,16 +356,27 @@ class IV_dIdV(Sequencer):
             
                 # get temperature
                 if self._enable_temperature_sweep:
+                    
                     temperature = self._instrument.get_temperature(
                         channel_name=thermometer_name,
                         global_channel_number=thermometer_global_num
                     )
-                    
-                    print('INFO: Temperature is '
-                          + str(temperature*1000) +'mK!')
-                
 
-             
+                    if thermometer_name is not None:
+                        print('INFO: ' + thermometer_name + ' temperature is '
+                              + str(temperature*1000) +'mK!')
+                    else:
+                         print('INFO: Temperature is '
+                               + str(temperature*1000) +'mK!')
+
+                    if monitoring_thermometer_names is not None:
+                        monitoring_temperature_list = list()
+                        for thermometer in monitoring_thermometer_names:
+                            monitoring_temperature_list.append(
+                                self._instrument.get_temperature(
+                                    channel_name=thermometer)
+                            )
+                            time.sleep(2)
                     
                 # -----------
                 # IV
@@ -396,7 +419,18 @@ class IV_dIdV(Sequencer):
                         )
 
                         if temperature is not None:
-                            det_config[adc_name]['temperature'] = temperature
+                            key_temp = 'temperature'
+                            if thermometer_name  is not None:
+                                key_temp += '_' + thermometer_name.lower()
+                            elif thermometer_global_num is not None:
+                                key_temp += '_' + str(hermometer_global_num)
+                            det_config[adc_name][key_temp] = temperature
+
+                        if monitoring_temperature_list is not None:
+                            for itherm in range(len(monitoring_temperature_list)):
+                                det_config[adc_name][
+                                    'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                ] = monitoring_temperature_list[itherm]
                             
                     self._daq.set_detector_config(det_config)
                     
@@ -480,10 +514,22 @@ class IV_dIdV(Sequencer):
                                     adc_id=adc_name,
                                     adc_channel_list=adc_channel_dict[adc_name]
                                 )
-                                if temperature is not None:
-                                    det_config[adc_name]['temperature'] = temperature
-                          
                                 
+
+                                if temperature is not None:
+                                    key_temp = 'temperature'
+                                    if thermometer_name  is not None:
+                                        key_temp += '_' + thermometer_name.lower()
+                                    elif thermometer_global_num is not None:
+                                        key_temp += '_' + str(hermometer_global_num)
+                                    det_config[adc_name][key_temp] = temperature
+
+                                if monitoring_temperature_list is not None:
+                                    for itherm in range(len(monitoring_temperature_list)):
+                                        det_config[adc_name][
+                                            'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                        ] = monitoring_temperature_list[itherm]
+                            
                             self._daq.set_detector_config(det_config)
 
                     
@@ -540,9 +586,21 @@ class IV_dIdV(Sequencer):
                                 adc_id=adc_name,
                                 adc_channel_list=adc_channel_dict[adc_name]
                             )
+
                             if temperature is not None:
-                                det_config[adc_name]['temperature'] = temperature
-                          
+                                key_temp = 'temperature'
+                                if thermometer_name  is not None:
+                                    key_temp += '_' + thermometer_name.lower()
+                                elif thermometer_global_num is not None:
+                                    key_temp += '_' + str(hermometer_global_num)
+                                det_config[adc_name][key_temp] = temperature
+
+                            if monitoring_temperature_list is not None:
+                                for itherm in range(len(monitoring_temperature_list)):
+                                    det_config[adc_name][
+                                        'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                    ] = monitoring_temperature_list[itherm]
+                                                              
                         self._daq.set_detector_config(det_config)
 
 

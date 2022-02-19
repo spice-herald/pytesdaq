@@ -511,7 +511,8 @@ class Series:
                               'signal_gen_source': ('SG source', None),
                               'signal_gen_current': ('SG amplitude [uA]', 1e6),
                               'signal_gen_frequency': ('SG frequency [Hz]', None),
-                              'temperature':('Temperature [mK]', 1e3) 
+                              'temperature_MC':('MC Temperature [mK]', 1e3),
+                              'temperature_still':('Still Temperature [mK]', 1e3),
                               }
                     
             detconfig_group = 'detconfig' + adc_id[3:]
