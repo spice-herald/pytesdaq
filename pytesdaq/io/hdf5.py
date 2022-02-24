@@ -1586,7 +1586,7 @@ def getrandevents(basepath, evtnums, seriesnums, cut=None, channels=None,
 
     fs = np.unique(list(filter(None, fs_list)))[0]
 
-    arr = h5_reader.read_many_events(
+    arr, metadata[0] = h5_reader.read_many_events(
         filepath=glob(f'{basepath}/*'),
         event_nums=np.asarray(evtnums[cut & crand]),
         series_nums=np.asarray(seriesnums[cut & crand]),
