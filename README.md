@@ -6,7 +6,7 @@
 
 To install the most recent release of `pytesdaq`, type the following line into your command line
 
-`pip install pytesdaq`
+`pip install pytesdaq --upgrade`
 
 To install the most recent development version of `pytesdaq`, clone this repo, then from the top-level directory of the repo, type the following line into your command line
 
