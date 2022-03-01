@@ -670,7 +670,10 @@ class ContinuousData:
             if nb_samples_file != self._nb_samples_continuous:
                 raise ValueError('ERROR: All the files should have '
                                  + 'the same number of samples per event!')
-            nb_random_chunks = int(nb_events_file* nb_samples_file/self._nb_samples)
+            elif nb_samples_file < self._nb_samples:
+                raise ValueError('ERROR: requested # samples randoms > '
+                                 + '# samples continuous data!')
+            nb_random_chunks = int(nb_events_file* floor(nb_samples_file/self._nb_samples))
             for ichunk in range(nb_random_chunks):
                 choice_events.append({ifile: ichunk})
         
@@ -719,14 +722,13 @@ class ContinuousData:
             current_event_num = -1
             for chunk_index in chunk_indices:
 
-                # Bin start
-                bin_start_global = chunk_index * self._nb_samples
-                bin_start = bin_start_global % self._nb_samples_continuous
-                bin_start_sec = bin_start/self._sample_rate
-                
-                # event number 
-                event_index = int(bin_start_global/nb_samples_file) + 1
-                
+                # find contunuous data event index and bin start from chunk index
+    
+                nb_chunks_per_event = floor(self._nb_samples_continuous/self._nb_samples)
+                event_index = int(floor(chunk_index/nb_chunks_per_event))
+                bin_start_event = self._nb_samples * (chunk_index % nb_chunks_per_event)
+                bin_start_event_sec = bin_start_event/self._sample_rate
+                             
                 # get traces for all channels
                 traces, info = h5reader.read_single_event(event_index,
                                                           file_name=file_name,
@@ -739,11 +741,11 @@ class ContinuousData:
 
                 
                 # truncate
-                traces = traces[:,bin_start:bin_start+self._nb_samples]
-
+                traces = traces[:,bin_start_event:bin_start_event+self._nb_samples]
+               
                 # dataset metadata
                 dataset_metadata = dict()
-                dataset_metadata['event_time'] = float(info['event_time']) + bin_start_sec
+                dataset_metadata['event_time'] = float(info['event_time']) + bin_start_event_sec
 
                 # file prefix
                 file_prefix = 'rand'
@@ -761,7 +763,7 @@ class ContinuousData:
                 if (verbose and event_counter % 50 == 0):
                     print('INFO: Number of randoms = ' + str(event_counter))
 
-
+           
         # cleanup
         h5writer.close()
         h5reader.clear()
