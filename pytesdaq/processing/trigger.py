@@ -723,9 +723,8 @@ class ContinuousData:
             for chunk_index in chunk_indices:
 
                 # find contunuous data event index and bin start from chunk index
-    
                 nb_chunks_per_event = floor(self._nb_samples_continuous/self._nb_samples)
-                event_index = int(floor(chunk_index/nb_chunks_per_event))
+                event_index = int(floor(chunk_index/nb_chunks_per_event)) + 1
                 bin_start_event = self._nb_samples * (chunk_index % nb_chunks_per_event)
                 bin_start_event_sec = bin_start_event/self._sample_rate
                              
@@ -814,8 +813,9 @@ class ContinuousData:
         for file_name in file_list:
         
             traces, info = h5reader.read_many_events(filepath=file_name,
-                                                           output_format=2,
-                                                           include_metadata=True)
+                                                     output_format=2,
+                                                     include_metadata=True,
+                                                     adctoamp=True)
 
             channels = info[0]['detector_chans']
             
