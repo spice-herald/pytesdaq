@@ -81,7 +81,7 @@ class SeriesGroup:
             
         return list(self._series_info.keys())
     
-    def get_group_info(self, include_series_info=False):
+    def get_group_info(self, include_series_info=False, json_format=False):
         """
         Get group infog
         
@@ -121,8 +121,8 @@ class SeriesGroup:
         if include_series_info:
             for series in self._series_info.values():
                  series_info_dict[series.series_name] = series.get_general_info()
-                 series_info_dict[series.series_name]['ADC_config'] = series.get_adc_info()
-                 series_info_dict[series.series_name]['detector_config'] = series.get_detector_info()
+                 series_info_dict[series.series_name]['ADC_config'] = series.get_adc_info(json_format=json_format)
+                 series_info_dict[series.series_name]['detector_config'] = series.get_detector_info(json_format=json_format)
                  series_info_dict[series.series_name]['connection_table'] = series.connection_table
             
         return group_info_dict, series_info_dict

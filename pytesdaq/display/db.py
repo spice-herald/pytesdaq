@@ -2,6 +2,7 @@ from __future__ import print_function
 import mysql.connector as mariadb
 from mysql.connector import errorcode
 import time
+import json
 
 
 
@@ -125,15 +126,17 @@ class MySQLCore:
             insert_cmd+='NOW(),'
 
         for key in columns:
-            if type(data_dict[key]) == str:
-                insert_cmd+= '"{}",'.format(data_dict[key])
+            d = data_dict[key]
+            
+            if type(d) != (int or float):
+                insert_cmd+= "'{}',".format(d)
             else:
-                insert_cmd+= '{},'.format(data_dict[key])
+                insert_cmd+= '{},'.format(d)
 
         insert_cmd =  insert_cmd[0:len(insert_cmd)-1]
         insert_cmd += ');'
 
-        #print(insert_cmd)
+        print(insert_cmd)
 
         # insert database
         cursor = self._cnx.cursor()

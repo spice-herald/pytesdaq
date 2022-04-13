@@ -5,6 +5,8 @@ from pyramid.view import (
 
 from pytesdaq.display import db
 from pytesdaq.display.series import *
+import json
+import json2html
 
 server = db.MySQLCore()
 
@@ -42,9 +44,30 @@ class MainViews:
         group_name = self.request.matchdict['group_name']
         series_num = self.request.matchdict['series_num'] #fix if we get 'id'
         
+        
         ind_series = next(item for item in MainViews.serieslist if item["series_num"] == int(series_num))
         finalseries = ind_series
-        return {'name': str(series_num), 'this_series': finalseries}
+        
+        det_con_html = None
+        adc_con_html = None
+        con_table_html = None
+        
+         if ('ADC_config' in finalseries):
+            adc_con = json.loads(finalseries.pop('ADC_config'))
+            adc_con_html = json2html.json2html.convert(adc_con)
+            
+        
+        if ('detector_config' in finalseries):
+            det_con = json.loads(finalseries.pop('detector_config'))
+            det_con_html = json2html.json2html.convert(det_con)
+            
+       
+        
+        if ('connection_table' in finalseries):
+            con_table = json.loads(finalseries.pop('connection_table'))
+            con_table_html = json2html.json2html.convert(con_table)
+        
+        return {'name': str(series_num), 'this_series': finalseries, 'detector_config': det_con_html, 'adc_config': adc_con_html, 'connection_table': con_table_html}
 
 
     @view_config(route_name='group_info', renderer='../templates/group_info.mako')

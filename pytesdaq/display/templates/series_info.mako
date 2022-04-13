@@ -57,6 +57,33 @@
             </tbody>
           </table>
   </div>
+  
+  <div id="det_con">
+   % if detector_config:
+  <h5> Detector configuration</a></h5>
+  <script>
+    document.getElementById("det_con") += detector_config;
+  </script>
+  % endif
+  </div>
+
+  <div id="adc_con">
+  % if adc_config:
+  <h5> ADC configuration</a></h5>
+  <script>
+    document.getElementById("adc_con") += adc_config;
+  </script>
+  % endif
+  </div>
+
+  <div id="con_table">
+  % if connection_table:
+  <h5> Connection Table</a></h5>
+  <script>
+    document.getElementById("con_table") += connection_table;
+  </script>
+  % endif
+  </div>
 
 </main><!-- /.container -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
