@@ -52,7 +52,7 @@ class MainViews:
         adc_con_html = None
         con_table_html = None
         
-         if ('ADC_config' in finalseries):
+        if ('ADC_config' in finalseries):
             adc_con = json.loads(finalseries.pop('ADC_config'))
             adc_con_html = json2html.json2html.convert(adc_con)
             
@@ -63,9 +63,9 @@ class MainViews:
             
        
         
-        if ('connection_table' in finalseries):
-            con_table = json.loads(finalseries.pop('connection_table'))
-            con_table_html = json2html.json2html.convert(con_table)
+        #if ('connection_table' in finalseries):
+        #    con_table = json.loads(finalseries.pop('connection_table'))
+        #    con_table_html = json2html.json2html.convert(con_table)
         
         return {'name': str(series_num), 'this_series': finalseries, 'detector_config': det_con_html, 'adc_config': adc_con_html, 'connection_table': con_table_html}
 

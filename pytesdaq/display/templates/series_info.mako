@@ -42,7 +42,7 @@
 
 <main role="main" class="container">
 
-    <h2>Series Info for series ${this_series['series_num']}</h2>
+    <h2>Series Info for series ${this_series['series_name']}</h2>
     <h5> In group <a  href="/group/${this_series['group_name']}">${this_series['group_name']}</a></h5>
 
   <div>
@@ -59,19 +59,17 @@
   </div>
   
   <div id="det_con">
-   % if detector_config:
   <h5> Detector configuration</a></h5>
   <script>
-    document.getElementById("det_con") += detector_config;
+    document.getElementById("det_con").insertAdjacentHTML(detector_config, '<div class="table"><input type="text" name="" value="" class="" /></div>');
   </script>
-  % endif
   </div>
 
   <div id="adc_con">
   % if adc_config:
   <h5> ADC configuration</a></h5>
   <script>
-    document.getElementById("adc_con") += adc_config;
+     document.body.innerHTML += adc_config;
   </script>
   % endif
   </div>
@@ -80,25 +78,12 @@
   % if connection_table:
   <h5> Connection Table</a></h5>
   <script>
-    document.getElementById("con_table") += connection_table;
+     document.body.innerHTML += connection_table;
   </script>
   % endif
   </div>
 
-  <h5> Detector configuration</a></h5>
-  <script>
-    document.innerHTML += detector_config;
-  </script>
 
-  <h5> ADC configuration</a></h5>
-  <script>
-    document.innerHTML += detector_config;
-  </script>
-
-  <h5> Connection Table</a></h5>
-  <script>
-    document.innerHTML += detector_config;
-  </script>
 
 </main><!-- /.container -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
