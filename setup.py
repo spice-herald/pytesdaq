@@ -14,6 +14,7 @@ setup(name='pytesdaq',
       long_description_content_type='text/markdown',
       author='Bruno Serfass',
       author_email='serfass@berkeley.edu',
+      url="https://github.com/spice-herald/pytesdaq",
       zip_safe = False,
       include_package_data = True,
       package_data = {
