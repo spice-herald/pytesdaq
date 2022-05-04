@@ -725,7 +725,7 @@ class ContinuousData:
                 # find contunuous data event index and bin start from chunk index
     
                 nb_chunks_per_event = floor(self._nb_samples_continuous/self._nb_samples)
-                event_index = int(floor(chunk_index/nb_chunks_per_event))
+                event_index = int(floor(chunk_index/nb_chunks_per_event)) + 1
                 bin_start_event = self._nb_samples * (chunk_index % nb_chunks_per_event)
                 bin_start_event_sec = bin_start_event/self._sample_rate
                              
