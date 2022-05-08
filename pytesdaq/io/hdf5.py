@@ -1571,7 +1571,7 @@ def getrandevents(basepath, evtnums, seriesnums, cut=None, channels=None,
 
     h5_reader = H5Reader()
 
-    first_file = sorted(glob(f'{basepath}/*/*.hdf5'))[0]
+    first_file = sorted(glob(f'{basepath}/**/*.hdf5', recursive=True))[0]
 
     if channels is None:
         connection_dict = h5_reader.get_connection_dict(
