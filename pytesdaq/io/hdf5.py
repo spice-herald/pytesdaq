@@ -1571,7 +1571,7 @@ def getrandevents(basepath, evtnums, seriesnums, cut=None, channels=None,
 
     h5_reader = H5Reader()
 
-    first_file = sorted(glob(f'{basepath}/*/*.hdf5'))[0]
+    first_file = sorted(glob(f'{basepath}/**/*.hdf5', recursive=True))[0]
 
     if channels is None:
         connection_dict = h5_reader.get_connection_dict(
@@ -1586,26 +1586,23 @@ def getrandevents(basepath, evtnums, seriesnums, cut=None, channels=None,
 
     fs = np.unique(list(filter(None, fs_list)))[0]
 
-    x = h5_reader.read_many_events(
+    arr, metadata = h5_reader.read_many_events(
         filepath=glob(f'{basepath}/*'),
         event_nums=np.asarray(evtnums[cut & crand]),
         series_nums=np.asarray(seriesnums[cut & crand]),
         output_format=2,
+        include_metadata=True,
         detector_chans=channels,
-        adctovolt=True,
+        adctoamp=True,
     )
 
-    
-    # convert traces to amps
-    detector_settings = h5_reader.get_detector_config()
-    close_loop_norm = [
-        detector_settings[chan]['close_loop_norm'] for chan in channels
-    ]
-    close_loop_norm_arr = np.asarray(close_loop_norm)
-    x = np.divide(x, close_loop_norm_arr[:, np.newaxis])
+    if channels != metadata[0]['detector_chans']:
+        chans = [metadata[0]['detector_chans'].index(ch) for ch in channels]
+        x = arr[:, chans].astype(float)
+    else:
+        x = arr.astype(float)
 
     t = np.arange(x.shape[-1])/fs
-
 
     if lgcplot:
         if nplot>ntraces:
