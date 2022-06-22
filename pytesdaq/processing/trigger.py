@@ -220,7 +220,7 @@ class OptimumFilt(object):
         self.trigtypes = None
 
 
-    def filtertraces(self, traces, times, trig=None):
+    def filtertraces(self, traces, times, trig=None, traces_norm=None, do_invert=False):
         """
         Method to apply the FIR filter the inputted traces with
         specified times.
@@ -239,7 +239,12 @@ class OptimumFilt(object):
             trigtemplate (if it exists). If left as None, then only the
             traces are analyzed. If the trigtemplate attribute has not
             been set, but this was set, then an error is raised.
-
+        traces_norm: NoneType, list, optional
+            Traces normalization (for example ADC to amps) to be used to calculate FIR
+            but not for the output triggered traces. Can be a list of float or ndarray 
+            (poly1d)
+        do_invert: False, boolean
+            Invert trigger . Default: False
         """
 
         # update the traces, times, and ttl attributes
@@ -247,20 +252,43 @@ class OptimumFilt(object):
         self.times = times
         self.trig = trig
 
-        # calculate the total pulse by summing across channels for each trace
+
+        # check trigger channel list
         if self.chan == "all":
-            pulsestot = np.sum(traces, axis=1)
-        elif np.any(np.atleast_1d(self.chan) > traces.shape[1]):
-            raise ValueError(
-                '`chan_to_trigger` was set to a value greater than the number of channels.',
-            )
-        elif np.isscalar(self.chan):
-            pulsestot = traces[:, self.chan]
+            self.chan = list(range(self.traces.shape[1]))
         else:
-            pulsestot = np.sum(traces[:, self.chan], axis=1)
+            self.chan = np.atleast_1d(self.chan)
+            if np.any(self.chan > traces.shape[1]):
+                raise ValueError(
+                    '`chan_to_trigger` was set to a value greater than the number of channels.',
+                )
+
+    
+        # Convert traces to amps (if needed)
+        traces_amps = np.zeros((traces.shape[0],len(self.chan), traces.shape[2]),
+                               dtype=np.float64)
+            
+        for ichan in range(len(self.chan)):
+            trig_chan = self.chan[ichan]
+            if traces_norm is None:
+                traces_amps[:,ichan,:] =  traces[:,trig_chan,:]
+            else:
+                norm = traces_norm[trig_chan]
+                if np.isscalar(norm):      
+                    traces_amps[:,ichan,:] = traces[:,trig_chan,:]/norm
+                else:
+                    p = np.poly1d(norm)
+                    traces_amps[:,ichan,:] = p(traces[:,trig_chan,:])
+            if do_invert:
+                traces_amps[:,ichan,:] *= -1
+
+                
+        # calculate the total pulse by summing across channels for each trace
+        pulsestot = np.sum(traces_amps, axis=1)
 
         # apply the FIR filter to each trace
-        self.filts = np.array([correlate(trace, self.phi, mode="same")/self.norm for trace in pulsestot])
+        self.filts = np.array([correlate(trace, self.phi, mode="same")/self.norm
+                               for trace in pulsestot])
 
         # set the filtered values to zero near the edges, so as not to use the padded values in the analysis
         # also so that the traces that will be saved will be equal to the tracelength
@@ -270,10 +298,12 @@ class OptimumFilt(object):
         self.filts[:, -(cut_len//2) + (cut_len+1)%2:] = 0.0
 
         if self.trigtemplate is None and trig is not None:
-            raise ValueError("trig values have been inputted, but trigtemplate attribute has not been set, cannot filter the trig values")
+            raise ValueError("trig values have been inputted, but trigtemplate"
+                             + " attribute has not been set, cannot filter the trig values")
         elif trig is not None:
-            # apply the FIR filter to each trace
-            self.trigfilts = np.array([correlate(trace, self.trigtemplate, mode="same")/self.trignorm for trace in trig])
+            # apply the FIR filter to each (ttl) trace
+            self.trigfilts = np.array([correlate(trace, self.trigtemplate, mode="same")/self.trignorm
+                                       for trace in trig])
 
             # set the filtered values to zero near the edges, so as not to use the padded values in the analysis
             # also so that the traces that will be saved will be equal to the tracelength
@@ -723,7 +753,6 @@ class ContinuousData:
             for chunk_index in chunk_indices:
 
                 # find contunuous data event index and bin start from chunk index
-    
                 nb_chunks_per_event = floor(self._nb_samples_continuous/self._nb_samples)
                 event_index = int(floor(chunk_index/nb_chunks_per_event)) + 1
                 bin_start_event = self._nb_samples * (chunk_index % nb_chunks_per_event)
@@ -734,12 +763,6 @@ class ContinuousData:
                                                           file_name=file_name,
                                                           include_metadata=True)
 
-
-                # invert if negative pulse
-                if self._is_negative_pulse:
-                    traces *= -1
-
-                
                 # truncate
                 traces = traces[:,bin_start_event:bin_start_event+self._nb_samples]
                
@@ -814,8 +837,9 @@ class ContinuousData:
         for file_name in file_list:
         
             traces, info = h5reader.read_many_events(filepath=file_name,
-                                                           output_format=2,
-                                                           include_metadata=True)
+                                                     output_format=2,
+                                                     include_metadata=True,
+                                                     adctoamp=True)
 
             channels = info[0]['detector_chans']
             
@@ -845,6 +869,10 @@ class ContinuousData:
             else:
                 traces_red = np.sum(trace_buffer[:,chan_ind], axis=1)
 
+            # invert if negative traces
+            if self._is_negative_pulse:
+                traces_red *= -1
+                
             # autocut
             cut = qp.autocuts(traces_red, fs=self._sample_rate)
             adc_chan = self._chan[ichan]
@@ -1317,12 +1345,18 @@ class ContinuousData:
                 do_continue_loop = False
                 break
 
-            
-            # invert if negative pulse
-            if self._is_negative_pulse:
-                traces *= -1
-
-            
+        
+            # normalization
+            norm = list()
+            detector_config = h5reader.get_detector_config()
+            for ind in range(traces.shape[0]):
+                adc_chan = int(info['adc_channel_indices'][ind])
+                coeff = info['adc_conversion_factor'][ind][::-1]
+                for det_config in  detector_config.values():
+                    if adc_chan == int(det_config['adc_channel_indices']):
+                        norm.append(coeff/det_config['close_loop_norm'])
+                        break
+                    
             # event time
             time_array = np.asarray([info['event_time']])
             
@@ -1349,7 +1383,8 @@ class ContinuousData:
                                    chan_to_trigger=chan_ind,
                                    lgcoverlap=True)
 
-                filt.filtertraces(traces, time_array)
+                filt.filtertraces(traces, time_array, traces_norm=norm,
+                                  do_invert=self._is_negative_pulse)
                 filt.eventtrigger(threshold[ichan], positivepulses=True)
                 filt_list.append(filt)
 
