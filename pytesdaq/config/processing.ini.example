@@ -57,24 +57,20 @@ pretrigger_length_ms = 10
 #       single value if same all channels
 #       otherwise one value per channels following chan_to_trigger order
 #
-#   merge_window:
-#     the window size that is used to merge events (in usec)
-#     default if None: 1/2 trace length
-#
-#
 #  coincident_window:
 #     Window in usec for merging coincident events on channels
 #     from chan_to_trigger 
 # 
 #  pileup_window
-#     Window in usec for removing pileup on individual channels
+#     the window size that is used to merge events (in usec)
+#     default if not set: 1/2 trace length
 
 chan_to_trigger = TES100x400_W2,TES100x400_W1+TES200x800_W2, TES200x800_W1
 #chan_to_trigger = 0, 2-3
 rise_time = 20, 20, 25
 fall_time = 30, 35, 30
 threshold = 10
-pileup_window = 0
+#pileup_window = 0
 coincident_window = 10
 
 # Misc settings

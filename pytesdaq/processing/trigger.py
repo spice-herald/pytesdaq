@@ -196,7 +196,7 @@ class OptimumFilt(object):
         else:
             self.pulse_range = merge_window
 
-                 
+                
         # set the trigger ttl template value
         self.trigtemplate = trigtemplate
         
@@ -903,8 +903,7 @@ class ContinuousData:
                         nb_events=-1,
                         template=None, noise_psd=None,
                         threshold=10,
-                        merge_window=None,
-                        pileup_window=0,
+                        pileup_window=None,
                         coincident_window=50,
                         nb_cores=1,
                         verbose=True,
@@ -929,7 +928,7 @@ class ContinuousData:
         threshold: float
             Trigger treshold (sigma)
 
-        merge_window : NoneType, float, optional
+        pileup_window : NoneType, float, optional
             The window size that is used to merge events (in usec).
             If left as None, then half a tracelength is used.
         
@@ -949,7 +948,6 @@ class ContinuousData:
                                   template=template,
                                   noise_psd=noise_psd,
                                   threshold=threshold,
-                                  merge_window=merge_window,
                                   pileup_window=pileup_window,
                                   coincident_window=coincident_window,
                                   verbose=verbose,
@@ -982,7 +980,6 @@ class ContinuousData:
                              repeat(template),
                              repeat(noise_psd),
                              repeat(threshold),
-                             repeat(merge_window),
                              repeat(pileup_window),
                              repeat(coincident_window),
                              repeat(verbose),
@@ -1270,7 +1267,7 @@ class ContinuousData:
                                self._filter_dict['psd'][0],
                                self._nb_samples,
                                lgcoverlap=True,
-                               merge_window=self._merge_window)
+                               merge_window=self._pileup_window)
         filtcomb.evttraces = evttracescomb
         filtcomb.pulseamps = pulseampscomb
         filtcomb.pulsetimes = pulsetimescomb
@@ -1290,8 +1287,7 @@ class ContinuousData:
                          template=None,
                          noise_psd=None,
                          threshold=10,
-                         merge_window=None,
-                         pileup_window=0,
+                         pileup_window=None,
                          coincident_window=50,            
                          verbose=True,
                          debug=False):
@@ -1344,14 +1340,13 @@ class ContinuousData:
             raise ValueError('ERROR: unexpected "threshold" vector length!')
         
 
-        # convert windows to sec
-        pileup_window = float(pileup_window) * 1e-6
+        # convert coincident windows to sec
         coincident_window = float(coincident_window) * 1e-6
 
-        # convert merge window in ADC bins
-        if merge_window is not None:
-            merge_window = int(float(merge_window) *1e-6 * self._sample_rate)
-        self._merge_window = merge_window 
+        # convert pileup window in ADC bins
+        if pileup_window is not None:
+            pileup_window = int(float(pileup_window) *1e-6 * self._sample_rate)
+        self._pileup_window = pileup_window 
             
         
 
@@ -1378,10 +1373,11 @@ class ContinuousData:
             detector_config = h5reader.get_detector_config()
             for ind in range(traces.shape[0]):
                 adc_indices = info['adc_channel_indices']
-                if isinstance(adc_indices, list):
+                if isinstance(adc_indices, (list, tuple, np.ndarray)):
                     adc_chan = int(adc_indices[ind])
                 else:
                     adc_chan = int(adc_indices)
+                    
                 coeff = info['adc_conversion_factor'][ind][::-1]
                 for det_config in  detector_config.values():
                     if adc_chan == int(det_config['adc_channel_indices']):
@@ -1413,7 +1409,7 @@ class ContinuousData:
                                    self._nb_samples,
                                    chan_to_trigger=chan_ind,
                                    lgcoverlap=True,
-                                   merge_window=merge_window)
+                                   merge_window=pileup_window)
 
                 filt.filtertraces(traces, time_array, traces_norm=norm,
                                   do_invert=self._is_negative_pulse)
