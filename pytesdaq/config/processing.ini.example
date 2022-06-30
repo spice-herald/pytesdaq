@@ -57,6 +57,11 @@ pretrigger_length_ms = 10
 #       single value if same all channels
 #       otherwise one value per channels following chan_to_trigger order
 #
+#   merge_window:
+#     the window size that is used to merge events (in usec)
+#     default if None: 1/2 trace length
+#
+#
 #  coincident_window:
 #     Window in usec for merging coincident events on channels
 #     from chan_to_trigger 

@@ -195,7 +195,8 @@ class OptimumFilt(object):
             self.pulse_range = tracelength / 2
         else:
             self.pulse_range = merge_window
-        
+
+                 
         # set the trigger ttl template value
         self.trigtemplate = trigtemplate
         
@@ -902,6 +903,7 @@ class ContinuousData:
                         nb_events=-1,
                         template=None, noise_psd=None,
                         threshold=10,
+                        merge_window=None,
                         pileup_window=0,
                         coincident_window=50,
                         nb_cores=1,
@@ -913,7 +915,23 @@ class ContinuousData:
         
         Arguments
         ---------
+
+        nb_events: int
+          number of trigger events to acquire (default: -1 = all trigger)
+       
+        template : ndarray
+            The pulse template to be used when creating the optimum
+            filter (assumed to be normalized)
         
+        noise_psd : ndarray
+            The two-sided power spectral density in units of A^2/Hz
+
+        threshold: float
+            Trigger treshold (sigma)
+
+        merge_window : NoneType, float, optional
+            The window size that is used to merge events (in usec).
+            If left as None, then half a tracelength is used.
         
 
 
@@ -931,6 +949,7 @@ class ContinuousData:
                                   template=template,
                                   noise_psd=noise_psd,
                                   threshold=threshold,
+                                  merge_window=merge_window,
                                   pileup_window=pileup_window,
                                   coincident_window=coincident_window,
                                   verbose=verbose,
@@ -963,6 +982,7 @@ class ContinuousData:
                              repeat(template),
                              repeat(noise_psd),
                              repeat(threshold),
+                             repeat(merge_window),
                              repeat(pileup_window),
                              repeat(coincident_window),
                              repeat(verbose),
@@ -1249,7 +1269,8 @@ class ContinuousData:
                                self._filter_dict['template'][0],
                                self._filter_dict['psd'][0],
                                self._nb_samples,
-                               lgcoverlap=True)
+                               lgcoverlap=True,
+                               merge_window=self._merge_window)
         filtcomb.evttraces = evttracescomb
         filtcomb.pulseamps = pulseampscomb
         filtcomb.pulsetimes = pulsetimescomb
@@ -1269,6 +1290,7 @@ class ContinuousData:
                          template=None,
                          noise_psd=None,
                          threshold=10,
+                         merge_window=None,
                          pileup_window=0,
                          coincident_window=50,            
                          verbose=True,
@@ -1277,7 +1299,7 @@ class ContinuousData:
         Function to acquire trigger from continuous data
         """
 
-
+        
         # Instanciate data reader
         h5reader = h5io.H5Reader()
 
@@ -1325,7 +1347,12 @@ class ContinuousData:
         # convert windows to sec
         pileup_window = float(pileup_window) * 1e-6
         coincident_window = float(coincident_window) * 1e-6
-        
+
+        # convert merge window in ADC bins
+        if merge_window is not None:
+            merge_window = int(float(merge_window) *1e-6 * self._sample_rate)
+        self._merge_window = merge_window 
+            
         
 
         # set file list to IO reader
@@ -1350,7 +1377,11 @@ class ContinuousData:
             norm = list()
             detector_config = h5reader.get_detector_config()
             for ind in range(traces.shape[0]):
-                adc_chan = int(info['adc_channel_indices'][ind])
+                adc_indices = info['adc_channel_indices']
+                if isinstance(adc_indices, list):
+                    adc_chan = int(adc_indices[ind])
+                else:
+                    adc_chan = int(adc_indices)
                 coeff = info['adc_conversion_factor'][ind][::-1]
                 for det_config in  detector_config.values():
                     if adc_chan == int(det_config['adc_channel_indices']):
@@ -1381,7 +1412,8 @@ class ContinuousData:
                                    self._filter_dict['psd'][ichan],
                                    self._nb_samples,
                                    chan_to_trigger=chan_ind,
-                                   lgcoverlap=True)
+                                   lgcoverlap=True,
+                                   merge_window=merge_window)
 
                 filt.filtertraces(traces, time_array, traces_norm=norm,
                                   do_invert=self._is_negative_pulse)
@@ -1389,7 +1421,8 @@ class ContinuousData:
                 filt_list.append(filt)
 
 
-            # remove pileup
+            # remove pileup -> FIXME: disable for now (keep?)
+            """
             for ichan, chan_ind in enumerate(self._chan_array_ind):
 
                 piledup_ind, _, _ = self._find_pileup(filt_list[ichan].pulsetimes,
@@ -1410,7 +1443,7 @@ class ContinuousData:
                     print('\n\n')
 
                 filt_list[ichan] = self._remove_triggers(filt_list[ichan], piledup_ind)
-
+            """
             # combine and sort the multiple
             # filt_list objects into a single one
             filtcomb, chancomb = self._combine_sort_triggers(filt_list)
@@ -1468,6 +1501,8 @@ class ContinuousData:
                 if debug:
                     print(filtcomb.evttraces[itrig])
                     print(dataset_metadata)
+
+                    
                 h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
                                            data_mode='threshold',
                                            dataset_metadata=dataset_metadata)

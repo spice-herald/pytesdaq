@@ -71,7 +71,11 @@ if __name__ == "__main__":
                               'space or comma separated '
                               '(If ADC number, range using "-" allowed, example 0,2-4). '
                               '[Default: all channels available in raw data]'))
-
+    
+    parser.add_argument('--merge_window', type=float,
+                        help=('The window size that is used to merge events (in usec).'
+                              '[default = 1/2 trace length]'))
+    
     parser.add_argument('--pileup_window', type=float,
                         help=('Window in usec for removing pileup on individual channels '
                               '[default = 0 usec]'))
@@ -158,6 +162,7 @@ if __name__ == "__main__":
     proc_config['rise_time'] = [20]
     proc_config['fall_time'] = [30]
     proc_config['threshold'] = [10]
+    proc_config['merge_window'] = None
     proc_config['pileup_window'] = 0
     proc_config['coincident_window'] = 50
     proc_config['trace_length_ms'] = None
@@ -244,6 +249,8 @@ if __name__ == "__main__":
         proc_config['save_filter'] = True
     if args.is_negative_pulse:
         proc_config['is_negative_pulse'] = True
+    if args.merge_window:
+        proc_config['merge_window'] = args.merge_window
     if args.pileup_window:
         proc_config['pileup_window'] = args.pileup_window
     if args.coincident_window:
@@ -352,6 +359,7 @@ if __name__ == "__main__":
     if acquire_trigger:
         data_inst.acquire_trigger(nb_events=int(proc_config['nb_triggers']),
                                   threshold=proc_config['threshold'],
+                                  merge_window=proc_config['merge_window'],
                                   pileup_window=proc_config['pileup_window'],
                                   coincident_window=proc_config['coincident_window'],
                                   nb_cores=int(proc_config['nb_cores']))
