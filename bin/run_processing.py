@@ -71,11 +71,11 @@ if __name__ == "__main__":
                               'space or comma separated '
                               '(If ADC number, range using "-" allowed, example 0,2-4). '
                               '[Default: all channels available in raw data]'))
-
+    
     parser.add_argument('--pileup_window', type=float,
-                        help=('Window in usec for removing pileup on individual channels '
-                              '[default = 0 usec]'))
-
+                        help=('The window size that is used to merge events (in usec).'
+                              '[default = 1/2 trace length]'))
+    
     parser.add_argument('--coincident_window', type=float,
                         help=('Window in usec for merging coincident events on channels '
                               'from chan_to_trigger (default = 50 usec)'))
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     proc_config['rise_time'] = [20]
     proc_config['fall_time'] = [30]
     proc_config['threshold'] = [10]
-    proc_config['pileup_window'] = 0
+    proc_config['pileup_window'] = None
     proc_config['coincident_window'] = 50
     proc_config['trace_length_ms'] = None
     proc_config['pretrigger_length_ms'] = None
@@ -220,45 +220,45 @@ if __name__ == "__main__":
         proc_config['input_group_path'] = args.input_group_path
     if args.input_series:
         proc_config['input_series'] = arg_utils.extract_list(args.input_series)
-    if args.nb_randoms:
+    if args.nb_randoms is not None:
         proc_config['nb_randoms'] = int(args.nb_randoms)
-    if args.nb_triggers:
+    if args.nb_triggers is not None:
         proc_config['nb_triggers'] = int(args.nb_triggers)
-    if args.trace_length_ms:
+    if args.trace_length_ms is not None:
         proc_config['trace_length_ms'] = float(args.trace_length_ms)
-    if args.pretrigger_length_ms:
+    if args.pretrigger_length_ms is not None:
         proc_config['pretrigger_length_ms'] = float(args.pretrigger_length_ms)
-    if args.nb_samples:
+    if args.nb_samples is not None:
         proc_config['nb_samples'] = int(args.nb_samples)
-    if args.nb_samples_pretrigger:
+    if args.nb_samples_pretrigger is not None:
         proc_config['nb_samples_pretrigger'] = int(args.nb_samples_pretrigger)
-    if args.chan_to_trigger:
+    if args.chan_to_trigger is not None:
         proc_config['chan_to_trigger'] = arg_utils.extract_list(args.chan_to_trigger)
-    if args.threshold:
+    if args.threshold is not None:
         proc_config['threshold'] = [float(i) for i in arg_utils.extract_list(args.threshold)]
-    if args.rise_time:
+    if args.rise_time is not None:
         proc_config['rise_time'] = [float(i) for i in arg_utils.extract_list(args.rise_time)]
-    if args.fall_time:
+    if args.fall_time is not None:
         proc_config['fall_time'] = [float(i) for i in arg_utils.extract_list(args.fall_time)]
     if args.save_filter:
         proc_config['save_filter'] = True
     if args.is_negative_pulse:
         proc_config['is_negative_pulse'] = True
-    if args.pileup_window:
+    if args.pileup_window is not None:
         proc_config['pileup_window'] = args.pileup_window
-    if args.coincident_window:
+    if args.coincident_window is not None:
         proc_config['coincident_window'] = args.coincident_window
-    if args.output_group_name:
+    if args.output_group_name is not None:
         proc_config['output_group_name'] = args.output_group_name
-    if args.output_group_prefix:
+    if args.output_group_prefix is not None:
         proc_config['output_group_prefix'] = args.output_group_prefix
-    if args.output_group_comment:
+    if args.output_group_comment is not None:
         proc_config['output_group_comment'] = args.output_group_comment
-    if args.output_base_path:
+    if args.output_base_path is not None:
         proc_config['output_base_path'] = args.output_base_path
-    if args.filter_file:
+    if args.filter_file is not None:
         proc_config['filter_file'] = args.filter_file
-    if args.nb_cores:
+    if args.nb_cores is not None:
         proc_config['nb_cores'] = args.nb_cores
 
     # ------------------
@@ -347,7 +347,7 @@ if __name__ == "__main__":
         data_inst.create_template(proc_config['rise_time'],  proc_config['fall_time'])
         data_inst.calc_psd(save_filter=proc_config['save_filter'])
         
-                        
+        
     # acquire trigger
     if acquire_trigger:
         data_inst.acquire_trigger(nb_events=int(proc_config['nb_triggers']),
