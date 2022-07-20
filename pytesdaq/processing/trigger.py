@@ -17,6 +17,8 @@ import pytesdaq.io.hdf5 as h5io
 from pytesdaq.utils import arg_utils
 import qetpy as qp
 
+import matplotlib.pyplot as plt
+
 __all__ = [
     'OptimumFilt',
     'ContinuousData',
@@ -1278,7 +1280,163 @@ class ContinuousData:
         return filtcomb, chancomb
 
 
+    def _acquire_trigger_single_trace(self, traces, info,
+                                      h5writer, threshold=10,
+                                      coincident_window=50,
+                                      norm = None,
+                                      verbose=True,
+                                      debug=False):
+        """
+        Function to acquare trigger from a single continuouse trace.
+        """
 
+        new_trigger_counter=0
+                
+        # event time
+        time_array = np.asarray([info['event_time']])
+        
+        # expand dimension traces
+        traces = np.expand_dims(traces, axis=0)
+
+        # loop over channels to trigger
+        # make OF filters for channel and store in list
+        filt_list = []
+
+        for ichan, chan_ind in enumerate(self._chan_array_ind):
+
+            if debug:
+                print(f'INFO: Finding OF triggers on ADC channel(s) {self._chan[ichan]}')
+            
+            # find triggers
+            if np.isscalar(chan_ind):
+                chan_ind = [chan_ind]
+                
+            filt = OptimumFilt(self._sample_rate,
+                               self._filter_dict['template'][ichan],
+                               self._filter_dict['psd'][ichan],
+                               self._nb_samples,
+                               chan_to_trigger=chan_ind,
+                               lgcoverlap=True,
+                               merge_window=self._pileup_window)
+
+            filt.filtertraces(traces, time_array, traces_norm=norm,
+                              do_invert=self._is_negative_pulse)
+            filt.eventtrigger(threshold[ichan], positivepulses=True)
+            filt_list.append(filt)
+
+
+        # remove pileup -> FIXME: disable for now (keep?)
+        """
+        for ichan, chan_ind in enumerate(self._chan_array_ind):
+
+            piledup_ind, _, _ = self._find_pileup(filt_list[ichan].pulsetimes,
+                                                  filt_list[ichan].pulseamps,
+                                                  pileup_window)
+            chan = self._chan[ichan]
+            if debug:
+                print(f'INFO: Pileup on ADC channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
+
+                import inspect
+                import pprint
+                attributes = inspect.getmembers(filt_list[ichan],
+                                                lambda a:not(inspect.isroutine(a)))
+                print('\n\n')
+                pprint.pprint([(a[0], type(a[1]), np.shape(a[1]))
+                               for a in attributes if not(a[0].startswith('__')
+                                                          and a[0].endswith('__'))])
+                print('\n\n')
+
+            filt_list[ichan] = self._remove_triggers(filt_list[ichan], piledup_ind)
+        """
+        # combine and sort the multiple
+        # filt_list objects into a single one
+        filtcomb, chancomb = self._combine_sort_triggers(filt_list)
+        if debug:
+            print('INFO: Combining Triggers')
+        
+        # find:
+        # (1) coincidence triggers
+        # (2) which triggers have had other channels merged into them
+        # (3) which channels have been merged into the merged triggers
+        coinc_ind, inds_merged, chancomb_merged = self._find_pileup(filtcomb.pulsetimes,
+                                                                    filtcomb.pulseamps,
+                                                                    coincident_window,
+                                                                    chancomb)
+
+        for i, ind in enumerate(inds_merged):
+            chancomb[ind] = chancomb_merged[i]
+
+        # remove the coincidence triggers from filtcomb
+        filtcomb = self._remove_triggers(filtcomb, coinc_ind)
+
+        # remove coincident triggers from chancomb
+        for ind in sorted(coinc_ind, reverse=True):
+            del chancomb[ind]
+
+        if debug:
+            print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
+            print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)}')
+        
+        # loop triggers
+        for itrig in range(len(filtcomb.pulsetimes)):
+
+            # dataset metadata
+            dataset_metadata = dict()
+            dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
+            dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
+            dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
+                             
+            trigger_channels = list()
+            for trig_chan in chancomb[itrig]:
+                if isinstance(trig_chan, list):
+                    trigger_channels.extend(trig_chan)
+                else:
+                    trigger_channels.append(trig_chan)
+            dataset_metadata['trigger_channel'] = trigger_channels
+
+            # file prefix
+            file_prefix = 'threshtrig'
+            if (self._input_series == 'even'
+                or  self._input_series == 'odd'):
+                file_prefix = self._input_series + '_' + file_prefix
+
+            
+            # write new file
+            if debug:
+                print(filtcomb.evttraces[itrig])
+                print(dataset_metadata)
+
+                
+            h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
+                                       data_mode='threshold',
+                                       dataset_metadata=dataset_metadata)
+            new_trigger_counter += 1
+        if debug:
+            fig, ax = plt.subplots(figsize=(20, 6))
+            #ax.set_ylim(-500,1000)
+            for itrig in range(len(filtcomb.pulsetimes)):
+                window = int((filtcomb.pulsetimes[itrig]-filt_list[0].times[0])*1.25e6)
+                #print(filt_list[0].filts[0,window-100000:window+250000])
+                ax.plot((np.arange(self._nb_samples)-self._nb_samples_pretrigger)/1.25e3,
+                    filt_list[0].filts[0,window-self._nb_samples_pretrigger:
+                                       window+self._nb_samples-self._nb_samples_pretrigger]
+                   )
+                ax.set_title('Alignment check - filtered waveform')
+            plt.show()
+            fig, ax = plt.subplots(figsize=(20, 6))
+        #ax.set_ylim(-12500,-10500)
+            for itrig in range(len(filtcomb.pulsetimes)):
+                window = int((filtcomb.pulsetimes[itrig]-filt_list[0].times[0])*1.25e6)
+            #print(filt_list[0].filts[0,window-100000:window+250000])
+                ax.plot((np.arange(self._nb_samples)-self._nb_samples_pretrigger)/1.25e3,
+                    traces[0][0,window-self._nb_samples//2:
+                                window-self._nb_samples//2+self._nb_samples]
+                   )
+                ax.set_title('Alignment check - raw waveform')
+            #ax.set_xlim(-1,10)
+            plt.show()
+
+        return new_trigger_counter
 
     
     def _acquire_trigger(self,file_list,
@@ -1356,6 +1514,7 @@ class ContinuousData:
         # loop events
         do_continue_loop = True
         trigger_counter = 0
+        trigger_counter_50=0
         while(do_continue_loop):
 
             # read next event
@@ -1383,135 +1542,26 @@ class ContinuousData:
                     if adc_chan == int(det_config['adc_channel_indices']):
                         norm.append(coeff/det_config['close_loop_norm'])
                         break
-                    
-            # event time
-            time_array = np.asarray([info['event_time']])
-            
-            # expand dimension traces
-            traces = np.expand_dims(traces, axis=0)
-
-            # loop over channels to trigger
-            # make OF filters for channel and store in list
-            filt_list = []
-
-            for ichan, chan_ind in enumerate(self._chan_array_ind):
-
-                if debug:
-                    print(f'INFO: Finding OF triggers on ADC channel(s) {self._chan[ichan]}')
                 
-                # find triggers
-                if np.isscalar(chan_ind):
-                    chan_ind = [chan_ind]
-                    
-                filt = OptimumFilt(self._sample_rate,
-                                   self._filter_dict['template'][ichan],
-                                   self._filter_dict['psd'][ichan],
-                                   self._nb_samples,
-                                   chan_to_trigger=chan_ind,
-                                   lgcoverlap=True,
-                                   merge_window=pileup_window)
 
-                filt.filtertraces(traces, time_array, traces_norm=norm,
-                                  do_invert=self._is_negative_pulse)
-                filt.eventtrigger(threshold[ichan], positivepulses=True)
-                filt_list.append(filt)
+            # trigger on one continuouse trace
+            new_triggers = self._acquire_trigger_single_trace(traces, info,
+                                                            h5writer=h5writer, 
+                                                            threshold=threshold,
+                                                            coincident_window=coincident_window,
+                                                            norm = norm,
+                                                            verbose=verbose,
+                                                            debug=debug)
+            # event counter
+            trigger_counter += new_triggers
+            if nb_events>0 and trigger_counter>=nb_events:
+                do_continue_loop = False
+                break
 
-
-            # remove pileup -> FIXME: disable for now (keep?)
-            """
-            for ichan, chan_ind in enumerate(self._chan_array_ind):
-
-                piledup_ind, _, _ = self._find_pileup(filt_list[ichan].pulsetimes,
-                                                      filt_list[ichan].pulseamps,
-                                                      pileup_window)
-                chan = self._chan[ichan]
-                if debug:
-                    print(f'INFO: Pileup on ADC channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
-
-                    import inspect
-                    import pprint
-                    attributes = inspect.getmembers(filt_list[ichan],
-                                                    lambda a:not(inspect.isroutine(a)))
-                    print('\n\n')
-                    pprint.pprint([(a[0], type(a[1]), np.shape(a[1]))
-                                   for a in attributes if not(a[0].startswith('__')
-                                                              and a[0].endswith('__'))])
-                    print('\n\n')
-
-                filt_list[ichan] = self._remove_triggers(filt_list[ichan], piledup_ind)
-            """
-            # combine and sort the multiple
-            # filt_list objects into a single one
-            filtcomb, chancomb = self._combine_sort_triggers(filt_list)
-            if debug:
-                print('INFO: Combining Triggers')
-            
-            # find:
-            # (1) coincidence triggers
-            # (2) which triggers have had other channels merged into them
-            # (3) which channels have been merged into the merged triggers
-            coinc_ind, inds_merged, chancomb_merged = self._find_pileup(filtcomb.pulsetimes,
-                                                                        filtcomb.pulseamps,
-                                                                        coincident_window,
-                                                                        chancomb)
-
-            for i, ind in enumerate(inds_merged):
-                chancomb[ind] = chancomb_merged[i]
-
-            # remove the coincidence triggers from filtcomb
-            filtcomb = self._remove_triggers(filtcomb, coinc_ind)
-
-            # remove coincident triggers from chancomb
-            for ind in sorted(coinc_ind, reverse=True):
-                del chancomb[ind]
-
-            if debug:
-                print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
-                print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)}')
-            
-            # loop triggers
-            for itrig in range(len(filtcomb.pulsetimes)):
-
-                # dataset metadata
-                dataset_metadata = dict()
-                dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
-                dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
-                dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
-                                 
-                trigger_channels = list()
-                for trig_chan in chancomb[itrig]:
-                    if isinstance(trig_chan, list):
-                        trigger_channels.extend(trig_chan)
-                    else:
-                        trigger_channels.append(trig_chan)
-                dataset_metadata['trigger_channel'] = trigger_channels
-
-                # file prefix
-                file_prefix = 'threshtrig'
-                if (self._input_series == 'even'
-                    or  self._input_series == 'odd'):
-                    file_prefix = self._input_series + '_' + file_prefix
-
-                
-                # write new file
-                if debug:
-                    print(filtcomb.evttraces[itrig])
-                    print(dataset_metadata)
-
-                    
-                h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
-                                           data_mode='threshold',
-                                           dataset_metadata=dataset_metadata)
-                
-                # event counter
-                trigger_counter += 1
-                if nb_events>0 and trigger_counter>=nb_events:
-                    do_continue_loop = False
-                    break
-
-                # display
-                if (verbose and trigger_counter % 50 == 0):
-                    print('INFO: Number of triggers = ' + str(trigger_counter))
+            # display
+            if (verbose and trigger_counter > 50*trigger_counter_50):
+                print('INFO: Number of triggers = ' + str(trigger_counter))
+                trigger_counter_50 = int(trigger_counter//50) +1
 
         # cleanup
         h5reader.clear()
