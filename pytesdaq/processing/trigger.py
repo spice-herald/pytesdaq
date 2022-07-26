@@ -908,6 +908,10 @@ class ContinuousData:
                         pileup_window=None,
                         coincident_window=50,
                         nb_cores=1,
+                        inject_n_sim=None,
+                        sim_energies=0,
+                        sim_with_template=True,
+                        TES_energyscale_dict=None,
                         verbose=True,
                         debug=False):
 
@@ -952,6 +956,10 @@ class ContinuousData:
                                   threshold=threshold,
                                   pileup_window=pileup_window,
                                   coincident_window=coincident_window,
+                                  inject_n_sim=inject_n_sim,
+                                  sim_energies=sim_energies,
+                                  sim_with_template=True,
+                                  TES_energyscale_dict=TES_energyscale_dict,
                                   verbose=verbose,
                                   debug=debug)
 
@@ -984,6 +992,10 @@ class ContinuousData:
                              repeat(threshold),
                              repeat(pileup_window),
                              repeat(coincident_window),
+                             repeat(inject_n_sim),
+                             repeat(sim_energies),
+                             repeat(sim_with_template),
+                             repeat(TES_energyscale_dict),
                              repeat(verbose),
                              repeat(debug)))
             
@@ -1284,6 +1296,8 @@ class ContinuousData:
                                       h5writer, threshold=10,
                                       coincident_window=50,
                                       norm = None,
+                                      sim_pulses=np.zeros((0,5)),
+                                      triggers_to_remove=None,
                                       verbose=True,
                                       debug=False):
         """
@@ -1295,7 +1309,8 @@ class ContinuousData:
         # event time
         time_array = np.asarray([info['event_time']])
         
-        # expand dimension traces
+        # expand dimension traces 
+        # required by OptimumFilt: (1 event, #channels, #bins)
         traces = np.expand_dims(traces, axis=0)
 
         # loop over channels to trigger
@@ -1377,46 +1392,99 @@ class ContinuousData:
             print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
             print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)}')
         
-        # loop triggers
-        for itrig in range(len(filtcomb.pulsetimes)):
+        if sim_pulses.shape[0]==0 : #raw traces
+            # loop triggers
+            for itrig in range(len(filtcomb.pulsetimes)):
 
-            # dataset metadata
-            dataset_metadata = dict()
-            dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
-            dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
-            dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
-                             
-            trigger_channels = list()
-            for trig_chan in chancomb[itrig]:
-                if isinstance(trig_chan, list):
-                    trigger_channels.extend(trig_chan)
-                else:
-                    trigger_channels.append(trig_chan)
-            dataset_metadata['trigger_channel'] = trigger_channels
+                # dataset metadata
+                dataset_metadata = dict()
+                dataset_metadata['trigger_time'] = filtcomb.pulsetimes[itrig]
+                dataset_metadata['event_time'] = filtcomb.pulsetimes[itrig]
+                dataset_metadata['event_type'] = 'raw'
+                dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[itrig]
+                                 
+                trigger_channels = list()
+                for trig_chan in chancomb[itrig]:
+                    if isinstance(trig_chan, list):
+                        trigger_channels.extend(trig_chan)
+                    else:
+                        trigger_channels.append(trig_chan)
+                dataset_metadata['trigger_channel'] = trigger_channels
 
-            # file prefix
-            file_prefix = 'threshtrig'
-            if (self._input_series == 'even'
-                or  self._input_series == 'odd'):
-                file_prefix = self._input_series + '_' + file_prefix
+                dataset_metadata['sim_time'] = 0
+                dataset_metadata['sim_energy'] = 0
+                dataset_metadata['sim_amplitude'] = 0 
 
-            
-            # write new file
-            if debug:
-                print(filtcomb.evttraces[itrig])
-                print(dataset_metadata)
+                # file prefix
+                file_prefix = 'threshtrig'
+                if (self._input_series == 'even'
+                    or  self._input_series == 'odd'):
+                    file_prefix = self._input_series + '_' + file_prefix
 
                 
-            h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
-                                       data_mode='threshold',
-                                       dataset_metadata=dataset_metadata)
-            new_trigger_counter += 1
+                # write new file
+                if debug:
+                    print(filtcomb.evttraces[itrig])
+                    print(dataset_metadata)
+
+                    
+                h5writer.write_event(filtcomb.evttraces[itrig], prefix=file_prefix,
+                                           data_mode='threshold',
+                                           dataset_metadata=dataset_metadata)
+                new_trigger_counter += 1
+        else : #salted traces FIXME! currently only considering salting 1 channel.
+            trigger_samples = (filtcomb.pulsetimes - filt_list[0].times[0])*self._sample_rate
+            triggers_to_remove   = (triggers_to_remove - filt_list[0].times[0])*self._sample_rate
+            for isim in range(sim_pulses.shape[0]):
+                dataset_metadata = dict()
+                dataset_metadata['trigger_time'] = 0
+                dataset_metadata['event_time'] = (sim_pulses.item(isim,0)
+                                            +self._nb_samples//2)/self._sample_rate+filt_list[0].times[0]
+                dataset_metadata['event_type'] = 'sim'
+                dataset_metadata['trigger_amplitude'] = 0
+                dataset_metadata['sim_time'] = (sim_pulses.item(isim,0)
+                                            +self._nb_samples//2)/self._sample_rate+filt_list[0].times[0]
+                dataset_metadata['sim_energy'] = sim_pulses.item(isim,1)
+                dataset_metadata['sim_amplitude'] = sim_pulses.item(isim,2)
+                dataset_metadata['trigger_channel'] = list() #FIXME!!
+                traceToSave = [[0]] #default to a trace of 1 sample. 
+
+            # match to triggers.
+            #triggerTime is the time on filtered pulse
+            #simPulses[:,0] is the time on raw pulse, peak positioin.
+                timeMatches = []
+            #print(simPulses.shape)
+                if trigger_samples.shape[0]>0 :
+                    timeMatches = np.abs(sim_pulses[isim,0]
+                                     - (trigger_samples-self._nb_samples//2)) < 50
+                    if debug:
+                        print(sim_pulses[isim,0]- (trigger_samples-self._nb_samples//2))
+                if np.sum(timeMatches)>0 :
+                    coinWithRawTrig = np.sum(np.abs(sim_pulses[isim,0] - (triggers_to_remove-self._nb_samples//2)) < 50) > 0
+                    if coinWithRawTrig :
+                        dataset_metadata['event_type'] = 'sim randcoin'
+                    else :
+                        dataset_metadata['trigger_time'] = filtcomb.pulsetimes[np.nonzero(timeMatches)[0][0]]
+                        dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[np.nonzero(timeMatches)[0][0]]
+                        dataset_metadata['event_type'] = 'sim trigger'
+                        traceToSave = filtcomb.evttraces[np.nonzero(timeMatches)[0][0]]
+                    trigger_samples[timeMatches] = -100
+
+                file_prefix = 'threshtrig'
+                if (self._input_series == 'even'
+                    or  self._input_series == 'odd'):
+                    file_prefix = self._input_series + '_' + file_prefix
+                h5writer.write_event(traceToSave,
+                                 prefix=file_prefix,
+                                data_mode='threshold',
+                                dataset_metadata=dataset_metadata)
+                if debug:
+                    print(dataset_metadata)
         if debug:
+            #plot the raw traces and filtered traces with triggers aligned.
             fig, ax = plt.subplots(figsize=(20, 6))
-            #ax.set_ylim(-500,1000)
             for itrig in range(len(filtcomb.pulsetimes)):
                 window = int((filtcomb.pulsetimes[itrig]-filt_list[0].times[0])*1.25e6)
-                #print(filt_list[0].filts[0,window-100000:window+250000])
                 ax.plot((np.arange(self._nb_samples)-self._nb_samples_pretrigger)/1.25e3,
                     filt_list[0].filts[0,window-self._nb_samples_pretrigger:
                                        window+self._nb_samples-self._nb_samples_pretrigger]
@@ -1424,20 +1492,76 @@ class ContinuousData:
                 ax.set_title('Alignment check - filtered waveform')
             plt.show()
             fig, ax = plt.subplots(figsize=(20, 6))
-        #ax.set_ylim(-12500,-10500)
             for itrig in range(len(filtcomb.pulsetimes)):
                 window = int((filtcomb.pulsetimes[itrig]-filt_list[0].times[0])*1.25e6)
-            #print(filt_list[0].filts[0,window-100000:window+250000])
                 ax.plot((np.arange(self._nb_samples)-self._nb_samples_pretrigger)/1.25e3,
                     traces[0][0,window-self._nb_samples//2:
                                 window-self._nb_samples//2+self._nb_samples]
                    )
                 ax.set_title('Alignment check - raw waveform')
-            #ax.set_xlim(-1,10)
             plt.show()
 
-        return new_trigger_counter
+        return new_trigger_counter, filtcomb.pulsetimes
 
+    def _sim_inject_single_trace(self, trace, nsim, energies, traces_norm, TES_energy_scale, usetemplate=False):
+        """
+        trace is 2d array: #channels, #bins
+        """
+        #inject simulated pulse to trace! energies in eV
+        newtrace = np.array(trace,copy=True)
+        #random times
+        simTime = np.random.rand(nsim)
+        #scale to the total trace length, leave 100 samples margin to the end.
+        simTime *= trace[0].size - self._nb_samples-100-100*nsim
+        #offset adjacent salts with 100 samples, such that when matching trigger time to sim truth the salts do not mix.
+        simTime = np.sort(simTime) + np.arange(nsim)*100 
+        simTime = simTime.astype(int)
+        #Sample energy in eV,
+        energy = np.random.choice(energies,nsim)
+
+        simAmp = []
+        for isim, amplitude_e in enumerate(energy* TES_energy_scale['detector_eff']):
+            for ichan in range(trace.shape[0]) :
+                if ichan>0 :
+                    print("Warning! Salting for multichannel not implemented!")
+                else :
+                    #prepare pulse shape, use the filter template by default.
+                    template = self._filter_dict['template'][ichan]
+
+                    #if usetemplate or True :
+                    #else :
+                    #    #construct pulse shape with rise and fall times.
+                    #    print("to be implemented")
+
+                    # scale to Amp
+                    if traces_norm is None :
+                        template_amp = template
+                    else :
+                        p = np.poly1d(traces_norm[ichan]) #FIXME!! for multiple channels, norm is an array of triggering channels, not all channels.
+                        template_amp = p(template+newtrace[ichan][0])
+                        template_amp -= template_amp[0]
+                    # scale to the sim energy
+                    vb_corr=TES_energy_scale['TES_vb']-2*TES_energy_scale['TES_i0']*TES_energy_scale['TES_rl']
+                    rl=TES_energy_scale['TES_rl']
+                    e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18
+                    template = (template/e_init * amplitude_e).astype(int)
+                    simAmp.append(max(template_amp)/e_init * amplitude_e)
+                    if self._is_negative_pulse:
+                        template *= -1
+                    # offset to the sampled time
+                    paddingback = newtrace[ichan].size - self._nb_samples - simTime[isim]
+                    if paddingback<0 :
+                        print("Error! Sim pulse truncated by the end of the trace record!")
+                        simTime[isim]+=paddingback
+                        paddingback = 0
+                    template = np.pad(template,
+                                      (simTime[isim], paddingback),
+                                      mode='constant',
+                                      constant_values=(0,0))
+                    newtrace[ichan] += template
+        simPulses = np.transpose([simTime,energy,simAmp])
+        #rint(simPulses)
+        return newtrace, simPulses
     
     def _acquire_trigger(self,file_list,
                          series_name=None,
@@ -1447,6 +1571,10 @@ class ContinuousData:
                          threshold=10,
                          pileup_window=None,
                          coincident_window=50,            
+                         inject_n_sim=None,
+                         sim_energies=0,
+                         sim_with_template=True,
+                         TES_energyscale_dict=None,
                          verbose=True,
                          debug=False):
         """
@@ -1463,7 +1591,12 @@ class ContinuousData:
             series_name = self._create_series_name()
         h5writer = h5io.H5Writer()
         h5writer.initialize(series_name=series_name,
-                            data_path=self._output_path)
+                            data_path=self._output_path+"/raw")
+        # a second writer for sim
+        if inject_n_sim is not None:
+            h5writer_sim = h5io.H5Writer()
+            h5writer_sim.initialize(series_name=series_name,
+                                data_path=self._output_path+"/sim")
         
 
         # write overall metadata
@@ -1471,8 +1604,30 @@ class ContinuousData:
         h5writer.set_metadata(file_metadata=output_metadata['file_metadata'],
                               detector_config=output_metadata['detector_config'],
                               adc_config=output_metadata['adc_config'])
+        if inject_n_sim is not None:
+            #add detector energy scales
+            detector_config = output_metadata['detector_config']
+            if TES_energyscale_dict is None:
+                print('Warning: TES bias point and energy scales not set for simulation!')
+                print('No pulse simulation will be performed!')
+                inject_n_sim = None
+            else :
+                keys=['TES_vb','TES_i0','TES_rl','detector_eff']
+                hasAllKeys=True
+                for key in keys :
+                    if key not in TES_energyscale_dict :
+                        hasAllKeys = False
+                if hasAllKeys :
+                    for key in keys :
+                        detector_config[key] = TES_energyscale_dict[key]
+                else :
+                    print('Warning: TES bias parameters are missing!')
+                    print('No pulse simulation will be performed!')
+                    inject_n_sim = None
+            h5writer_sim.set_metadata(file_metadata=output_metadata['file_metadata'],
+                                  detector_config=output_metadata['detector_config'],
+                                  adc_config=output_metadata['adc_config'])
 
-            
         # noise PSD (overwrite calculated PSD)
         if noise_psd is not None:
             if not isinstance(noise_psd, list):
@@ -1518,6 +1673,7 @@ class ContinuousData:
         while(do_continue_loop):
 
             # read next event
+            # This is a single event! traces is 2d #channels,#bins
             traces, info = h5reader.read_event(include_metadata=True,
                                                adc_name=self._adc_name)
 
@@ -1545,13 +1701,36 @@ class ContinuousData:
                 
 
             # trigger on one continuouse trace
-            new_triggers = self._acquire_trigger_single_trace(traces, info,
+            new_triggers, triggers_on_raw = self._acquire_trigger_single_trace(traces, info,
                                                             h5writer=h5writer, 
                                                             threshold=threshold,
                                                             coincident_window=coincident_window,
                                                             norm = norm,
                                                             verbose=verbose,
                                                             debug=debug)
+            # add salts
+            if inject_n_sim is not None :
+                sim_energies = np.atleast_1d(sim_energies)
+                inject_n_sim = np.atleast_1d(inject_n_sim)
+                n_repeats = 1
+                if len(inject_n_sim)==2 : 
+                    n_repeats = inject_n_sim[0]
+                for i in np.arange(n_repeats) :
+                    traces_sim, sim_pulses = self._sim_inject_single_trace(traces, inject_n_sim[-1],
+                                                             sim_energies,
+                                                             norm,
+                                                             TES_energy_scale=TES_energyscale_dict,
+                                                             usetemplate=sim_with_template)
+                    self._acquire_trigger_single_trace(traces_sim, info,
+                                                     h5writer=h5writer_sim,
+                                                     threshold=threshold,
+                                                     coincident_window=coincident_window,
+                                                     norm = norm,
+                                                     sim_pulses = sim_pulses,
+                                                     triggers_to_remove = triggers_on_raw,
+                                                     verbose=verbose,
+                                                     debug=debug)
+
             # event counter
             trigger_counter += new_triggers
             if nb_events>0 and trigger_counter>=nb_events:
