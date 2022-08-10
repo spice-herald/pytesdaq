@@ -906,7 +906,7 @@ class ContinuousData:
                         template=None, noise_psd=None,
                         threshold=10,
                         pileup_window=None,
-                        coincident_window=50,
+                        coincident_window=50, #sec
                         nb_cores=1,
                         inject_n_sim=None,
                         sim_energies=0,
@@ -1453,21 +1453,22 @@ class ContinuousData:
             #triggerTime is the time on filtered pulse
             #simPulses[:,0] is the time on raw pulse, peak positioin.
                 timeMatches = []
+                coincident_window_bin =  coincident_window*self._sample_rate
             #print(simPulses.shape)
                 if trigger_samples.shape[0]>0 :
                     timeMatches = np.abs(sim_pulses[isim,0]
-                                     - (trigger_samples-self._nb_samples//2)) < 50
+                                     - (trigger_samples-self._nb_samples//2)) < coincident_window_bin
                     if debug:
                         print(sim_pulses[isim,0]- (trigger_samples-self._nb_samples//2))
                 if np.sum(timeMatches)>0 :
-                    coinWithRawTrig = np.sum(np.abs(sim_pulses[isim,0] - (triggers_to_remove-self._nb_samples//2)) < 50) > 0
+                    coinWithRawTrig = np.sum(np.abs(sim_pulses[isim,0] - (triggers_to_remove-self._nb_samples//2)) < coincident_window_bin) > 0
                     if coinWithRawTrig :
                         dataset_metadata['event_type'] = 'sim randcoin'
                     else :
-                        dataset_metadata['trigger_time'] = filtcomb.pulsetimes[np.nonzero(timeMatches)[0][0]]
-                        dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[np.nonzero(timeMatches)[0][0]]
                         dataset_metadata['event_type'] = 'sim trigger'
-                        traceToSave = filtcomb.evttraces[np.nonzero(timeMatches)[0][0]]
+                    dataset_metadata['trigger_time'] = filtcomb.pulsetimes[np.nonzero(timeMatches)[0][0]]
+                    dataset_metadata['trigger_amplitude'] = filtcomb.pulseamps[np.nonzero(timeMatches)[0][0]]
+                    traceToSave = filtcomb.evttraces[np.nonzero(timeMatches)[0][0]]
                     trigger_samples[timeMatches] = -100
 
                 file_prefix = 'threshtrig'
@@ -1503,7 +1504,7 @@ class ContinuousData:
 
         return new_trigger_counter, filtcomb.pulsetimes
 
-    def _sim_inject_single_trace(self, trace, nsim, energies, traces_norm, TES_energy_scale, usetemplate=False):
+    def _sim_inject_single_trace(self, trace, nsim, energies, traces_norm, TES_energy_scale, coincident_window, usetemplate=False):
         """
         trace is 2d array: #channels, #bins
         """
@@ -1511,10 +1512,11 @@ class ContinuousData:
         newtrace = np.array(trace,copy=True)
         #random times
         simTime = np.random.rand(nsim)
-        #scale to the total trace length, leave 100 samples margin to the end.
-        simTime *= trace[0].size - self._nb_samples-100-100*nsim
-        #offset adjacent salts with 100 samples, such that when matching trigger time to sim truth the salts do not mix.
-        simTime = np.sort(simTime) + np.arange(nsim)*100 
+        #scale to the total trace length, leave 2*coincident_window samples margin to the end.
+        coincident_window_bin=int(coincident_window*self._sample_rate*2)+1
+        simTime *= trace[0].size - self._nb_samples-coincident_window_bin-coincident_window_bin*nsim
+        #offset adjacent salts with 2*coincident_window_bin samples, such that when matching trigger time to sim truth the salts do not mix.
+        simTime = np.sort(simTime) + np.arange(nsim)*coincident_window_bin 
         simTime = simTime.astype(int)
         #Sample energy in eV,
         energy = np.random.choice(energies,nsim)
@@ -1699,6 +1701,11 @@ class ContinuousData:
                         norm.append(coeff/det_config['close_loop_norm'])
                         break
                 
+            if debug:
+                print(info)
+                fig, ax = plt.subplots(figsize=(20, 6))
+                ax.plot(np.arange(len(traces[0]))/1250e3+info['event_time'],traces[0])
+                plt.show()
 
             # trigger on one continuouse trace
             new_triggers, triggers_on_raw = self._acquire_trigger_single_trace(traces, info,
@@ -1720,6 +1727,7 @@ class ContinuousData:
                                                              sim_energies,
                                                              norm,
                                                              TES_energy_scale=TES_energyscale_dict,
+                                                             coincident_window=coincident_window,
                                                              usetemplate=sim_with_template)
                     self._acquire_trigger_single_trace(traces_sim, info,
                                                      h5writer=h5writer_sim,
