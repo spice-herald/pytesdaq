@@ -531,8 +531,21 @@ class MainWindow(QtWidgets.QMainWindow):
                                                  enable_pileup_rejection=False)
 
   
+    def _handle_lpfilter(self):
+
+        if self._lpfilter_checkbox.isChecked():
+            self._lpfilter_spinbox.setEnabled(True)
+            value = float(self._lpfilter_spinbox.value())
+            self._readout.update_analysis_config(enable_lowpass_filter=True,
+                                                 reset_running_avg=True,
+                                                 lowpass_cutoff=value)
+        else:
+            self._lpfilter_spinbox.setEnabled(False)
+            self._readout.update_analysis_config(enable_lowpass_filter=False,
+                                                 reset_running_avg=True)
 
 
+            
     def _init_main_frame(self):
         
        
@@ -1109,7 +1122,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._running_avg_spinbox = QtWidgets.QSpinBox(self._tools_frame)
         self._running_avg_spinbox.setEnabled(False)
         self._running_avg_spinbox.setGeometry(QtCore.QRect(31, 39, 85, 21))
-        self._running_avg_spinbox.setMaximum(500)
+        self._running_avg_spinbox.setMaximum(5000)
+        self._running_avg_spinbox.setMinimum(1)
         self._running_avg_spinbox.setProperty('value', 1)
         self._running_avg_spinbox.setObjectName('runningAvgSpinBox')
         self._running_avg_spinbox.setEnabled(False)
@@ -1124,7 +1138,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lpfilter_checkbox.setFont(font)
         self._lpfilter_checkbox.setObjectName('lpFilterCheckBox')
         self._lpfilter_checkbox.setText('LP Filter [kHz]')
-        self._lpfilter_checkbox.setEnabled(False)
 
         # lp filter spin box
         self._lpfilter_spinbox = QtWidgets.QSpinBox(self._tools_frame)
@@ -1132,6 +1145,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lpfilter_spinbox.setGeometry(QtCore.QRect(34, 110, 83, 21))
         self._lpfilter_spinbox.setMinimum(1)
         self._lpfilter_spinbox.setMaximum(500)
+        self._lpfilter_spinbox.setProperty('value', 50)
         self._lpfilter_spinbox.setObjectName('lpFilterSpinBox')
         self._lpfilter_spinbox.setEnabled(False)
         
@@ -1142,8 +1156,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._save_button.clicked.connect(self._handle_save_data)
         self._tools_button.clicked.connect(self._show_tools)
         self._read_board_button.clicked.connect(self._handle_read_board)
-        #self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
-     
+        self._lpfilter_checkbox.toggled.connect(self._handle_lpfilter)
+        self._lpfilter_spinbox.valueChanged.connect(self._handle_lpfilter)
 
     def _set_display_button(self, do_run):
         
