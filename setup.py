@@ -8,12 +8,13 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 
 setup(name='pytesdaq',
-      version='0.2.1',
+      version='0.2.7',
       description='DAQ and Intruments control for TES development',
       long_description=long_description,
       long_description_content_type='text/markdown',
       author='Bruno Serfass',
       author_email='serfass@berkeley.edu',
+      url="https://github.com/spice-herald/pytesdaq",
       zip_safe = False,
       include_package_data = True,
       package_data = {

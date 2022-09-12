@@ -1,8 +1,8 @@
 import time
 import numpy as np
 from astropy.stats import sigma_clip as clip
-
 import qetpy as qp
+from scipy import signal
 
 
 class Analyzer:
@@ -73,7 +73,17 @@ class Analyzer:
                 self._analysis_config['norm_list'] = None
 
 
-                
+
+        
+        # ---------------------
+        # low pass filter
+        # ---------------------
+        if self._analysis_config['enable_lowpass_filter']:
+            nyq = adc_config['sample_rate']/2
+            cut_off = float(self._analysis_config['lowpass_cutoff'])*1e3/nyq
+            b,a = signal.butter(2, cut_off)
+            data_array = signal.filtfilt(b, a, data_array, axis=1,
+                                         padtype='even')
 
         # ---------------------
         # Pileup rejection calc
@@ -811,6 +821,8 @@ class Analyzer:
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
         self._analysis_config['nb_events_avg'] = 1
+        self._analysis_config['enable_lowpass_filter'] = False
+        self._analysis_config['lowpass_cutoff'] = 50
         self._analysis_config['signal_gen_current'] = None
         self._analysis_config['signal_gen_frequency'] = None
         self._analysis_config['tes_bias'] = None

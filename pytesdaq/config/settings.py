@@ -666,6 +666,8 @@ class Config:
 
 
         # initialize dictionary
+        thermometer_list = list()
+        heater_list = list()
         output_dict = dict()
 
         try:
@@ -689,7 +691,24 @@ class Config:
                     param_name = str(param.split(':')[0]).strip()
                     param_val = str(param.split(':')[1]).strip()
                     output_dict[device_param][param_name] = param_val
-            
+
+                    # get list if thermometer name
+                    if param_name=='name':
+                        if  device_name=='macrt':
+                            if 'mmr3' in device_param:
+                                thermometer_list.append(param_val)
+                            elif 'mgc3' in device_param:
+                                heater_list.append(param_val)
+                        if device_name=='lakeshore':
+                            if 'chan' in device_param:
+                                thermometer_list.append(param_val)
+                            if 'heater' in device_param:
+                                heater_list.append(param_val)
+
+            # add thermometer and heater list
+            output_dict['thermometers'] = thermometer_list
+            output_dict['heaters'] =  heater_list
+                            
         except:
             raise ValueError('ERROR: Unknown temperature_controllers format!')
                 

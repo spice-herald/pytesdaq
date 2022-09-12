@@ -8,6 +8,7 @@ import numpy as np
 import os
 from datetime import datetime
 import stat
+import time
 
 if __name__ == "__main__":
 
@@ -61,6 +62,15 @@ if __name__ == "__main__":
                         help='Disable instrument control. Require "detector_config" field in setup.ini!')
     parser.add_argument('--split-series', '--split_series', dest='split_series', action='store_true',
                         help='Split series into even/odd data')
+
+    # temperature measurement
+    parser.add_argument('--disable-temperature-reading', dest='disable_temperature_reading', action='store_true',
+                        help='Disable temperature reading, enabled by default if controller defined')
+    
+    parser.add_argument('--thermometer_list', nargs= '+', type=str,
+                        help=('List of thermometers name as defined in setup file, default=all'))
+
+    
     
     args = parser.parse_args()
 
@@ -83,7 +93,8 @@ if __name__ == "__main__":
     disable_control = False
     verbose = False
     split_series = False
-    
+    disable_temperature_reading = False
+    thermometer_list = 'all'
        
     # Setup file:
     setup_file = None
@@ -143,8 +154,26 @@ if __name__ == "__main__":
         group_name = args.group_name
     if args.split_series:
         split_series=True
+    if args.disable_temperature_reading:
+        disable_temperature_reading = True
+    if args.thermometer_list:
+        thermometer_list = arg_utils.extract_list(args.thermometer_list)
 
         
+    # Get thermometers
+    temperature_controllers = config.get_temperature_controllers()
+    if not temperature_controllers:
+        disable_temperature_reading = True
+
+    if (not disable_temperature_reading and
+        thermometer_list=='all'):
+
+        thermometer_list = list()
+        for temp_control in temperature_controllers:
+            temp_setup = config.get_temperature_controller_setup(temp_control)
+            thermometer_list += temp_setup['thermometers']
+            
+         
     # nb of runs
     nb_runs = int(round(duration/run_time_seconds))
     if nb_runs<1:
@@ -243,12 +272,27 @@ if __name__ == "__main__":
             config_dict = adc_config[adc_name]
             detector_config[adc_name] = myinstrument.read_all(adc_id=adc_name,
                                                               adc_channel_list=config_dict['channel_list'])
+
+        # temperature reading
+        if not disable_temperature_reading:
+            for thermometer in thermometer_list:
+                temperature = myinstrument.get_temperature(
+                    channel_name=thermometer)
+                time.sleep(1)
+                detector_config[adc_name][
+                    'temperature_' + thermometer.lower()
+                ] = temperature
+                
+                print('Current ' + thermometer + ' temperature = '
+                      + str(temperature*1000) + ' mK')
+                
+
+            
     else:
         for adc_name in adc_list:
             config_dict = adc_config[adc_name]
             detector_config[adc_name] = config.get_detector_config(adc_id=adc_name,
                                                                    adc_channel_list=config_dict['channel_list'])
-
     # ========================
     # Data path
     # ========================

@@ -136,7 +136,7 @@ class DAQ:
                        trigger_type=[]):
         
 
-        if self._driver_name=='polaris' or _driver_name=='pydaqmx':
+        if self._driver_name=='polaris' or self._driver_name=='pydaqmx':
             self._driver.set_adc_config(adc_name, sample_rate=sample_rate,
                                         nb_samples=nb_samples,
                                         voltage_min=voltage_min,voltage_max=voltage_max,

@@ -361,7 +361,7 @@ class PolarisTask:
             channel_names = list()
             for chan in channel_list:
                 channel_names.append(config_dict['device_name'] + '/ai' + str(chan))
-            channel_names_flatten = flatten_channel_string(channel_names)
+            channel_names_flatten = flatten_channel_string(channel_names).replace(',',' ')
             cfg_list.append('\tchannel : ' + channel_names_flatten + ',\n')
 
             # voltage range

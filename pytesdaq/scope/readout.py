@@ -258,6 +258,8 @@ class Readout:
                                enable_running_avg=None,
                                reset_running_avg=None,
                                nb_events_avg=None,
+                               enable_lowpass_filter=None,
+                               lowpass_cutoff=None,
                                fit_didv=None, didv_1pole=None,
                                didv_2pole=None, didv_3pole=None,
                                didv_measurement=None,
@@ -290,6 +292,13 @@ class Readout:
         if nb_events_avg is not None:
             self._analyzer.set_config('nb_events_avg', nb_events_avg)
 
+        if enable_lowpass_filter is not None:
+            self._analyzer.set_config('enable_lowpass_filter', enable_lowpass_filter)
+
+        if lowpass_cutoff is not None:
+            self._analyzer.set_config('lowpass_cutoff', lowpass_cutoff)
+
+            
         if fit_didv is not None:
             self._do_get_sg = True
             self._analyzer.set_config('fit_didv', fit_didv)
