@@ -1275,9 +1275,12 @@ class H5Writer:
         self._series_path = data_path
         
         if not os.path.isdir(self._series_path):
-            os.mkdir(self._series_path)
-            os.chmod(self._series_path,
+            try:
+                os.mkdir(self._series_path)
+                os.chmod(self._series_path,
                      stat.S_IRWXG | stat.S_IRWXU | stat.S_IROTH | stat.S_IXOTH)
+            except:
+                print(self._series_path+"already exist!")
 
 
     def set_metadata(self, file_metadata=None, adc_config=None, detector_config=None):

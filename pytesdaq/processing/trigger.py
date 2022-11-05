@@ -909,6 +909,7 @@ class ContinuousData:
                         coincident_window=50, #sec
                         nb_cores=1,
                         inject_n_sim=None,
+                        sim_mode=0,
                         sim_energies=0,
                         sim_with_template=True,
                         TES_energyscale_dict=None,
@@ -957,6 +958,7 @@ class ContinuousData:
                                   pileup_window=pileup_window,
                                   coincident_window=coincident_window,
                                   inject_n_sim=inject_n_sim,
+                                  sim_mode=sim_mode,
                                   sim_energies=sim_energies,
                                   sim_with_template=True,
                                   TES_energyscale_dict=TES_energyscale_dict,
@@ -993,6 +995,7 @@ class ContinuousData:
                              repeat(pileup_window),
                              repeat(coincident_window),
                              repeat(inject_n_sim),
+                             repeat(sim_mode),
                              repeat(sim_energies),
                              repeat(sim_with_template),
                              repeat(TES_energyscale_dict),
@@ -1510,13 +1513,14 @@ class ContinuousData:
         """
         #inject simulated pulse to trace! energies in eV
         newtrace = np.array(trace,copy=True)
+        salts_before_ADC=np.zeros(trace.shape,dtype=float)
         #random times
         simTime = np.random.rand(nsim)
-        #scale to the total trace length, leave 2*coincident_window samples margin to the end.
-        coincident_window_bin=int(coincident_window*self._sample_rate*2)+1
-        simTime *= trace[0].size - self._nb_samples-coincident_window_bin-coincident_window_bin*nsim
-        #offset adjacent salts with 2*coincident_window_bin samples, such that when matching trigger time to sim truth the salts do not mix.
-        simTime = np.sort(simTime) + np.arange(nsim)*coincident_window_bin 
+        #scale to the total trace length, leave coincident_window samples margin to the end.
+        coincident_window_bin=int(coincident_window*self._sample_rate)+1
+        simTime *= trace[0].size - self._nb_samples-coincident_window_bin #- coincident_window_bin*nsim
+        #offset adjacent salts with coincident_window_bin samples, such that when matching trigger time to sim truth the salts do not mix.
+        simTime = np.sort(simTime) #+ np.arange(nsim)*coincident_window_bin 
         simTime = simTime.astype(int)
         #Sample energy in eV,
         energy = np.random.choice(energies,nsim)
@@ -1546,7 +1550,7 @@ class ContinuousData:
                     vb_corr=TES_energy_scale['TES_vb']-2*TES_energy_scale['TES_i0']*TES_energy_scale['TES_rl']
                     rl=TES_energy_scale['TES_rl']
                     e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18
-                    template = (template/e_init * amplitude_e).astype(int)
+                    template = (template/e_init * amplitude_e) #.astype(int) #DO digitization in the end!
                     simAmp.append(max(template_amp)/e_init * amplitude_e)
                     if self._is_negative_pulse:
                         template *= -1
@@ -1560,7 +1564,20 @@ class ContinuousData:
                                       (simTime[isim], paddingback),
                                       mode='constant',
                                       constant_values=(0,0))
-                    newtrace[ichan] += template
+                    salts_before_ADC[ichan] += template
+        #simulate the digitization: randomize the digits of each sample of the salt
+        salts_after_ADC=np.floor(salts_before_ADC).astype(int)
+        newtrace +=salts_after_ADC
+        newtrace += (salts_before_ADC-salts_after_ADC-np.random.random_sample(trace.shape))>0
+        #print((salts_before_ADC)[salts_before_ADC>0])
+        #print((salts_before_ADC-salts_after_ADC)[salts_before_ADC>0])
+        #print(np.random.random_sample(trace.shape)[salts_before_ADC>0])
+        #print(np.sum((salts_before_ADC-salts_after_ADC-np.random.random_sample(trace.shape))>0))
+        #for ichan in range(trace.shape[0]):
+        #    for isample in range(trace.shape[1]):
+        #        sample=salts_before_ADC[ichan,isample]
+        #        sample_digitized=np.floor(sample)
+        #        newtrace[ichan,isample] += sample_digitized+np.random.choice(2, p=[sample-sample_digitized,1+sample_digitized-sample] )
         simPulses = np.transpose([simTime,energy,simAmp])
         #rint(simPulses)
         return newtrace, simPulses
@@ -1574,6 +1591,7 @@ class ContinuousData:
                          pileup_window=None,
                          coincident_window=50,            
                          inject_n_sim=None,
+                         sim_mode=0,
                          sim_energies=0,
                          sim_with_template=True,
                          TES_energyscale_dict=None,
@@ -1581,6 +1599,9 @@ class ContinuousData:
                          debug=False):
         """
         Function to acquire trigger from continuous data
+        sim_mode=0: no salts
+        sim_mode=1: efficiency estimation and cut study with salts. Trigger on raw trace once, salt with all energies and match trigger to sim truth.
+        sim_mode=2: diff rate calculation. Trigger on raw trace once. Salt with each energy separately, save salted trigger separately.
         """
 
         
@@ -1594,19 +1615,17 @@ class ContinuousData:
         h5writer = h5io.H5Writer()
         h5writer.initialize(series_name=series_name,
                             data_path=self._output_path+"/raw")
-        # a second writer for sim
-        if inject_n_sim is not None:
-            h5writer_sim = h5io.H5Writer()
-            h5writer_sim.initialize(series_name=series_name,
-                                data_path=self._output_path+"/sim")
-        
-
         # write overall metadata
         output_metadata = self._fill_metadata()
         h5writer.set_metadata(file_metadata=output_metadata['file_metadata'],
                               detector_config=output_metadata['detector_config'],
                               adc_config=output_metadata['adc_config'])
-        if inject_n_sim is not None:
+
+        # a second writer for sim
+        if sim_mode>=1 :
+            h5writer_sim = h5io.H5Writer()
+            h5writer_sim.initialize(series_name=series_name,
+                                data_path=self._output_path+"/sim")
             #add detector energy scales
             detector_config = output_metadata['detector_config']
             if TES_energyscale_dict is None:
@@ -1629,6 +1648,18 @@ class ContinuousData:
             h5writer_sim.set_metadata(file_metadata=output_metadata['file_metadata'],
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
+
+        if sim_mode==2 :
+            h5writer_sim_diffrate = []
+            for energy in sim_energies :
+                h5writer_sim_diffrate_oneE = h5io.H5Writer()
+                h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
+                                data_path=self._output_path+"/diffrate_"+str(energy))
+                h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
+                                  detector_config=output_metadata['detector_config'],
+                                  adc_config=output_metadata['adc_config'])
+                h5writer_sim_diffrate.append(h5writer_sim_diffrate_oneE)
+        
 
         # noise PSD (overwrite calculated PSD)
         if noise_psd is not None:
@@ -1720,16 +1751,17 @@ class ContinuousData:
                 sim_energies = np.atleast_1d(sim_energies)
                 inject_n_sim = np.atleast_1d(inject_n_sim)
                 n_repeats = 1
-                if len(inject_n_sim)==2 : 
-                    n_repeats = inject_n_sim[0]
-                for i in np.arange(n_repeats) :
-                    traces_sim, sim_pulses = self._sim_inject_single_trace(traces, inject_n_sim[-1],
+                if sim_mode==1 :
+                    if len(inject_n_sim)==2 : 
+                        n_repeats = inject_n_sim[0]
+                    for i in np.arange(n_repeats) :
+                        traces_sim, sim_pulses = self._sim_inject_single_trace(traces, inject_n_sim[-1],
                                                              sim_energies,
                                                              norm,
                                                              TES_energy_scale=TES_energyscale_dict,
-                                                             coincident_window=coincident_window,
+                                                             coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
                                                              usetemplate=sim_with_template)
-                    self._acquire_trigger_single_trace(traces_sim, info,
+                        self._acquire_trigger_single_trace(traces_sim, info,
                                                      h5writer=h5writer_sim,
                                                      threshold=threshold,
                                                      coincident_window=coincident_window,
@@ -1738,6 +1770,33 @@ class ContinuousData:
                                                      triggers_to_remove = triggers_on_raw,
                                                      verbose=verbose,
                                                      debug=debug)
+                if sim_mode==2 :
+                    for i,energy in enumerate(sim_energies) :
+                        if len(inject_n_sim)==2 : 
+                            n_repeats = inject_n_sim[0]
+                        for ii in np.arange(n_repeats) :
+                            traces_sim, sim_pulses = self._sim_inject_single_trace(traces, inject_n_sim[-1],
+                                                             np.atleast_1d(energy),
+                                                             norm,
+                                                             TES_energy_scale=TES_energyscale_dict,
+                                                             coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
+                                                             usetemplate=sim_with_template)
+                            self._acquire_trigger_single_trace(traces_sim, info,
+                                                     h5writer=h5writer_sim,
+                                                     threshold=threshold,
+                                                     coincident_window=coincident_window,
+                                                     norm = norm,
+                                                     sim_pulses = sim_pulses,
+                                                     triggers_to_remove = triggers_on_raw,
+                                                     verbose=verbose,
+                                                     debug=debug)
+                            self._acquire_trigger_single_trace(traces_sim, info,
+                                                            h5writer=h5writer_sim_diffrate[i], 
+                                                            threshold=threshold,
+                                                            coincident_window=coincident_window,
+                                                            norm = norm,
+                                                            verbose=verbose,
+                                                            debug=debug)
 
             # event counter
             trigger_counter += new_triggers
