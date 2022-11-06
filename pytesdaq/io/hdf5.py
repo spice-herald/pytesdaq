@@ -1282,6 +1282,9 @@ class H5Writer:
             except:
                 print(self._series_path+"already exist!")
 
+    def set_nb_events_per_dump_max(self, maxperdump=1000):
+        self._nb_events_per_dump_max = maxperdump
+
 
     def set_metadata(self, file_metadata=None, adc_config=None, detector_config=None):
         """

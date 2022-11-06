@@ -1655,6 +1655,7 @@ class ContinuousData:
                 h5writer_sim_diffrate_oneE = h5io.H5Writer()
                 h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
                                 data_path=self._output_path+"/diffrate_"+str(energy))
+                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0])
                 h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
