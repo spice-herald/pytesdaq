@@ -7,17 +7,27 @@ from glob import glob
 import stat
 import pickle
 import math
+import array
+
+import ROOT
+from ROOT.TVirtualFFT import FFT
+from ctypes import *
+
 from multiprocessing import Pool
 from itertools import repeat
 from pathlib import Path
 from scipy.signal import correlate
-from numpy.fft import ifft, fft
+from scipy.fft import ifft, fft, next_fast_len
 
 import pytesdaq.io.hdf5 as h5io
 from pytesdaq.utils import arg_utils
 import qetpy as qp
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+import time
 
 __all__ = [
     'OptimumFilt',
@@ -137,7 +147,7 @@ class OptimumFilt(object):
 
     """
 
-    def __init__(self, fs, template, noisepsd, tracelength, chan_to_trigger='all',
+    def __init__(self, fs, template, noisepsd, tracelength, raw_trace_length, chan_to_trigger='all',
                  trigtemplate=None, lgcoverlap=True, merge_window=None):
         """
         Initialization of the FIR filter.
@@ -181,13 +191,24 @@ class OptimumFilt(object):
         self.noisepsd = noisepsd
         self.lgcoverlap = lgcoverlap
         self.chan = chan_to_trigger
+
+        #rewrite with root fft
+        self.fft_root = FFT(1, array.array('i',[raw_trace_length]),"R2C M K")
+        self.ifft_root = FFT(1, array.array('i',[raw_trace_length]),"C2R M K")
         
         # calculate the time-domain optimum filter
-        phi_freq = fft(self.template) / self.noisepsd
-        phi_freq[0] = 0 #ensure we do not use DC information
-        self.phi = ifft(phi_freq).real
+        self.phi_freq = fft(self.template) / self.noisepsd
+        self.phi_freq[0] = 0 #ensure we do not use DC information
+        self.phi = ifft(self.phi_freq).real
         # calculate the normalization of the optimum filter
         self.norm = np.dot(self.phi, self.template)
+        # calculate the filter in frequency space, matching data trace length
+        self.fast_length = next_fast_len(raw_trace_length, real=True)
+        print('next fast length=', next_fast_len(raw_trace_length, real=True))
+        self.phi_freq_long = np.conjugate( fft(self.phi, self.fast_length )) / self.norm
+
+        self.trace_freq_re = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
+        self.trace_freq_im = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
         
         # calculate the expected energy resolution
         self.resolution = 1/(np.dot(self.phi, self.template)/self.fs)**0.5
@@ -250,6 +271,7 @@ class OptimumFilt(object):
             Invert trigger . Default: False
         """
 
+        #t0 = time.time()
         # update the traces, times, and ttl attributes
         self.traces = traces
         self.times = times
@@ -288,10 +310,27 @@ class OptimumFilt(object):
                 
         # calculate the total pulse by summing across channels for each trace
         pulsestot = np.sum(traces_amps, axis=1)
+        #t1 = time.time()
+        #apply the FIR filter to each trace
+        #self.filts = np.array([correlate(trace, self.phi, mode="same", method='fft')/self.norm
+        #                       for trace in pulsestot])
+        #t2 = time.time()
+        filts = []
+        for trace in pulsestot :
+            self.fft_root.SetPoints( np.pad(trace,(self.tracelength//2,self.fast_length-len(trace)),'edge')[:-self.tracelength//2])
+            self.fft_root.Transform()
+            self.fft_root.GetPointsComplex(self.trace_freq_re, self.trace_freq_im)
+            trace_filt_freq = self.phi_freq_long[:self.fast_length//2]*(self.trace_freq_re + 1j*self.trace_freq_im)
+            trace_filt_freq_re=np.array(np.real(trace_filt_freq))
+            trace_filt_freq_im=np.array(np.imag(trace_filt_freq))
+            self.ifft_root.SetPointsComplex(trace_filt_freq_re, trace_filt_freq_im)
+            self.ifft_root.Transform()
+            filt = np.zeros(self.fast_length, dtype='d')#array.array('d',[0])
+            self.ifft_root.GetPoints(filt)
+            filts.append(np.array(filt/self.fast_length))
+        self.filts = np.array(filts)
+        #t3 = time.time()
 
-        # apply the FIR filter to each trace
-        self.filts = np.array([correlate(trace, self.phi, mode="same")/self.norm
-                               for trace in pulsestot])
 
         # set the filtered values to zero near the edges, so as not to use the padded values in the analysis
         # also so that the traces that will be saved will be equal to the tracelength
@@ -312,6 +351,8 @@ class OptimumFilt(object):
             # also so that the traces that will be saved will be equal to the tracelength
             self.trigfilts[:, :cut_len//2] = 0.0
             self.trigfilts[:, -(cut_len//2) + (cut_len+1)%2:] = 0.0
+        #t4 = time.time()
+        #print('filter time',t1-t0, t2-t1, t3-t2, t4-t3)
 
     def eventtrigger(self, thresh, trigthresh=None, positivepulses=True):
         """
@@ -607,6 +648,38 @@ class ContinuousData:
                         raise ValueError('ERROR: "trigger_channels" in filter file ' +
                                          'is different than input channels or ' +
                                          'does not exist!')
+
+    def update_filters(self, nb_samples_raw_trace, debug=False):
+        # prepare the filter
+        filt_list = []
+        for ichan, chan_ind in enumerate(self._chan_array_ind):
+            if debug:
+                print(f'INFO: Finding OF triggers on ADC channel(s) {self._chan[ichan]}')
+            
+            # find triggers
+            if np.isscalar(chan_ind):
+                chan_ind = [chan_ind]
+                
+            filt = OptimumFilt(self._sample_rate,
+                               self._filter_dict['template'][ichan],
+                               self._filter_dict['psd'][ichan],
+                               self._nb_samples,
+                               nb_samples_raw_trace,
+                               chan_to_trigger=chan_ind,
+                               lgcoverlap=True,
+                               merge_window=self._pileup_window)
+            filt_list.append(filt)
+        # the combined filt
+        filtcomb = OptimumFilt(self._sample_rate,
+                               self._filter_dict['template'][0],
+                               self._filter_dict['psd'][0],
+                               self._nb_samples,
+                               nb_samples_raw_trace,
+                               lgcoverlap=True,
+                               merge_window=self._pileup_window)
+        return filt_list, filtcomb
+
+
                     
                 
     def get_psd_data(self):
@@ -1249,20 +1322,20 @@ class ContinuousData:
 
         return filt
 
-    def _combine_sort_triggers(self, filt_list):
+    def _combine_sort_triggers(self, filt_list, filtcomb):
 
         # make list of filt.chan for each filter
         # and combine into single long list for filters
         chancomb = list()
-        for filt in filt_list:
+        for filt in filt_list:#self._filt_list[process_id]:
             chancomb.extend([filt.chan] * len(filt.pulseamps))
 
-        # combine filt_list lists into single long list
-        evttracescomb = [evt for filt in filt_list for evt in filt.evttraces]
-        pulseampscomb = [amp for filt in filt_list for amp in filt.pulseamps]
-        pulsetimescomb = [time for filt in filt_list for time in filt.pulsetimes]
-        trigampscomb = [trigamp for filt in filt_list for trigamp in filt.trigamps]
-        trigtimescomb = [trigtime for filt in filt_list for trigtime in filt.trigtimes]
+        # combine self._filt_list lists into single long list
+        evttracescomb = [evt       for filt in filt_list for evt in filt.evttraces]
+        pulseampscomb = [amp       for filt in filt_list for amp in filt.pulseamps]
+        pulsetimescomb = [time     for filt in filt_list for time in filt.pulsetimes]
+        trigampscomb = [trigamp    for filt in filt_list for trigamp in filt.trigamps]
+        trigtimescomb = [trigtime  for filt in filt_list for trigtime in filt.trigtimes]
         trigtypescomb = [trigtypes for filt in filt_list for trigtypes in filt.trigtypes]
 
         # sort by pulsetimes (not the same as trig times)
@@ -1279,12 +1352,6 @@ class ContinuousData:
         chancomb = [chancomb[i] for i in indsort]
 
         # make new OptimumFilt object
-        filtcomb = OptimumFilt(self._sample_rate,
-                               self._filter_dict['template'][0],
-                               self._filter_dict['psd'][0],
-                               self._nb_samples,
-                               lgcoverlap=True,
-                               merge_window=self._pileup_window)
         filtcomb.evttraces = evttracescomb
         filtcomb.pulseamps = pulseampscomb
         filtcomb.pulsetimes = pulsetimescomb
@@ -1292,11 +1359,14 @@ class ContinuousData:
         filtcomb.trigtimes = trigtimescomb
         filtcomb.trigtypes = trigtypescomb
 
-        return filtcomb, chancomb
+        return chancomb
 
 
     def _acquire_trigger_single_trace(self, traces, info,
-                                      h5writer, threshold=10,
+                                      h5writer, 
+                                      filt_list, # distinguish the filter buffer for multiprocessing
+                                      filtcomb,
+                                      threshold=10,
                                       coincident_window=50,
                                       norm = None,
                                       sim_pulses=np.zeros((0,5)),
@@ -1306,6 +1376,10 @@ class ContinuousData:
         """
         Function to acquare trigger from a single continuouse trace.
         """
+        #t0 = time.time()
+        if debug:
+            print('INFO: _acquire_trigger_single_trace')
+
 
         new_trigger_counter=0
                 
@@ -1318,7 +1392,6 @@ class ContinuousData:
 
         # loop over channels to trigger
         # make OF filters for channel and store in list
-        filt_list = []
 
         for ichan, chan_ind in enumerate(self._chan_array_ind):
 
@@ -1328,21 +1401,12 @@ class ContinuousData:
             # find triggers
             if np.isscalar(chan_ind):
                 chan_ind = [chan_ind]
-                
-            filt = OptimumFilt(self._sample_rate,
-                               self._filter_dict['template'][ichan],
-                               self._filter_dict['psd'][ichan],
-                               self._nb_samples,
-                               chan_to_trigger=chan_ind,
-                               lgcoverlap=True,
-                               merge_window=self._pileup_window)
-
-            filt.filtertraces(traces, time_array, traces_norm=norm,
+            filt_list[ichan].filtertraces(traces, time_array, traces_norm=norm,
                               do_invert=self._is_negative_pulse)
-            filt.eventtrigger(threshold[ichan], positivepulses=True)
-            filt_list.append(filt)
+            filt_list[ichan].eventtrigger(threshold[ichan], positivepulses=True)
 
 
+        #t1 = time.time()
         # remove pileup -> FIXME: disable for now (keep?)
         """
         for ichan, chan_ind in enumerate(self._chan_array_ind):
@@ -1368,7 +1432,7 @@ class ContinuousData:
         """
         # combine and sort the multiple
         # filt_list objects into a single one
-        filtcomb, chancomb = self._combine_sort_triggers(filt_list)
+        chancomb = self._combine_sort_triggers(filt_list, filtcomb)
         if debug:
             print('INFO: Combining Triggers')
         
@@ -1394,6 +1458,8 @@ class ContinuousData:
         if debug:
             print(f'INFO: Number of events with merged triggers = {len(inds_merged)}')
             print(f'INFO: Final number of events in this continuous data chunk = {len(chancomb)}')
+
+        #t2 = time.time()
         
         if sim_pulses.shape[0]==0 : #raw traces
             # loop triggers
@@ -1436,8 +1502,8 @@ class ContinuousData:
                                            dataset_metadata=dataset_metadata)
                 new_trigger_counter += 1
         else : #salted traces FIXME! currently only considering salting 1 channel.
-            trigger_samples = (filtcomb.pulsetimes - filt_list[0].times[0])*self._sample_rate
-            triggers_to_remove   = (triggers_to_remove - filt_list[0].times[0])*self._sample_rate
+            trigger_samples =   (filtcomb.pulsetimes - filt_list[0].times[0])*self._sample_rate
+            triggers_to_remove = (triggers_to_remove - filt_list[0].times[0])*self._sample_rate
             for isim in range(sim_pulses.shape[0]):
                 dataset_metadata = dict()
                 dataset_metadata['trigger_time'] = 0
@@ -1484,6 +1550,8 @@ class ContinuousData:
                                 dataset_metadata=dataset_metadata)
                 if debug:
                     print(dataset_metadata)
+        #t3 = time.time()
+        #print('triger single trace time',t1-t0, t2-t0, t3-t0)
         if debug:
             #plot the raw traces and filtered traces with triggers aligned.
             fig, ax = plt.subplots(figsize=(20, 6))
@@ -1497,7 +1565,7 @@ class ContinuousData:
             plt.show()
             fig, ax = plt.subplots(figsize=(20, 6))
             for itrig in range(len(filtcomb.pulsetimes)):
-                window = int((filtcomb.pulsetimes[itrig]-filt_list[0].times[0])*1.25e6)
+                window = int((filtcomb.pulsetimes[itrig]- filt_list[0].times[0])*1.25e6)
                 ax.plot((np.arange(self._nb_samples)-self._nb_samples_pretrigger)/1.25e3,
                     traces[0][0,window-self._nb_samples//2:
                                 window-self._nb_samples//2+self._nb_samples]
@@ -1505,9 +1573,10 @@ class ContinuousData:
                 ax.set_title('Alignment check - raw waveform')
             plt.show()
 
+
         return new_trigger_counter, filtcomb.pulsetimes
 
-    def _sim_inject_single_trace(self, trace, nsim, energies, traces_norm, TES_energy_scale, coincident_window, usetemplate=False):
+    def _sim_inject_single_trace(self, trace, nsim, energies, traces_norm, TES_energy_scale, coincident_window, usetemplate=False, pulses=None):
         """
         trace is 2d array: #channels, #bins
         """
@@ -1515,56 +1584,64 @@ class ContinuousData:
         newtrace = np.array(trace,copy=True)
         salts_before_ADC=np.zeros(trace.shape,dtype=float)
         #random times
-        simTime = np.random.rand(nsim)
-        #scale to the total trace length, leave coincident_window samples margin to the end.
-        coincident_window_bin=int(coincident_window*self._sample_rate)+1
-        simTime *= trace[0].size - self._nb_samples-coincident_window_bin #- coincident_window_bin*nsim
-        #offset adjacent salts with coincident_window_bin samples, such that when matching trigger time to sim truth the salts do not mix.
-        simTime = np.sort(simTime) #+ np.arange(nsim)*coincident_window_bin 
-        simTime = simTime.astype(int)
-        #Sample energy in eV,
-        energy = np.random.choice(energies,nsim)
+        if pulses is not None:
+            if len(pulses)!=nsim :
+                raise ValueError('ERROR: unexpected slats vector length!')
+            simTime = np.transpose(pulses)[0].astype(int)
+            energy = np.transpose(pulses)[1]
+        else:
+            simTime = np.random.rand(nsim)
+            #scale to the total trace length, leave coincident_window samples margin to the end.
+            coincident_window_bin=int(coincident_window*self._sample_rate)+1
+            simTime *= trace[0].size - self._nb_samples-coincident_window_bin #- coincident_window_bin*nsim
+            #offset adjacent salts with coincident_window_bin samples, such that when matching trigger time to sim truth the salts do not mix.
+            simTime = np.sort(simTime) #+ np.arange(nsim)*coincident_window_bin 
+            simTime = simTime.astype(int)
+            #Sample energy in eV,
+            energy = np.random.choice(energies,nsim)
 
         simAmp = []
-        for isim, amplitude_e in enumerate(energy* TES_energy_scale['detector_eff']):
-            for ichan in range(trace.shape[0]) :
-                if ichan>0 :
-                    print("Warning! Salting for multichannel not implemented!")
+        for ichan in range(trace.shape[0]) :
+            if ichan>0 :
+                print("Warning! Salting for multichannel not implemented!")
+            else :
+                #prepare pulse shape, use the filter template by default.
+                template = self._filter_dict['template'][ichan]
+
+                #if usetemplate or True :
+                #else :
+                #    #construct pulse shape with rise and fall times.
+                #    print("to be implemented")
+
+                # scale to Amp
+                if traces_norm is None :
+                    template_amp = template
                 else :
-                    #prepare pulse shape, use the filter template by default.
-                    template = self._filter_dict['template'][ichan]
+                    p = np.poly1d(traces_norm[ichan]) #FIXME!! for multiple channels, norm is an array of triggering channels, not all channels.
+                    template_amp = p(template+newtrace[ichan][0])
+                    template_amp -= template_amp[0]
+                template_amp_amplitude = max(template_amp)
+                # scale to the sim energy
+                vb_corr=TES_energy_scale['TES_vb']-2*TES_energy_scale['TES_i0']*TES_energy_scale['TES_rl']
+                rl=TES_energy_scale['TES_rl']
+                e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18
 
-                    #if usetemplate or True :
-                    #else :
-                    #    #construct pulse shape with rise and fall times.
-                    #    print("to be implemented")
-
-                    # scale to Amp
-                    if traces_norm is None :
-                        template_amp = template
-                    else :
-                        p = np.poly1d(traces_norm[ichan]) #FIXME!! for multiple channels, norm is an array of triggering channels, not all channels.
-                        template_amp = p(template+newtrace[ichan][0])
-                        template_amp -= template_amp[0]
-                    # scale to the sim energy
-                    vb_corr=TES_energy_scale['TES_vb']-2*TES_energy_scale['TES_i0']*TES_energy_scale['TES_rl']
-                    rl=TES_energy_scale['TES_rl']
-                    e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18
-                    template = (template/e_init * amplitude_e) #.astype(int) #DO digitization in the end!
-                    simAmp.append(max(template_amp)/e_init * amplitude_e)
+                for isim, amplitude_e in enumerate(energy* TES_energy_scale['detector_eff']):
+                    template_scaled = (template/e_init * amplitude_e) #.astype(int) #DO digitization in the end!
+                    simAmp.append(template_amp_amplitude/e_init * amplitude_e)
                     if self._is_negative_pulse:
-                        template *= -1
-                    # offset to the sampled time
-                    paddingback = newtrace[ichan].size - self._nb_samples - simTime[isim]
-                    if paddingback<0 :
-                        print("Error! Sim pulse truncated by the end of the trace record!")
-                        simTime[isim]+=paddingback
-                        paddingback = 0
-                    template = np.pad(template,
-                                      (simTime[isim], paddingback),
-                                      mode='constant',
-                                      constant_values=(0,0))
-                    salts_before_ADC[ichan] += template
+                        template_scaled *= -1
+                    ## offset to the sampled time
+                    #paddingback = newtrace[ichan].size - self._nb_samples - simTime[isim]
+                    #if paddingback<0 :
+                    #    print("Error! Sim pulse truncated by the end of the trace record!")
+                    #    simTime[isim]+=paddingback
+                    #    paddingback = 0
+                    ##template_scaled = np.pad(template_scaled,
+                    ##                  (simTime[isim], paddingback),
+                    ##                  mode='constant',
+                    ##                  constant_values=(0,0))
+                    salts_before_ADC[ichan,simTime[isim]:simTime[isim]+self._nb_samples] += template_scaled
         #simulate the digitization: randomize the digits of each sample of the salt
         salts_after_ADC=np.floor(salts_before_ADC).astype(int)
         newtrace +=salts_after_ADC
@@ -1579,7 +1656,6 @@ class ContinuousData:
         #        sample_digitized=np.floor(sample)
         #        newtrace[ichan,isample] += sample_digitized+np.random.choice(2, p=[sample-sample_digitized,1+sample_digitized-sample] )
         simPulses = np.transpose([simTime,energy,simAmp])
-        #rint(simPulses)
         return newtrace, simPulses
     
     def _acquire_trigger(self,file_list,
@@ -1620,6 +1696,7 @@ class ContinuousData:
         h5writer.set_metadata(file_metadata=output_metadata['file_metadata'],
                               detector_config=output_metadata['detector_config'],
                               adc_config=output_metadata['adc_config'])
+        h5writer.set_nb_events_per_dump_max(1000, int(2000*25000/self._nb_samples)) #flush every 100MB
 
         # a second writer for sim
         if sim_mode>=1 :
@@ -1650,12 +1727,22 @@ class ContinuousData:
                                   adc_config=output_metadata['adc_config'])
 
         if sim_mode==2 :
+            h5writer_sim.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples)) #flush every 100MB
             h5writer_sim_diffrate = []
             for energy in sim_energies :
                 h5writer_sim_diffrate_oneE = h5io.H5Writer()
                 h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
                                 data_path=self._output_path+"/diffrate_"+str(energy))
-                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0])
+                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples))
+                h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
+                                  detector_config=output_metadata['detector_config'],
+                                  adc_config=output_metadata['adc_config'])
+                h5writer_sim_diffrate.append(h5writer_sim_diffrate_oneE)
+                #double rate to check the effect of rate difference.
+                h5writer_sim_diffrate_oneE = h5io.H5Writer()
+                h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
+                                data_path=self._output_path+"/diffrate_double_"+str(energy))
+                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples)) #flush every 100MB
                 h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
@@ -1695,22 +1782,25 @@ class ContinuousData:
             pileup_window = int(float(pileup_window) *1e-6 * self._sample_rate)
         self._pileup_window = pileup_window 
             
-        
-
         # set file list to IO reader
         h5reader.set_files(file_list)
+        print(file_list)
+
+        #Right before the loop, update filters
+        filt_list, filtcomb = self.update_filters(10000*1250, debug=debug)
        
         # loop events
         do_continue_loop = True
         trigger_counter = 0
         trigger_counter_50=0
         while(do_continue_loop):
+            if debug:
+                print("entererd continue loop!")
 
             # read next event
             # This is a single event! traces is 2d #channels,#bins
             traces, info = h5reader.read_event(include_metadata=True,
                                                adc_name=self._adc_name)
-
             # check if successful
             if info['read_status'] != 0:
                 do_continue_loop = False
@@ -1735,13 +1825,15 @@ class ContinuousData:
                 
             if debug:
                 print(info)
-                fig, ax = plt.subplots(figsize=(20, 6))
-                ax.plot(np.arange(len(traces[0]))/1250e3+info['event_time'],traces[0])
-                plt.show()
+                #fig, ax = plt.subplots(figsize=(20, 6))
+                #ax.plot(np.arange(len(traces[0]))/1250e3+info['event_time'],traces[0])
+                #plt.show()
 
             # trigger on one continuouse trace
             new_triggers, triggers_on_raw = self._acquire_trigger_single_trace(traces, info,
                                                             h5writer=h5writer, 
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
                                                             threshold=threshold,
                                                             coincident_window=coincident_window,
                                                             norm = norm,
@@ -1764,6 +1856,8 @@ class ContinuousData:
                                                              usetemplate=sim_with_template)
                         self._acquire_trigger_single_trace(traces_sim, info,
                                                      h5writer=h5writer_sim,
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
                                                      threshold=threshold,
                                                      coincident_window=coincident_window,
                                                      norm = norm,
@@ -1776,28 +1870,64 @@ class ContinuousData:
                         if len(inject_n_sim)==2 : 
                             n_repeats = inject_n_sim[0]
                         for ii in np.arange(n_repeats) :
-                            traces_sim, sim_pulses = self._sim_inject_single_trace(traces, inject_n_sim[-1],
+                            traces_sim1, sim_pulses1 = self._sim_inject_single_trace(traces, inject_n_sim[-1],
                                                              np.atleast_1d(energy),
                                                              norm,
                                                              TES_energy_scale=TES_energyscale_dict,
                                                              coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
                                                              usetemplate=sim_with_template)
-                            self._acquire_trigger_single_trace(traces_sim, info,
-                                                     h5writer=h5writer_sim,
-                                                     threshold=threshold,
-                                                     coincident_window=coincident_window,
-                                                     norm = norm,
-                                                     sim_pulses = sim_pulses,
-                                                     triggers_to_remove = triggers_on_raw,
-                                                     verbose=verbose,
-                                                     debug=debug)
-                            self._acquire_trigger_single_trace(traces_sim, info,
-                                                            h5writer=h5writer_sim_diffrate[i], 
+                            traces_sim2, sim_pulses2 = self._sim_inject_single_trace(traces, inject_n_sim[-1],
+                                                             np.atleast_1d(energy),
+                                                             norm,
+                                                             TES_energy_scale=TES_energyscale_dict,
+                                                             coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
+                                                             usetemplate=sim_with_template)
+                            sim_pulses_double = np.append(sim_pulses1,sim_pulses2,axis=0)
+                            traces_sim_double, sim_pulses_double = self._sim_inject_single_trace(traces, inject_n_sim[-1]*2,
+                                                             np.atleast_1d(energy),
+                                                             norm,
+                                                             TES_energy_scale=TES_energyscale_dict,
+                                                             coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
+                                                             usetemplate=sim_with_template,
+                                                             pulses=sim_pulses_double)
+                            self._acquire_trigger_single_trace(traces_sim1, info,
+                                                            h5writer=h5writer_sim_diffrate[2*i], 
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
                                                             threshold=threshold,
                                                             coincident_window=coincident_window,
                                                             norm = norm,
                                                             verbose=verbose,
                                                             debug=debug)
+                            self._acquire_trigger_single_trace(traces_sim2, info,
+                                                            h5writer=h5writer_sim_diffrate[2*i], 
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
+                                                            threshold=threshold,
+                                                            coincident_window=coincident_window,
+                                                            norm = norm,
+                                                            verbose=verbose,
+                                                            debug=debug)
+                            self._acquire_trigger_single_trace(traces_sim_double, info,
+                                                            h5writer=h5writer_sim_diffrate[2*i+1], 
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
+                                                            threshold=threshold,
+                                                            coincident_window=coincident_window,
+                                                            norm = norm,
+                                                            verbose=verbose,
+                                                            debug=debug)
+                            self._acquire_trigger_single_trace(traces_sim_double, info,
+                                                     h5writer=h5writer_sim,
+                                                            filt_list=filt_list,
+                                                            filtcomb=filtcomb,
+                                                     threshold=threshold,
+                                                     coincident_window=coincident_window,
+                                                     norm = norm,
+                                                     sim_pulses = sim_pulses_double,
+                                                     triggers_to_remove = triggers_on_raw,
+                                                     verbose=verbose,
+                                                     debug=debug)
 
             # event counter
             trigger_counter += new_triggers

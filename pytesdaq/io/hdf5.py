@@ -7,6 +7,7 @@ from glob import glob
 import stat
 import matplotlib.pyplot as plt
 import warnings
+import time
 
 
 from pytesdaq.utils import connection_utils
@@ -1086,6 +1087,7 @@ class H5Reader:
         file = None
         try:
             file = h5py.File(file_name,rw_string)
+            print('Triggering file' + file_name)
         except:
             print('ERROR: unable to open file ' + file_name)
             return
@@ -1252,6 +1254,7 @@ class H5Writer:
         self._file_counter = 0
 
         # max event per dump
+        self._nb_events_per_flush = 1000
         self._nb_events_per_dump_max = 1000
         self._adc_name = 'adc1'
 
@@ -1282,8 +1285,9 @@ class H5Writer:
             except:
                 print(self._series_path+"already exist!")
 
-    def set_nb_events_per_dump_max(self, maxperdump=1000):
+    def set_nb_events_per_dump_max(self, maxperdump=1000, maxperflush=1000):
         self._nb_events_per_dump_max = maxperdump
+        self._nb_events_per_flush = maxperflush
 
 
     def set_metadata(self, file_metadata=None, adc_config=None, detector_config=None):
@@ -1350,6 +1354,7 @@ class H5Writer:
         write pulse data in files
         """
 
+        #t0=time.time()
 
         # open file if needed
         if (self._current_file is None or
@@ -1365,6 +1370,7 @@ class H5Writer:
         dataset_name = 'event_' + str(self._current_file_event_counter)
         dataset = self._current_file_adc_group.create_dataset(dataset_name, data=data_array)
       
+        #t1=time.time()
         # add metadata
         if dataset_metadata is not None:
             for key,val in dataset_metadata.items():
@@ -1377,14 +1383,19 @@ class H5Writer:
         dataset.attrs['event_index'] = self._current_file_event_counter
         dataset.attrs['event_num'] = self._file_counter *100000 + self._current_file_event_counter
                 
+       # t2=time.time()
         # update number of events
         self._current_file_adc_group.attrs['nb_events'] = self._current_file_event_counter
         if data_mode is not None:
             self._current_file_adc_group.attrs['data_mode'] = str(data_mode)
 
 
-        # flush
-        self._current_file.flush()
+       # t3=time.time()
+       # print('write time',t1-t0,t2-t0,t3-t0)
+        # flush buffer when events in buffer * event size > 100M.
+        if (self._current_file_event_counter+1)%self._nb_events_per_flush == 0 :
+            #print('flushing...')
+            self._current_file.flush()
         
 
 
@@ -1420,7 +1431,7 @@ class H5Writer:
         
         file = None
         try:
-            file = h5py.File(file_name, 'w')
+            file = h5py.File(file_name, 'w', driver='core')
         except:
             print('ERROR: Unable to open file ' + file_name)
             return

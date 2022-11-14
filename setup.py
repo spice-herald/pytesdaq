@@ -36,5 +36,6 @@ setup(name='pytesdaq',
           'seaborn',
           'astropy',
           'lmfit',
+          #'pyroot',
       ],
 )
