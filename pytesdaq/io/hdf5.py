@@ -7,7 +7,6 @@ from glob import glob
 import stat
 import matplotlib.pyplot as plt
 import warnings
-import time
 
 
 from pytesdaq.utils import connection_utils

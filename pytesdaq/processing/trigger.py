@@ -9,9 +9,9 @@ import pickle
 import math
 import array
 
-import ROOT
-from ROOT.TVirtualFFT import FFT
-from ctypes import *
+#import ROOT
+#from ROOT.TVirtualFFT import FFT
+#from ctypes import *
 
 from multiprocessing import Pool
 from itertools import repeat
@@ -193,8 +193,8 @@ class OptimumFilt(object):
         self.chan = chan_to_trigger
 
         #rewrite with root fft
-        self.fft_root = FFT(1, array.array('i',[raw_trace_length]),"R2C M K")
-        self.ifft_root = FFT(1, array.array('i',[raw_trace_length]),"C2R M K")
+        #self.fft_root = FFT(1, array.array('i',[raw_trace_length]),"R2C M K")
+        #self.ifft_root = FFT(1, array.array('i',[raw_trace_length]),"C2R M K")
         
         # calculate the time-domain optimum filter
         self.phi_freq = fft(self.template) / self.noisepsd
@@ -207,8 +207,8 @@ class OptimumFilt(object):
         print('next fast length=', next_fast_len(raw_trace_length, real=True))
         self.phi_freq_long = np.conjugate( fft(self.phi, self.fast_length )) / self.norm
 
-        self.trace_freq_re = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
-        self.trace_freq_im = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
+        #self.trace_freq_re = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
+        #self.trace_freq_im = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
         
         # calculate the expected energy resolution
         self.resolution = 1/(np.dot(self.phi, self.template)/self.fs)**0.5
@@ -312,23 +312,23 @@ class OptimumFilt(object):
         pulsestot = np.sum(traces_amps, axis=1)
         #t1 = time.time()
         #apply the FIR filter to each trace
-        #self.filts = np.array([correlate(trace, self.phi, mode="same", method='fft')/self.norm
-        #                       for trace in pulsestot])
-        #t2 = time.time()
-        filts = []
-        for trace in pulsestot :
-            self.fft_root.SetPoints( np.pad(trace,(self.tracelength//2,self.fast_length-len(trace)),'edge')[:-self.tracelength//2])
-            self.fft_root.Transform()
-            self.fft_root.GetPointsComplex(self.trace_freq_re, self.trace_freq_im)
-            trace_filt_freq = self.phi_freq_long[:self.fast_length//2]*(self.trace_freq_re + 1j*self.trace_freq_im)
-            trace_filt_freq_re=np.array(np.real(trace_filt_freq))
-            trace_filt_freq_im=np.array(np.imag(trace_filt_freq))
-            self.ifft_root.SetPointsComplex(trace_filt_freq_re, trace_filt_freq_im)
-            self.ifft_root.Transform()
-            filt = np.zeros(self.fast_length, dtype='d')#array.array('d',[0])
-            self.ifft_root.GetPoints(filt)
-            filts.append(np.array(filt/self.fast_length))
-        self.filts = np.array(filts)
+        self.filts = np.array([correlate(trace, self.phi, mode="same", method='fft')/self.norm
+                               for trace in pulsestot])
+        ##t2 = time.time()
+        #filts = []
+        #for trace in pulsestot :
+        #    self.fft_root.SetPoints( np.pad(trace,(self.tracelength//2,self.fast_length-len(trace)),'edge')[:-self.tracelength//2])
+        #    self.fft_root.Transform()
+        #    self.fft_root.GetPointsComplex(self.trace_freq_re, self.trace_freq_im)
+        #    trace_filt_freq = self.phi_freq_long[:self.fast_length//2]*(self.trace_freq_re + 1j*self.trace_freq_im)
+        #    trace_filt_freq_re=np.array(np.real(trace_filt_freq))
+        #    trace_filt_freq_im=np.array(np.imag(trace_filt_freq))
+        #    self.ifft_root.SetPointsComplex(trace_filt_freq_re, trace_filt_freq_im)
+        #    self.ifft_root.Transform()
+        #    filt = np.zeros(self.fast_length, dtype='d')#array.array('d',[0])
+        #    self.ifft_root.GetPoints(filt)
+        #    filts.append(np.array(filt/self.fast_length))
+        #self.filts = np.array(filts)
         #t3 = time.time()
 
 
@@ -1727,13 +1727,13 @@ class ContinuousData:
                                   adc_config=output_metadata['adc_config'])
 
         if sim_mode==2 :
-            h5writer_sim.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples)) #flush every 100MB
+            h5writer_sim.set_nb_events_per_dump_max(10000, int(2000*25000/self._nb_samples)) #flush every 100MB
             h5writer_sim_diffrate = []
             for energy in sim_energies :
                 h5writer_sim_diffrate_oneE = h5io.H5Writer()
                 h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
                                 data_path=self._output_path+"/diffrate_"+str(energy))
-                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples))
+                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(10000, int(2000*25000/self._nb_samples))
                 h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
@@ -1742,7 +1742,7 @@ class ContinuousData:
                 h5writer_sim_diffrate_oneE = h5io.H5Writer()
                 h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
                                 data_path=self._output_path+"/diffrate_double_"+str(energy))
-                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(1000*inject_n_sim[0], int(2000*25000/self._nb_samples)) #flush every 100MB
+                h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(10000, int(2000*25000/self._nb_samples)) #flush every 100MB
                 h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
