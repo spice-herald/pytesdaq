@@ -24,7 +24,7 @@ __all__ = [
 
 
 class Error(Exception):
-    """Base class for other exceptions"""
+    """Base class for other exceptions!"""
     pass
 
 class AnalysisError(Error):
