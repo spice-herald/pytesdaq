@@ -416,8 +416,9 @@ class Readout:
 
             elif self._data_source == 'hdf5':
 
-                data_array, self._adc_config = self._hdf5.read_event(include_metadata=True,
-                                                                     adc_name=self._adc_name)
+                data_array, self._adc_config = self._hdf5.read_next_event(
+                    include_metadata=True,
+                    adc_name=self._adc_name)
                 
                 # if error -> output is a string
                 if self._adc_config['read_status'] != 0:

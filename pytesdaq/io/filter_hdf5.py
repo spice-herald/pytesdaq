@@ -2,7 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+from pprint import pprint
+from numpy.fft import fftfreq, rfftfreq
 
 __all__ = ['FilterH5IO']
 
@@ -24,7 +25,7 @@ class FilterH5IO:
     """
 
     
-    def __init__(self, filter_file, verbose=False):
+    def __init__(self, filter_file, verbose=True):
         """
         Initialize class
 
@@ -93,10 +94,16 @@ class FilterH5IO:
         for i in range(len(msg_title)):
             sep += '='
         print(sep + '\n')
-        
+
         # loop keys
         for key in filter_file.keys():
+            
             msg = key + ': '
+            if '__plus__' in key:
+                msg  = key.replace('__plus__', '+') + ': '
+            elif '__' in key:
+                msg = key.replace('__','|') + ': '
+            
             val = filter_file[key]
 
             if isinstance(val, pd.Series):
@@ -118,7 +125,7 @@ class FilterH5IO:
         
    
         
-    def get_psd(self, channel, fold=False, add_metadata=False):
+    def get_psd(self, channel, tag=None, fold=False, add_metadata=False):
         """
         Get PSD and associated metadata (optional) for specified channel
 
@@ -128,6 +135,10 @@ class FilterH5IO:
         
         channel : str (required)
              channel name
+
+        tag : str (optional)
+              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
+              if tag is None, then "psd" or "psd_fold" is used  
 
         fold : bool (optional, default=False)
              if True, get "psd_fold" parameter
@@ -150,7 +161,7 @@ class FilterH5IO:
              Metadata associated with parameter
         """
 
-        psd_series, metadata = self.get_psd_series(channel, fold=fold,
+        psd_series, metadata = self.get_psd_series(channel, tag=tag, fold=fold,
                                                    add_metadata=True)
 
         psd = psd_series.values
@@ -164,7 +175,7 @@ class FilterH5IO:
 
         
         
-    def get_psd_series(self, channel, fold=False, add_metadata=False):
+    def get_psd_series(self, channel, tag=None, fold=False, add_metadata=False):
         """
         Get PSD and associated metadata (optional) for specified channel
 
@@ -174,6 +185,11 @@ class FilterH5IO:
         
         channel : str (required)
              channel name
+        
+        tag : str (optional)
+              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
+              if tag is None, then "psd" or "psd_fold" is used  
+
 
         fold : bool (optional, default=False)
              if True, get "psd_fold" parameter
@@ -198,12 +214,16 @@ class FilterH5IO:
         if fold:
             param_name = 'psd_fold'
 
+        if tag is not None:
+            param_name += '_' + tag 
+      
+
         return self.get_param(channel, param_name,
                               add_metadata=add_metadata)
     
 
         
-    def get_template(self, channel, template_name='template',
+    def get_template(self, channel, tag=None,
                      add_metadata=False):
         """
         Get template and associated metadata (optional) for specified channel
@@ -214,6 +234,10 @@ class FilterH5IO:
         
         channel : str (required)
              channel name
+
+        tag : str (optional)
+              template name suffix:  "template_[tag]"
+              if tag is None, then "template" name is used
 
         template_name : str (optional, default='template')
              name of the template saved in the file
@@ -237,7 +261,7 @@ class FilterH5IO:
       
 
         template_series, metadata = self.get_template_series(
-            channel, template_name=template_name,
+            channel, tag=tag,
             add_metadata=True)
         
         template = template_series.values
@@ -250,7 +274,7 @@ class FilterH5IO:
 
 
         
-    def get_template_series(self, channel, template_name='template',
+    def get_template_series(self, channel, tag=None,
                             add_metadata=False):
         """
         Get template and associated metadata (optional) for specified channel
@@ -262,8 +286,9 @@ class FilterH5IO:
         channel : str (required)
              channel name
 
-        template_name : str (optional, default='template')
-             name of the template saved in the file
+        tag : str (optional)
+              template name suffix:  "template_[tag]"
+              if tag is None, then "template" name is used
         
         add_medatata: bool (optional, default=False)
              if True, return metadata
@@ -278,6 +303,11 @@ class FilterH5IO:
              Metadata associated with template
 
         """
+
+        template_name = 'template'
+        if tag is not None:
+            template_name += '_' + tag
+            
 
         return self.get_param(channel, template_name,
                               add_metadata=add_metadata)
@@ -371,8 +401,7 @@ class FilterH5IO:
             raise ValueError('Parameter "' + param_name
                              + ' should be eiter a numpy array'
                              + ' or pandas Series/dataFrame')
-
-
+            
 
         # key name
         key = '/' + channel + '/' + param_name
@@ -385,8 +414,8 @@ class FilterH5IO:
         
         
         
-    def save_psd(self, channel, psd, freq=None, fold=False,
-                 attributes=None, overwrite=False):
+    def save_psd(self, channel, psd, freq=None, sample_rate=None, tag=None,
+                 fold=False, attributes=None, overwrite=False):
         """
         Save PSD for the specified channel
 
@@ -400,8 +429,16 @@ class FilterH5IO:
         psd : 1D numpy array or pandas Series/DataFrame (required)
              values of teh parameter
 
-        freq : 1D numpy array (optional, default=None)
+        freq : 1D numpy array (optional if "fs" argument, default=None)
              frequencies of the PSD index (if input  psd  is a numpy array)
+
+
+        fs: float (optional if "freq" argument not None, default None)
+             sample rate 
+        
+        tag : str (optional)
+              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
+              if tag is None, then "psd" or "psd_fold" is used  
 
         fold : bool (optional, default=False)
              if True, save "psd_fold" parameter
@@ -428,26 +465,48 @@ class FilterH5IO:
             raise ValueError('PSD should be eiter a numpy array'
                              + ' or pandas series')
 
-        if isinstance(psd, np.ndarray) and freq is None:
-            raise ValueError('PSD frequencies need to be provided')
+        # calculte frequencies
+        if isinstance(psd, np.ndarray):
+
+            if (freq is None and sample_rate is None):
+                raise ValueError('PSD frequencies '
+                                 ' or sample rate need to be provided!')
+
+            if freq is None:
+
+                if fold:
+                    freq = rfftfreq(len(psd),d=1.0/sample_rate)
+                else:
+                    freq = fftfreq(len(psd),d=1.0/sample_rate)
+                    
         
         if freq is not None and not isinstance(freq, np.ndarray):
             raise ValueError('PSD frequencies should be a numpy array')
-
-
-        # case multiple channel (trigger):
-        #if isinstance(channel, list):
-        #    channel = '__'.join(channel)
 
         # convert to pandas Series
         if isinstance(psd, np.ndarray):
             psd = pd.Series(psd, freq)
             
-        # store
-        key = '/' + channel + '/psd'
+        # name
+        psd_name = 'psd'
         if fold:
-            key = '/' + channel + '/psd_fold'
+            psd_name += '_fold'
+        
+        if tag is not None:
+            psd_name += '_' + tag
+
+        # full key name
+        key = '/' + channel + '/' + psd_name
+
+
+        # add sample rate to attribute
+        if sample_rate is not None:
+            if attributes is None:
+                attributes = dict()
+            attributes['sample_rate'] = sample_rate
             
+        
+        # save
         self._put(key,
                   psd,
                   attributes=attributes,
@@ -455,8 +514,7 @@ class FilterH5IO:
 
         
     def save_template(self, channel, template, template_time=None,
-                      template_name='template',
-                      attributes=None, overwrite=False):
+                      tag=None, attributes=None, overwrite=False):
         """
         Save template for the specified channel
         
@@ -472,10 +530,10 @@ class FilterH5IO:
         template_time : 1D numpy array (optional, default=None)
              time array for template (if input template  is a numpy array)
 
-        
-        template_name : str (optinal, default='template')
-             name of the template if different than default
-
+        tag : str (optional)
+              template name suffix:  "template_[tag]"
+              if tag is None, then "template" name is used
+    
         attributes : dict (optional, default=None)
              metadata associated with parameter
 
@@ -487,9 +545,6 @@ class FilterH5IO:
         ------
 
         None
-
-
-        
         """
 
         # check
@@ -501,14 +556,15 @@ class FilterH5IO:
         if template_time is not None and not isinstance(template_time, np.ndarray):
             raise ValueError('time parameter should be a numpy array')
 
-
-        # case multiple channels (trigger):
-        #if isinstance(channel, list):
-        #    channel = '__'.join(channel)
-
         # convert to pandas Series
         if isinstance(template, np.ndarray):
             template = pd.Series(template, template_time)
+
+        # template name
+        template_name = 'template'
+        if tag is not None:
+            template_name += '_' + tag
+
             
         # store
         key = '/' + channel + '/' + template_name
@@ -607,6 +663,11 @@ class FilterH5IO:
             if len(key_split)!=3:
                 continue
             chan = key_split[1]
+            if '__plus__' in chan:
+                chan = chan.replace('__plus__', '+')
+            if '__' in chan:
+                chan = chan.replace('__','|')
+
             chan_key = key_split[2]
 
             # create channel dict if needed
@@ -625,6 +686,7 @@ class FilterH5IO:
 
         # close file
         filter_file.close()
+        
         return  output_dict
 
 
@@ -633,7 +695,7 @@ class FilterH5IO:
     
 
             
-    def plot_psd(self, channels, fold=True, unit='pA'):
+    def plot_psd(self, channels, tag=None, fold=True, unit='pA'):
         """
         Plot PSD for specified channel(s)
 
@@ -642,6 +704,10 @@ class FilterH5IO:
         
         channels :  str or list of str (required)
            channel name or list of channels
+
+        tag : str (optional)
+              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
+              if tag is None, then "psd" or "psd_fold" is used  
 
         fold : bool (optional, default=False)
              if True, plot "psd_fold" parameter
@@ -665,7 +731,8 @@ class FilterH5IO:
         
             
         for chan in channels:
-            psd, psd_meta = self.get_psd_series(chan, fold=fold, add_metadata=True)
+            psd, psd_meta = self.get_psd_series(chan, tag=tag,
+                                                fold=fold, add_metadata=True)
             f = psd.index
             val = psd.values**0.5
             if unit=='pA':
@@ -715,6 +782,18 @@ class FilterH5IO:
         
         # open file
         filter_file = pd.HDFStore(self._filter_file)
+
+        # verbose
+        if self._verbose:
+            print('Storing ' + key + ' in ' + self._filter_file)
+
+        # check if key contains + or | (not able to save in file)
+        if '+' in key:
+            key = key.replace('+','__plus__')
+            
+        if '|' in key:
+            key = key.replace('|','__')
+            
             
         # check if key exist already
         file_keys = filter_file.keys()
@@ -722,12 +801,8 @@ class FilterH5IO:
             raise ValueError('Key ' + key + ' already stored in '
                              + self._filter_file + '. Use "overwrite=True"'
                              + ' to overwrite or change file name')
-        
-        
+
         # save
-        if self._verbose:
-            print('Storing ' + key + ' in ' + self._filter_file)
-    
         filter_file.put(key, value, format='fixed')
 
         # add attributes
@@ -765,10 +840,19 @@ class FilterH5IO:
 
         # open file
         filter_file = pd.HDFStore(self._filter_file)
-        
+
+
+        # check if key contains + or | (not able to save in file)
+        if '__plus__' in key:
+            key = key.replace('__plus__', '+')
+            
+        if '__' in key:
+            key = key.replace('__','|')
+            
+            
         # check key
         file_keys = filter_file.keys()
-
+        
 
         if key not in file_keys:
             raise ValueError('Key ' + key + ' is not in  '
@@ -776,7 +860,7 @@ class FilterH5IO:
                              + 'Check file with "describe()"')
 
         
-        # save
+        # get
         value = filter_file.get(key)
 
         # get attributes
@@ -784,8 +868,6 @@ class FilterH5IO:
         attributes = filter_file.get_storer(key).attrs
         if 'metadata' in attributes:
             metadata = filter_file.get_storer(key).attrs.metadata 
-
-
 
             
         # close

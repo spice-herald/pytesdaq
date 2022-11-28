@@ -8,8 +8,12 @@ import stat
 import matplotlib.pyplot as plt
 import warnings
 
-
 from pytesdaq.utils import connection_utils
+
+__all__ = ['H5Reader', 'H5Writer',
+           'extract_series_num', 'extract_series_name',
+           'extract_dump_num']
+
 
 
 def extract_series_num(series_name):
@@ -236,13 +240,17 @@ class H5Reader:
 
 
 
-    def read_event(self, include_metadata=False, adc_name='adc1'):
+    def read_next_event(self, detector_chans=None,
+                        adctovolt=False, adctoamp=False,
+                        baselinesub=False, baselineinds=None,
+                        include_metadata=False,
+                        adc_name='adc1'):
         """
         Function to read next event
         """
 
         info = dict()
-        array = []
+        array = np.array([])
         
         # check if files available
         if not self._file_list or len(self._file_list)==0:
@@ -269,44 +277,40 @@ class H5Reader:
             else:
                 self._open_file(self._file_list[self._file_counter])
 
-
+                
             
 
-        # check if file open (shouldn't happen)
+        # check if file not yet open (shouldn't happen)
         if self._current_file is None:
             info['read_status'] = 1
             info['error_msg'] = 'Problem reading next event. File closed!'
             return array, info
          
 
-        # get dataset
+        # load data
         self._current_file_event_counter+=1
-        dataset_name = 'event_' + str(self._current_file_event_counter)
-        dataset = self._current_file[adc_name][dataset_name]
-
-        # array
-        dims = dataset.shape
-        array = np.zeros((dims[0],dims[1]), dtype=np.int16)
-        dataset.read_direct(array)
-      
-
-        # include info
+        array, info = self._load_event(self._current_file_event_counter,
+                                       adc_name=adc_name,
+                                       detector_chans=detector_chans,
+                                       adctovolt=adctovolt, adctoamp=adctoamp,
+                                       baselinesub=baselinesub,
+                                       baselineinds=baselineinds)
+        
+        # return
         if include_metadata:
-            info = self._extract_metadata(dataset.attrs)
-            info.update(self._extract_metadata(self._current_file.attrs))
-            info.update(self._extract_metadata(self._current_file[adc_name].attrs))
-                    
-        info['read_status'] = 0
-        info['error_msg'] = ''
-
-        return array, info
+            return array,info
+        else:
+            return array
+        
               
 
 
-    def read_single_event(self, event_index, file_name=None, include_metadata=False,
-                          adc_name='adc1'):
+    def read_single_event(self, event_index, file_name=None,
+                          detector_chans=None, adctovolt=False, adctoamp=False,
+                          baselinesub=False, baselineinds=None,
+                          include_metadata=False, adc_name='adc1'):
         """
-        Read a single event
+        Read a single event for a file
         """
 
         #  set file list
@@ -317,25 +321,21 @@ class H5Reader:
         if self._current_file is None:
             self._open_file(self._file_list[0])
 
-        # dataset
-        dataset_name = 'event_' + str(event_index)
-        dataset = self._current_file[adc_name][dataset_name]
         
-        # array
-        dims = dataset.shape
-        array = np.zeros((dims[0],dims[1]), dtype=np.int16)
-        dataset.read_direct(array)
-      
-        # metadata
+        # load event
+        array, info = self._load_event(event_index,
+                                       adc_name=adc_name,
+                                       detector_chans=detector_chans,
+                                       adctovolt=adctovolt, adctoamp=adctoamp,
+                                       baselinesub=baselinesub,
+                                       baselineinds=baselineinds)
+        
         if include_metadata:
-            info = self._extract_metadata(dataset.attrs)
-            info.update(self._extract_metadata(self._current_file.attrs))
-            info.update(self._extract_metadata(self._current_file[adc_name].attrs))
-            info['read_status'] = 0
-            info['error_msg'] = ''
             return array, info
-              
-        return array
+        else:
+            return array
+        
+
 
 
 
@@ -421,7 +421,8 @@ class H5Reader:
 
         # series nums
         if series_nums is not None:
-            if not isinstance(series_nums, list) and not isinstance(series_nums, np.ndarray):
+            if not isinstance(series_nums, list) and not isinstance(series_nums,
+                                                                    np.ndarray):
                 series_nums = [series_nums]
 
         # event nums: create dump number list, convert event_nums to list of tuple
@@ -430,7 +431,8 @@ class H5Reader:
         if event_nums is not None:
 
             # convert to list if not array/list
-            if not isinstance(event_nums, list) and not isinstance(event_nums, np.ndarray):
+            if not isinstance(event_nums, list) and not isinstance(event_nums,
+                                                                   np.ndarray):
                 event_nums = [event_nums]
                 
             if series_nums is not None and  len(event_nums) != len(series_nums):
@@ -521,7 +523,8 @@ class H5Reader:
                     even_index = int(event_num % 100000)
                     if even_index>int(adc_metadata['nb_events']):
                         raise ValueError('ERROR: Find file for event number '
-                                         + str(event_num) + ' however, event does not exist!')
+                                         + str(event_num)
+                                         + ' however, event does not exist!')
                     
                     # store in list as a tuple
                     event_nums[ievent] = event_nums[ievent] + (file_name,)
@@ -552,12 +555,14 @@ class H5Reader:
                               
                 # available adc channels  
                 adc_chan_list = adc_metadata['adc_channel_indices']
-                if not isinstance(adc_chan_list, list) and not isinstance(adc_chan_list, np.ndarray):
+                if (not isinstance(adc_chan_list, list)
+                    and not isinstance(adc_chan_list, np.ndarray)):
                     adc_chan_list = np.array([adc_chan_list])
                     
 
                 # connections
-                connections = self.get_connection_dict(adc_name=adc_name, metadata=metadata)
+                connections = self.get_connection_dict(adc_name=adc_name,
+                                                       metadata=metadata)
                                 
                 # loop channels
                 chan_counter = 0
@@ -574,7 +579,8 @@ class H5Reader:
                             
                 nb_channels_file = len(array_indices_file)
                 if (nb_channels_file==0):
-                    error_msg = 'Unable to find selected channel(s). Check connection table!'
+                    error_msg = ('Unable to find selected channel(s).'
+                                 + ' Check connection table!')
                     if self._raise_errors:
                         raise ValueError(error_msg)
                     else:
@@ -598,7 +604,8 @@ class H5Reader:
                 
             # check channel consistency
             if array_indices!=array_indices_file:
-                error_msg = 'Unable to return arrray due to inconsistent list of channels between files!'
+                error_msg = ('Unable to return arrray due to inconsistent ' +
+                             'list of channels between files!')
                 if self._raise_errors:
                     raise ValueError(error_msg)
                 else:
@@ -652,11 +659,14 @@ class H5Reader:
                     selected_event_nums.append(event)
                     
             if len(selected_event_nums)!=nb_events_tot:
-                raise ValueError('ERROR: inconsistent number of events! Possible bug in the code...')
+                raise ValueError('ERROR: inconsistent number of events! '
+                                 + 'Possible bug in the code...')
                 
             if nb_events_tot<len(event_nums):
-                print('WARNING: Only ' + str(nb_events_tot) + ' events out of '
-                      + str(len(event_nums)) + ' have been found!')
+                print('WARNING: Only ' + str(nb_events_tot)
+                      + ' events out of '
+                      + str(len(event_nums))
+                      + ' have been found!')
             
         else:
             # refresh file list
@@ -675,8 +685,10 @@ class H5Reader:
         output_memory = nb_events_tot*output_memory_per_event
         if output_memory>memory_limit:
             nb_events_tot_temp = int(round(memory_limit/output_memory_per_event))
-            print('WARNING: Max number events based on memory limit of ' + str(memory_limit) + 'GB is ' +
-                  str(nb_events_tot_temp) + ' out of ' + str(nb_events_tot) +'!')
+            print('WARNING: Max number events based on memory limit of '
+                  + str(memory_limit) + 'GB is '
+                  + str(nb_events_tot_temp) + ' out of '
+                  + str(nb_events_tot) +'!')
             nb_events_tot = nb_events_tot_temp
 
 
@@ -692,9 +704,11 @@ class H5Reader:
      
         if output_format==2:
             if adctovolt or adctoamp or baselinesub:
-                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples), dtype=np.float64)
+                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples),
+                                       dtype=np.float64)
             else:
-                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples), dtype=np.int16)
+                output_data = np.zeros((nb_events_tot, nb_channels, nb_samples),
+                                       dtype=np.int16)
 
 
                 
@@ -705,98 +719,36 @@ class H5Reader:
         for ievent in range(nb_events_tot):
             
             # read event
-            traces_int = []
+            traces = []
             info = dict()
 
             if selected_event_nums is None:
-                traces_int, info = self.read_event(include_metadata=True)
+                traces, info = self.read_next_event(detector_chans=detector_chans,
+                                                    adctovolt=adctovolt, adctoamp=adctoamp,
+                                                    baselinesub=baselinesub,
+                                                    baselineinds=baselineinds,
+                                                    include_metadata=True)
             else:
                 event_index = int(selected_event_nums[ievent][0] % 100000)
                 file_name = selected_event_nums[ievent][1]
-                traces_int, info = self.read_single_event(event_index, file_name=file_name,
-                                                         include_metadata=True)
-
-
+                traces, info = self.read_single_event(event_index, file_name=file_name,
+                                                      detector_chans=detector_chans,
+                                                      adctovolt=adctovolt, adctoamp=adctoamp,
+                                                      baselinesub=baselinesub,
+                                                      baselineinds=baselineinds,
+                                                      include_metadata=True)
+                
             # check if reading error
             if info['read_status']>0:
                 print('WARNING: Unable to read event #' + str(ievent) + '! Error message: ')
                 print('WARNING: "' + info['error_msg'] + '". Stopping event loop')
                 break
-                
-                
-            # add connections to metadata
-            connections = self.get_connection_dict(adc_name=adc_name, metadata=info)
-            info['detector_chans'] = [connections['detector_chans'][i] for i in array_indices]
-            info['tes_chans'] = [connections['tes_chans'][i] for i in array_indices]
-            info['controller_chans'] = [connections['controller_chans'][i] for i in array_indices]
+
             
-            # detector settings
-            detector_config = self.get_detector_config()
-            info['detector_config'] = dict()
-            for det in info['detector_chans']:
-                info['detector_config'][det] = detector_config[det]
-
-
             # add to metadata list
             if include_metadata:
                 info_list.append(info)
 
-
-            # reshape with only selected events
-            if len(array_indices)!=traces_int.shape[0] and array_indices:
-                traces_int = traces_int[array_indices,:]
-
-            
-            # convert to volt
-            traces = []
-            if adctovolt or adctoamp:
-                traces = np.zeros_like(traces_int, dtype=np.float64)
-                for ichan in range(traces_int.shape[0]):
-                    icoeff = ichan
-                    if array_indices:
-                        icoeff = array_indices[ichan]
-                    cal_coeff = info['adc_conversion_factor'][icoeff][::-1]
-                    poly = np.poly1d(cal_coeff)
-                    traces[ichan,:] = poly(traces_int[ichan,:])
-            else:
-                traces = traces_int 
-                    
-            # convert to amps
-            if adctoamp:
-                if detector_config is None:
-                    raise ValueError('ERROR: Unable to convert to amps. No detector config available!')
-                for ichan in range(traces.shape[0]):
-                    det = info['detector_chans'][ichan]
-                    if 'close_loop_norm' in detector_config[det]:
-                        traces[ichan,:] = traces[ichan,:]/detector_config[det]['close_loop_norm']
-                    else:
-                        raise ValueError('ERROR: Unable to convert to amps. No normalization available for ' + det)
-
-
-
-            
-            # baseline subtract
-            if baselinesub:
-
-                # find baseline start/stop
-                baseline_start = None
-                baseline_stop = None
-                if baselineinds is not None:
-                    if len(baselineinds)!=2:
-                        raise ValueError('ERROR: baselineinds should be list/tuple of length 2')
-                    baseline_start = baselineinds[0]
-                    baseline_stop =  baselineinds[1]
-                elif 'nb_samples_pretrigger' in info:
-                    baseline_start = 10
-                    baseline_stop = int(round(info['nb_samples_pretrigger']*0.8))
-
-                if (baseline_start is None or baseline_stop is None or
-                    baseline_stop<=baseline_start or baseline_stop>=traces.shape[1]):
-                    raise ValueError('ERROR: Unable to find baseline start/stop. Add argument "baselineinds"')
-
-                traces = traces - np.mean(traces[:,baseline_start:baseline_stop], axis=-1, keepdims=True)
-            
-                
             
             # store
             if (output_format==1 or output_format==3):
@@ -1059,7 +1011,7 @@ class H5Reader:
             for key,val in adc_metadata.items():
                 if key[0:10]=='connection':
                     adc_chan = re.sub(r'\s+','', str(key))[10:]
-                    name_val_list, name_list, val_list  = connection_utils.extract_adc_connection(list(val))
+                    name_val_list, name_list, val_list = connection_utils.extract_adc_connection(list(val))
                     val_list  = [adc_id,adc_chan] + val_list
                     name_list = ['adc_id','adc_channel'] + name_list
                     connection_list.append(val_list)
@@ -1069,7 +1021,7 @@ class H5Reader:
                         print('ERROR: missing adc connection values!')
                         
                     
-        connection_table = pd.DataFrame(connection_list, columns = connection_name_list )
+        connection_table = pd.DataFrame(connection_list, columns=connection_name_list )
         return connection_table
 
 
@@ -1133,8 +1085,6 @@ class H5Reader:
         self._current_file_nb_events = 0
                             
         
-        
-
 
 
     def _load_metadata(self, include_dataset_metadata=False):
@@ -1213,6 +1163,196 @@ class H5Reader:
         return metadata_dict
         
 
+    
+    def _load_event(self, event_index, adc_name='adc1',
+                    detector_chans=None,
+                    adctovolt=False, adctoamp=False,
+                    baselinesub=False, baselineinds=None):
+        
+        """
+        Load traces and metadata from file 
+
+        
+        """
+                    
+        # check file open
+        if self._current_file is None:
+            raise ValueError('No file open!')
+        
+        # get dataset
+        dataset_name = 'event_' + str(event_index)
+        dataset = self._current_file[adc_name][dataset_name]
+        
+        # read dataset
+        dims = dataset.shape
+        traces_int = np.zeros((dims[0],dims[1]), dtype=np.int16)
+        dataset.read_direct(traces_int)
+      
+        # get metadata
+        info = self._extract_metadata(dataset.attrs)
+        info.update(self._extract_metadata(self._current_file.attrs))
+        info.update(self._extract_metadata(self._current_file[adc_name].attrs))
+        info['read_status'] = 0
+        info['error_msg'] = ''
+
+
+        # extract list of adc channels, index correspond to array index!
+        adc_nums_file = info['adc_channel_indices']
+        if (not isinstance(adc_nums_file, list)
+            and not isinstance(adc_nums_file, np.ndarray)):
+            adc_nums_file = np.array([adc_nums_file])
+        nb_channels_file = len(adc_nums_file)
+
+
+        # get connection map and convert to numpy array
+        connections = self.get_connection_dict(adc_name=adc_name, metadata=info)
+              
+        # Filter based on detector_chans argument
+        selected_array_indices = list()
+        selected_adc_nums = list()
+        selected_detector_chans = list()
+        selected_tes_chans = list()
+        selected_controller_chans = list()
+        
+        
+        if detector_chans is not None:
+            
+            # convert detector_chans to list if needed
+            if (not isinstance(detector_chans, list)
+                and not isinstance(detector_chans, np.ndarray)):
+                detector_chans = [detector_chans]
+                            
+
+            # loop selected channels
+            for chan in detector_chans:
+
+                # check
+                if chan not in connections['detector_chans']:
+                    raise ValueError('Detector channel ' + chan
+                                     + ' not available in raw data.'
+                                     + ' Check connection map!')
+                
+                # find channel index in connection map
+                ind = connections['detector_chans'].index(chan)
+
+                # extract selected ADC number
+                selected_adc = int(connections['adc_chans'][ind])
+                if selected_adc not in adc_nums_file:
+                    raise ValueError('Problem with raw data. Unable to find ADC channel')
+                
+                # save connections
+                selected_adc_nums.append(selected_adc)
+                selected_detector_chans.append(connections['detector_chans'][ind])
+                if 'tes_chans' in connections:
+                    selected_tes_chans.append(connections['tes_chans'][ind])
+                if 'controller_chans' in connections:
+                    selected_controller_chans.append(connections['controller_chans'][ind])
+
+                # save array index
+                ind_adc = int(np.where(adc_nums_file==selected_adc)[0])
+                selected_array_indices.append(ind_adc)                
+                
+        else:
+            selected_array_indices = list(range(nb_channels_file))
+            selected_adc_nums = list(adc_nums_file)
+            for adc_chan in selected_adc_nums:
+                ind = connections['adc_chans'].index(adc_chan)
+                selected_detector_chans.append(connections['detector_chans'][ind])
+                if 'tes_chans' in connections:
+                    selected_tes_chans.append(connections['tes_chans'][ind])
+                if 'controller_chans' in connections:
+                    selected_controller_chans.append(connections['controller_chans'][ind])
+
+
+        # check number channels
+        if not selected_array_indices or len(selected_array_indices)==0:
+            raise ValueError('Unable to find selected channel(s). Check connection table!')
+
+        # extract array for selected channels
+        traces_int = traces_int[selected_array_indices,:]
+        info['adc_channel_indices'] = selected_adc_nums
+        info['adc_chans'] = selected_adc_nums
+        info['detector_chans'] = selected_detector_chans
+        info['tes_chans'] = selected_tes_chans
+        info['controller_chans'] = selected_controller_chans
+        info['adc_conversion_factor'] =  info['adc_conversion_factor'][selected_array_indices,:]
+        info['voltage_range'] = info['voltage_range'][selected_array_indices,:]
+
+
+        # get detector config
+        detector_config = self.get_detector_config()
+        info['detector_config'] = dict()
+        for det in info['detector_chans']:
+            info['detector_config'][det] = detector_config[det]
+        
+        
+        # convert to volt/amps
+        traces = []
+        if adctovolt or adctoamp:
+
+            # initialize
+            traces = np.zeros_like(traces_int, dtype=np.float64)
+
+            # convert to volts
+            for ichan in range(traces_int.shape[0]):
+                cal_coeff = info['adc_conversion_factor'][ichan][::-1]
+                poly = np.poly1d(cal_coeff)
+                traces[ichan,:] = poly(traces_int[ichan,:])
+
+            # convert to amps
+            if adctoamp:
+                if detector_config is None:
+                    raise ValueError('ERROR: Unable to convert to amps. No detector config available!')
+                for ichan in range(traces.shape[0]):
+                    det = info['detector_chans'][ichan]
+                    if 'close_loop_norm' in detector_config[det]:
+                        traces[ichan,:] = traces[ichan,:]/detector_config[det]['close_loop_norm']
+                    else:
+                        raise ValueError('ERROR: Unable to convert to amps. '
+                                         + 'No normalization available for ' + det)      
+        else:
+            traces = traces_int
+                    
+            
+        # baseline subtract
+        if baselinesub:
+            
+            # find baseline start/stop
+            baseline_start = None
+            baseline_stop = None
+            if baselineinds is not None:
+                if len(baselineinds)!=2:
+                    raise ValueError('ERROR: baselineinds should be list/tuple of length 2')
+                baseline_start = baselineinds[0]
+                baseline_stop =  baselineinds[1]
+                
+            elif 'nb_samples_pretrigger' in info:
+                baseline_start = 10
+                baseline_stop = int(round(info['nb_samples_pretrigger']*0.8))
+
+            if (baseline_start is None or baseline_stop is None or
+                baseline_stop<=baseline_start or baseline_stop>=traces.shape[1]):
+                raise ValueError('ERROR: Unable to find baseline start/stop. Add argument "baselineinds"')
+
+            traces = traces - np.mean(traces[:,baseline_start:baseline_stop], axis=-1, keepdims=True)
+            
+        
+        return traces, info
+        
+
+
+        
+
+
+        
+
+
+
+
+
+
+
+                              
 
 
     
@@ -1458,9 +1598,6 @@ class H5Writer:
                             val = val.astype(dt)
                         self._current_file_adc_group.attrs[key] = val
                                 
-
- 
-            
         
                    
     def _close_file(self):

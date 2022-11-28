@@ -1359,8 +1359,8 @@ class ContinuousData:
         while(do_continue_loop):
 
             # read next event
-            traces, info = h5reader.read_event(include_metadata=True,
-                                               adc_name=self._adc_name)
+            traces, info = h5reader.read_next_event(include_metadata=True,
+                                                    adc_name=self._adc_name)
 
             # check if successful
             if info['read_status'] != 0:
