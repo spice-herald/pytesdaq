@@ -1116,23 +1116,18 @@ class H5Reader:
         #    return []
 
 
-        # convert to list if only one channel
-        for config in detector_config_dict:
-            param = detector_config_dict[config]
-            if not isinstance(param, list) and not isinstance(param, np.ndarray):
-                detector_config_dict[config] = [detector_config_dict[config]]
-    
-
         # add detector/channel list from adc metadata, needs to match
         # detector settings array order
         tes_chans = list()
         detector_chans = list()
         controller_chans = list()
-        connection_dict = self.get_connection_dict(adc_name=adc_name, metadata=metadata)
+        connection_dict = self.get_connection_dict(adc_name=adc_name,
+                                                   metadata=metadata)
 
         if connection_dict:
             chan_list = detector_config_dict['channel_list']
-            if not isinstance(chan_list, np.ndarray) and not isinstance(chan_list, list):
+            if (not isinstance(chan_list, np.ndarray)
+                and not isinstance(chan_list, list)):
                 chan_list  = [chan_list]
             for chan in chan_list:
                 if chan in connection_dict['adc_chans']:
@@ -1149,10 +1144,15 @@ class H5Reader:
         detector_config_dict['detector_chans'] =  detector_chans
         detector_config_dict['controller_chans'] =  controller_chans   
 
-
+        # convert to list if needed (size of nb channels)
+        nb_chan = len(detector_config_dict['detector_chans'])
+        for config in detector_config_dict.keys():
+            param = detector_config_dict[config]
+            if not isinstance(param, list) and not isinstance(param, np.ndarray):
+                detector_config_dict[config] = [detector_config_dict[config]]*nb_chan
+    
         # convert to dictionary
         detector_config = dict()
-        nb_chan = len(detector_config_dict['detector_chans'])
         if use_chan_dict:
             chan_list = detector_config_dict['detector_chans']
             for chan in chan_list:
