@@ -501,12 +501,6 @@ class H5Reader:
             return array
         
 
-
-
-
-
-
-    
     
     def read_many_events(self, filepath=None, nevents=0, output_format=1,
                          detector_chans=None,
@@ -581,15 +575,20 @@ class H5Reader:
         # Check arguments
         # ===============================
 
-        #  file list
-        current_file_list = None  
+
+        # set file path if provided
         if filepath is not None:
             self.set_files(filepath)
-        elif not self._file_list:
+
+        # check 
+        if not self._file_list:
             raise ValueError('ERROR: No files selected!')
-        else:
+
+        # let's keep a copy of current file list
+        current_file_list = None
+        if self._file_list:
             current_file_list = self._file_list.copy()
-            
+
 
         # detector/channel
         if (detector_chans is not None
@@ -598,82 +597,115 @@ class H5Reader:
             detector_chans = [detector_chans]
     
 
-        # series nums
+        # let's filter files based 
+        # series_nums and event_nums input
+        filtered_file_list = list()
         if series_nums is not None:
+                    
+            # convert to array
             if (not isinstance(series_nums, list)
                 and not isinstance(series_nums, np.ndarray)):
                 series_nums = [series_nums]
-
-            # make sure we are using integers
+                
+            # loop series and convert to series name
+            # (and check integer)
+            series_names = list()
             for iseries in range(len(series_nums)):
-                series_nums[iseries] = int(series_nums[iseries])
+                series = int(series_nums[iseries])
+                series_names.append(extract_series_name(series))
+                series_nums[iseries] = series
 
-        # event nums:
-        #   associate a dump list
-        #   convert to list of int if needed
-        
-        dump_nums = None
+            # loop files and check if part of selected series
+            for file_name in self._file_list:
+                for series in series_names:
+                    if series in file_name:
+                        filtered_file_list.append(file_name)
+                        break
+                    
+            
+        # filter based on event nums
+        # (series names should be same length)
+
+        dump_nums = list()
+        event_indices = list()
         if event_nums is not None:
+
+            series_dump_names = list()
             
             # convert to list if not array/list
             if (not isinstance(event_nums, list)
                 and not isinstance(event_nums,np.ndarray)):
                 event_nums = [event_nums]
                 
-            if (series_nums is not None
-                and  len(event_nums)!=len(series_nums)):
-                raise ValueError('ERROR: series_nums and event_nums need to be same length!')
+            if (series_nums is None
+                or len(event_nums)!=len(series_nums)):
+                raise ValueError('ERROR: series_nums and event_nums '
+                                 + 'need to be same length!')
 
-            dump_nums = list()
+            series_dump_names = list()
             for ievent in range(len(event_nums)):
                 event_nums[ievent] = int(event_nums[ievent])
                 dump_num = int(event_nums[ievent]/100000)
+                event_index = int(event_nums[ievent]%100000)
                 if dump_num == 0:
-                    raise ValueError('ERROR: Unexpected event number format!' +
-                                     ' Required format = "dump_num*100000+event_index"')
+                    raise ValueError('ERROR: Unexpected event number format!'
+                                     + ' Required format = '
+                                     + '"dump_num*100000+event_index"')
                 dump_nums.append(dump_num)
-          
-
-
+                event_indices.append(event_index)
+                
+                # dump str
+                dump_name = str(dump_num)
+                for x in range(1,5-len(dump_name)):
+                    dump_name = '0'+dump_name
+                series_dump_names.append(
+                    series_names[ievent] + '_F' + dump_name
+                )
+                
+            # filter files
+            event_filtered_files = list()
+            for file_name in filtered_file_list:
+                for series_dump in series_dump_names:
+                    if series_dump in file_name:
+                        event_filtered_files.append(file_name)
+                        break
+            
+            filtered_file_list = event_filtered_files
+    
+            
+        # replace file list
+        if filtered_file_list:
+            self.set_files(filtered_file_list)
+            
                  
         # ===============================
-        # Raw data checks using metadata
+        # Check raw data
         # ===============================
-
+        
         # initialize useful parameters
         nb_events_tot = 0
         nb_channels = 0
         nb_samples = 0
-        array_indices = list()
-
+       
         # selected files (case series number only provided)
-        # or tuple (event index, file) if event provided
-        selected_files = None
-        selected_event_files = None
-        if event_nums is None:
-            selected_files = list()
-        else:
-            selected_event_files = list()
-            
-
+        #    tuple (event index, file) if event provided
+        selected_event_files = list()
+    
         
-        # loop files
+        # loop files to get number of events
         for file_name in self._file_list:
 
             # get metadata
             metadata = self.get_metadata(file_name)
             adc_metadata = metadata['groups'][adc_name]
 
-                      
-            # extract series number
+
+            # extract dump and series based on metadata
             file_series_num = None
             if 'series_num' in metadata:
                 file_series_num = int(metadata['series_num'])
             else:
                 file_series_num = int(extract_series_num(file_name))
-
-            if series_nums is not None and file_series_num is None:
-                raise ValueError('ERROR: unable to get series number!')
             
             # extract dump number
             file_dump_num = None  
@@ -682,21 +714,8 @@ class H5Reader:
             else:
                 file_dump_num = int(extract_dump_num(file_name))
 
-            if dump_nums is not None and file_dump_num is None:
-                raise ValueError('ERROR: unable to get dump number!')
+           
             
-            
-            # skip files that are not needed
-            if (series_nums is not None
-                and file_series_num not in series_nums):
-                continue
-            
-            if (dump_nums is not None
-                and file_dump_num not in dump_nums):
-                continue
-            
-
-                      
             # if event_nums:  check file if available and store it
             if event_nums is not None:
 
@@ -705,25 +724,21 @@ class H5Reader:
                 for ievent in range(len(event_nums)):
 
                     # check if dump number match current file
-                    dump_num =  dump_nums[ievent]
-                    if dump_num != file_dump_num:
+                    if (int(dump_nums[ievent])!=file_dump_num):
                         continue
 
                     # check series match current file
-                    if series_nums is not None:
-                        series_num = series_nums[ievent]
-                        if series_num != file_series_num:
-                            continue
-                        
+                    if (int(series_nums[ievent])!=file_series_num):
+                        continue
+                    
                     # Found file!
                     keep_file  = True
 
                     # check index available
-                    event_num = event_nums[ievent]
-                    event_index = int(event_num % 100000)
+                    event_index = event_indices[ievent]
                     
-                    if event_index>int(adc_metadata['nb_events']):
-                        raise ValueError('ERROR: Find file for event number '
+                    if (event_index>int(adc_metadata['nb_events'])):
+                        raise ValueError('ERROR: Found file for event number '
                                          + str(event_num)
                                          + ' however, event does not exist!')
                     
@@ -742,40 +757,26 @@ class H5Reader:
                 nb_events_tot += adc_metadata['nb_events']
                 if nevents>0  and nb_events_tot>=nevents:
                     nb_events_tot = nevents
-                selected_files.append(file_name)
+                
 
            
-            # channels
-            array_indices_file = list()
+            # check channels
             nb_channels_file = adc_metadata['nb_channels']
-            
+        
             if detector_chans is not None:
-                              
-                # available adc channels  
-                adc_chan_list = adc_metadata['adc_channel_indices']
-                if (not isinstance(adc_chan_list, list)
-                    and not isinstance(adc_chan_list, np.ndarray)):
-                    adc_chan_list = np.array([adc_chan_list])
-                    
 
                 # connections
                 connections = self.get_connection_dict(adc_name=adc_name,
                                                        metadata=metadata)
                                 
                 # loop channels
-                chan_counter = 0
+                nb_channels_file  = 0
                 for chan_name in connections['detector_chans']:
                     if chan_name in detector_chans:
-                        chan_adc = int(connections['adc_chans'][chan_counter])
-                        if chan_adc in adc_chan_list:
-                            ind = np.where(adc_chan_list==chan_adc)[0]
-                            if len(ind)==1:
-                                array_indices_file.append(int(ind))
-                            else:
-                                raise ValueError('Problem with raw data..')
-                    chan_counter+=1
-                            
-                nb_channels_file = len(array_indices_file)
+                        nb_channels_file +=1
+
+                        
+                # error if no channel found
                 if (nb_channels_file==0):
                     error_msg = ('Unable to find selected channel(s).'
                                  + ' Check connection table!')
@@ -787,33 +788,15 @@ class H5Reader:
                             return [],[]
                         else:
                             return []
-                else:
-                    array_indices_file.sort()
-
-            else:
-                array_indices_file = list(range(nb_channels_file))
+            
 
             if nb_channels==0:
                 nb_channels =  nb_channels_file
+            elif nb_channels!=nb_channels_file:
+                raise ValueError('ERROR: inconsistent number '
+                                 + 'of channels between files!')
                 
-            if not array_indices:
-                array_indices = array_indices_file
-            
-                
-            # check channel consistency
-            if array_indices!=array_indices_file:
-                error_msg = ('Unable to return arrray due to inconsistent ' +
-                             'list of channels between files!')
-                if self._raise_errors:
-                    raise ValueError(error_msg)
-                else:
-                    print('ERROR: ' + error_msg)
-                    if include_metadata:
-                        return [],[]
-                    else:
-                        return []
-
-
+                            
             # number of samples
             nb_samples_file = adc_metadata['nb_samples']   
             if nb_samples==0:
@@ -831,7 +814,7 @@ class H5Reader:
                         return []
 
             # check max events
-            if nevents>0  and nb_events_tot>=nevents:
+            if (nevents>0  and nb_events_tot>=nevents):
                 break
 
             
@@ -843,24 +826,17 @@ class H5Reader:
         if nb_events_tot == 0:
             raise ValueError('ERROR: No events found!')
         
-        if event_nums is not None:
-
-            if nb_events_tot>len(event_nums):
-
-                if series_nums is None:
-                    raise ValueError('ERROR: Multiple events found with same '
-                                     + 'event number. "series_nums" argument '
-                                     + 'is required!')
-                else:
-                    raise ValueError('ERROR: Multiple events found with same '
-                                     + 'event number. Something went wrong...')
-
-            elif nb_events_tot<len(event_nums):
-                print('WARNING: Only ' + str(nb_events_tot)
-                      + ' events out of '
-                      + str(len(event_nums))
-                      + ' have been found!')
+        if (event_nums is not None
+            and nb_events_tot<len(event_nums)):
+            print('WARNING: Only ' + str(nb_events_tot)
+                  + ' events out of '
+                  + str(len(event_nums))
+                  + ' have been found!')
+            
     
+
+
+                
         
         # ===============================
         # Memory check
@@ -905,10 +881,7 @@ class H5Reader:
         #  Loop and read events
         # ===============================
 
-        # reset list of files if needed
-        if selected_files is not None:
-            self.set_files(selected_files)
-
+     
         # loop events
         for ievent in range(nb_events_tot):
             
@@ -916,7 +889,7 @@ class H5Reader:
             traces = []
             info = dict()
 
-            if selected_event_files is None:
+            if not selected_event_files:
                 traces, info = self.read_next_event(detector_chans=detector_chans,
                                                     adctovolt=adctovolt, adctoamp=adctoamp,
                                                     baselinesub=baselinesub,
