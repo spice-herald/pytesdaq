@@ -86,4 +86,36 @@ def extract_list(arg_list):
                 
     return output_list
         
+
+
+def convert_to_seconds(par):
+    """
+    Function to convert a string to seconds
+    """
+    # make sure it is a string
+    par = str(par)
+    if par.isdigit():
+        return float(par)
     
+    seconds_per_unit = {'us': 1e-6, 'ms':1e-3, 's':1,
+                        'm':60, 'h':3600, 'd':86400,
+                        'w': 604800}
+
+    int nstr = 1
+    if 'us' in par or 'ms' in par:
+        nstr = 2
+
+    # check
+    if par[-nstr] not in seconds_per_unit.keys():
+        raise ValueError('ERROR: time unit "'
+                         + par[-nstr] + '" unknown!')
+
+        
+    # conver to seconds
+    par_sec = (
+        float(par[:-nstr])*seconds_per_unit[par[-nstr]]
+    )
+    
+    return par_sec
+        
+        
