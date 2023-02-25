@@ -8,6 +8,7 @@ from pytesdaq.utils import connection_utils
 from math import nan
 import os
 import sys
+import copy
 
 class Config:
     
@@ -127,10 +128,10 @@ class Config:
                         
             # case "iv_didv": get other individual sections
             if measurement_name == 'iv_didv':
-                output_setup['iv_didv'] = config_dict.copy()
+                output_setup['iv_didv'] = copy.deepcopy(config_dict)
                 for name in measurement_list:
                     # copy setup and update with individual setup
-                    output_setup[name] = config_dict.copy()
+                    output_setup[name] = copy.deepcopy(config_dict)
                 
                     if self._has_section(name):
                         iv_didv_config =  self._get_section(name)

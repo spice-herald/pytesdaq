@@ -101,19 +101,19 @@ def convert_to_seconds(par):
                         'm':60, 'h':3600, 'd':86400,
                         'w': 604800}
 
-    int nstr = 1
+    nstr = 1
     if 'us' in par or 'ms' in par:
         nstr = 2
 
     # check
-    if par[-nstr] not in seconds_per_unit.keys():
+    if par[-nstr:] not in seconds_per_unit.keys():
         raise ValueError('ERROR: time unit "'
-                         + par[-nstr] + '" unknown!')
+                         + par[-nstr:] + '" unknown!')
 
         
     # conver to seconds
     par_sec = (
-        float(par[:-nstr])*seconds_per_unit[par[-nstr]]
+        float(par[:-nstr])*seconds_per_unit[par[-nstr:]]
     )
     
     return par_sec

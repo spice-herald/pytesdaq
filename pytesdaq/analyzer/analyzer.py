@@ -3,7 +3,7 @@ import numpy as np
 from astropy.stats import sigma_clip as clip
 import qetpy as qp
 from scipy import signal
-
+import copy
 
 class Analyzer:
     
@@ -373,7 +373,7 @@ class Analyzer:
             
 
         # check configuration configuration
-        analysis_config = self._analysis_config.copy()
+        analysis_config = copy.deepcopy(self._analysis_config)
         if fit_config is not None:
             for key,val in fit_config.items():
                 analysis_config[key] = val
