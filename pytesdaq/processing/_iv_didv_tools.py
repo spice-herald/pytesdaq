@@ -761,6 +761,11 @@ class IVanalysis(object):
         lgcsave : bool, optional
             If True, all the plots will be saved in the a folder
             Avetrace_noise/ within the user specified directory.
+        lp_cutoff: float, optional
+            Low pass filter cutoff for the displayed trace
+        zoomfactor: float, optional
+            Zoom in factor, if included shows a zoomed in version of the trace
+            around the peak
         **kwargs : dict
             Additional key word arguments to be passed to
             didvinitfromdata(). See Notes for description.
@@ -899,7 +904,7 @@ class IVanalysis(object):
                     lp_cutoff = lp_cutoff,
                 )
 
-                if zoomfactor:
+                if zoomfactor is not None:
                     didvobj_p.plot_zoomed_in_trace(
                         saveplot=lgcsave,
                         savepath=self.figsavepath,
