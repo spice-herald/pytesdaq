@@ -749,7 +749,8 @@ class IVanalysis(object):
             )
 
 
-    def fit_tran_didv(self, lgcplot=False, lgcsave=False,**kwargs):
+    def fit_tran_didv(self, lgcplot=False, lgcsave=False, lp_cutoff=None,
+                      zoomfactor=None, **kwargs):
         """
         Function to fit all the didv data in the IV sweep data.
 
@@ -760,6 +761,11 @@ class IVanalysis(object):
         lgcsave : bool, optional
             If True, all the plots will be saved in the a folder
             Avetrace_noise/ within the user specified directory.
+        lp_cutoff: float, optional
+            Low pass filter cutoff for the displayed trace
+        zoomfactor: float, optional
+            Zoom in factor, if included shows a zoomed in version of the trace
+            around the peak
         **kwargs : dict
             Additional key word arguments to be passed to
             didvinitfromdata(). See Notes for description.
@@ -895,7 +901,18 @@ class IVanalysis(object):
                     saveplot=lgcsave,
                     savepath=self.figsavepath,
                     savename=f'didv_{row.qetbias:.3e}',
+                    lp_cutoff = lp_cutoff,
                 )
+
+                if zoomfactor is not None:
+                    didvobj_p.plot_zoomed_in_trace(
+                        saveplot=lgcsave,
+                        savepath=self.figsavepath,
+                        savename=f'didv_{row.qetbias:.3e}',
+                        lp_cutoff = lp_cutoff,
+                        zoomfactor = zoomfactor,
+                    ) 
+                
                 didvobj_p.plot_re_im_didv(
                     poles='all',
                     saveplot=lgcsave,
