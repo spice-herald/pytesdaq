@@ -42,7 +42,7 @@ def get_adc_channel_info(connection_table,
 
 def get_adc_channel_list(connection_table,
                          tes_channel_list=list(),
-                         detector_channel_list= list()):
+                         detector_channel_list=list()):
     
     
     if tes_channel_list:
@@ -70,7 +70,7 @@ def get_adc_channel_list(connection_table,
             if adc_id not in adc_dict:
                 adc_dict[adc_id] = list()
             adc_dict[adc_id].append(int(adc_chan))
-            adc_dict[adc_id].sort()
+            #adc_dict[adc_id].sort()
             
     
     return  adc_dict
