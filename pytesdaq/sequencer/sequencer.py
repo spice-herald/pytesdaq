@@ -65,7 +65,6 @@ class Sequencer:
           
           # setup files
           self._setup_file = setup_file
-          
           self._sequencer_pickle_file = sequencer_pickle_file
           self._sequencer_file = sequencer_file
 
@@ -80,8 +79,10 @@ class Sequencer:
                            
           # Instantiate config
           try:
-               self._config = settings.Config(sequencer_file=self._sequencer_file,
-                                              setup_file=self._setup_file)
+               self._config = settings.Config(
+                    daq_file=self._sequencer_file,
+                    setup_file=self._setup_file
+               )
           except Exception as e:
                print(str(e))
                raise ValueError('ERROR reading configuration files!')

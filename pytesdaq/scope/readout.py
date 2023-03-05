@@ -177,7 +177,7 @@ class Readout:
                 return error_msg
 
             # ADC setup
-            self._adc_config = self._config.get_adc_setup(adc_name)
+            self._adc_config = self._config.get_adc_setup(adc_name).copy()
 
             # convert connection dataframe to dict 
             connections = self._adc_config['connection_table'].to_dict(orient='list')
