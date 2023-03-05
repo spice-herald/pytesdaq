@@ -4,11 +4,16 @@ import os,string
 import pandas as pd
 import re
 import traceback
-from pytesdaq.utils import connection_utils
 from math import nan
 import os
 import sys
 import copy
+from datetime import datetime
+import time
+
+from pytesdaq.utils import connection_utils
+
+
 
 class Config:
     
@@ -277,6 +282,19 @@ class Config:
     
         return fridge_run
 
+    def get_fridge_run_start(self):
+        fridge_run_start = []
+        try:
+            datetime_str =  self._get_setting('setup','fridge_run_start')
+            datetime_obj = datetime. strptime(datetime_str,
+                                              '%m/%d/%Y %H:%M')
+            fridge_run_start = int(time.mktime(datetime_obj.timetuple()))
+        except:
+            raise ValueError('ERROR: Problem with "fridge_run_start" '
+                             + 'parameter in setup file! '
+                             + 'Expecting: fridge_run_start = mm/dd/yyyy HH:MM')
+        
+        return fridge_run_start
 
 
     def get_preamp_fix_gain(self, controller_name=None):
@@ -466,6 +484,7 @@ class Config:
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source','signal_gen_current','signal_gen_frequency',
                       'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
+                      'parasitic_resistance',
                       'signal_gen_tes_resistance','close_loop_norm']
         
         detector_config = dict()
