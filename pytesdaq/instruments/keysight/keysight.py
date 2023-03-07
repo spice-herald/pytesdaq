@@ -6,9 +6,12 @@ from pytesdaq.instruments.communication import InstrumentComm
 class KeysightFuncGenerator(InstrumentComm):
     """
     Keysight function generators management
+        
     """
 
-    def __init__(self, visa_address, visa_library=None, raise_errors=True, verbose=True):
+    def __init__(self, visa_address, visa_library=None,
+                 attenuation=1, raise_errors=True,
+                 verbose=True):
         super().__init__(visa_address=visa_address, termination='\n',
                          visa_library=visa_library,
                          raise_errors=raise_errors,
@@ -33,6 +36,9 @@ class KeysightFuncGenerator(InstrumentComm):
         self._generator_onoff = 'off'
         
 
+        # signal generator attenuation
+        self._attenuation = attenuation
+        
         
         
     def set_shape(self, shape,source=1):
@@ -155,7 +161,10 @@ class KeysightFuncGenerator(InstrumentComm):
         if unit == 'mVpp':
             amplitude = float(amplitude)/1000
             unit = 'Vpp'
-            
+
+
+        # remove attenuation
+        amplitude *= self._attenuation
             
         # set unit
         command = 'SOUR' + str(source) + ':VOLT:UNIT ' + unit
@@ -214,6 +223,11 @@ class KeysightFuncGenerator(InstrumentComm):
         # get amplitude
         command = 'SOUR' + str(source) + ':VOLT?'
         amplitude = float(self.query(command))
+
+
+        # attenuation
+        amplitude /= self._attenuation
+        
 
         if convert_mVpp:
             amplitude *= 1000

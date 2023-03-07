@@ -674,6 +674,31 @@ class Config:
         return address
 
 
+    def get_signal_generator_attenuation(self, device_name):
+        """
+        get function generator attenuation 
+
+        Parameters:
+        ----------        
+        device_name : str
+          signal generator name (field in .ini configuration file)
+ 
+        Returns:
+        --------
+            attenuation : float
+        """
+
+        key = device_name + '_attenuation'
+    
+        attenuation = 1
+        try:
+            attenuation =  float(self._get_setting('signal_generators', key))
+        except:
+            pass
+    
+        return attenuation
+
+
     def get_temperature_controller_setup(self, device_name):
         """
         get function generators

@@ -643,10 +643,12 @@ class Control:
         """
         bias = nan
         #try:
-        bias = self._get_sensor_val('tes_bias',
-                                    tes_channel=tes_channel,
-                                    detector_channel=detector_channel,
-                                    adc_id=adc_id, adc_channel=adc_channel)
+        bias = self._get_sensor_val(
+            'tes_bias',
+            tes_channel=tes_channel,
+            detector_channel=detector_channel,
+            adc_id=adc_id, adc_channel=adc_channel
+        )
             
         #except:
         #    print('ERROR getting TES bias')
@@ -666,11 +668,12 @@ class Control:
         """
         bias = nan
         try:
-            bias = self._get_sensor_val('squid_bias',
-                                        tes_channel=tes_channel,
-                                        detector_channel=detector_channel,
-                                        adc_id=adc_id, adc_channel=adc_channel)
-                                                   
+            bias = self._get_sensor_val(
+                'squid_bias',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )                                       
         except:
             print('ERROR getting SQUID bias')
             
@@ -691,11 +694,12 @@ class Control:
         """
         lock_point = nan
         try:
-            lock_point = self._get_sensor_val('lock_point_voltage',
-                                              tes_channel=tes_channel,
-                                              detector_channel=detector_channel,
-                                              adc_id=adc_id, adc_channel=adc_channel)
-            
+            lock_point = self._get_sensor_val(
+                'lock_point_voltage',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting lock point')
             
@@ -717,11 +721,12 @@ class Control:
         """
         feedback_gain = nan
         try:
-            feedback_gain = self._get_sensor_val('feedback_gain',
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, adc_channel=adc_channel)
-            
+            feedback_gain = self._get_sensor_val(
+                'feedback_gain',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting feedback gain')
             
@@ -738,10 +743,12 @@ class Control:
         """
         output_offset = nan
         try:
-            output_offset = self._get_sensor_val('output_offset',
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, adc_channel=adc_channel)
+            output_offset = self._get_sensor_val(
+                'output_offset',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
             
         except:
             print('ERROR getting output offset')
@@ -761,11 +768,12 @@ class Control:
         """
         output_variable_gain = 1
         try:
-            output_variable_gain = self._get_sensor_val('output_gain',
-                                                        tes_channel=tes_channel,
-                                                        detector_channel=detector_channel,
-                                                        adc_id=adc_id, adc_channel=adc_channel)
-            
+            output_variable_gain = self._get_sensor_val(
+                'output_gain',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting output gain')
             
@@ -795,11 +803,12 @@ class Control:
         """
         preamp_variable_gain = 1
         try:
-            preamp_variable_gain = self._get_sensor_val('preamp_gain',
-                                                        tes_channel=tes_channel,
-                                                        detector_channel=detector_channel,
-                                                        adc_id=adc_id, adc_channel=adc_channel)
-            
+            preamp_variable_gain = self._get_sensor_val(
+                'preamp_gain',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting preamp gain')
             
@@ -1767,11 +1776,13 @@ class Control:
 
         # get readout controller ID and Channel
         controller_id, controller_channel = (
-            connection_utils.get_controller_info(self._connection_table,
-                                                 tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, 
-                                                 adc_channel=adc_channel)
+            connection_utils.get_controller_info(
+                self._connection_table,
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, 
+                adc_channel=adc_channel
+            )
         )
               
         # ================
@@ -1788,29 +1799,37 @@ class Control:
             slot = int(feb_info[1])
             
             if self._verbose or self._debug:
-                print('INFO: Setting ' + param_name + ' to ' + str(value) + ' using FEB!')
+                print('INFO: Setting ' + param_name
+                      + ' to ' + str(value) + ' using FEB!')
             if self._debug:
-                print('DEBUG: FEB - subrack = ' + str(subrack) + ', slot = ' + str(slot) + ', channel = ' + 
-                      str(controller_channel))
+                print('DEBUG: FEB - subrack = ' + str(subrack)
+                      + ', slot = ' + str(slot) + ', channel = '
+                      + str(controller_channel))
                  
             if not self._dummy_mode:
                 if param_name == 'tes_bias':
-                    self._readout_inst.set_phonon_qet_bias(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_qet_bias(
+                        subrack, slot, controller_channel, value)
             
                 elif param_name == 'squid_bias':
-                    self._readout_inst.set_phonon_squid_bias(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_squid_bias(
+                        subrack, slot, controller_channel, value)
                 
                 elif param_name == 'lock_point_voltage':
-                    self._readout_inst.set_phonon_lock_point(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_lock_point(
+                        subrack, slot, controller_channel, value)
                 
                 elif param_name == 'preamp_gain':
-                    self._readout_inst.set_phonon_preamp_gain(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_preamp_gain(
+                        subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_offset':
-                    self._readout_inst.set_phonon_offset(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_offset(
+                        subrack, slot, controller_channel, value)
                 
                 elif param_name == 'output_gain':
-                    self._readout_inst.set_phonon_output_gain(subrack, slot, controller_channel, value)
+                    self._readout_inst.set_phonon_output_gain(
+                        subrack, slot, controller_channel, value)
                 
                 elif param_name == 'feedback_polarity':
                     do_invert = False
@@ -1955,8 +1974,11 @@ class Control:
         """
 
         # check input
-        if instrument_name is None and channel_name is None and global_channel_number is None:
-            raise ValueError('ERROR: Missing channel name, global number, or instrument name')
+        if (instrument_name is None
+            and channel_name is None
+            and global_channel_number is None):
+            raise ValueError('ERROR: Missing channel name, '
+                             +'global number, or instrument name')
     
 
         # get instrument name
@@ -1964,7 +1986,9 @@ class Control:
         if instrument_name is None:
 
             # get channel table
-            channel_table = self.get_temperature_controllers_table(channel_type=channel_type)
+            channel_table = self.get_temperature_controllers_table(
+                channel_type=channel_type
+            )
 
             # query instrument name
             if channel_name is not None:
@@ -2002,14 +2026,18 @@ class Control:
         """
         
         # find instrument
-        inst = self.get_temperature_controller(channel_name=channel_name,
-                                               global_channel_number=global_channel_number,
-                                               instrument_name=instrument_name,
-                                               channel_type='resistance')
+        inst = self.get_temperature_controller(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number,
+            instrument_name=instrument_name,
+            channel_type='resistance'
+        )
         
         # get temperature
-        temperature = inst.get_temperature(channel_name=channel_name,
-                                          global_channel_number=global_channel_number)
+        temperature = inst.get_temperature(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number
+        )
 
        
         return temperature
@@ -2027,14 +2055,18 @@ class Control:
         """
 
         # find instrument
-        inst = self.get_temperature_controller(channel_name=channel_name,
-                                               global_channel_number=global_channel_number,
-                                               instrument_name=instrument_name,
-                                               channel_type='resistance')
+        inst = self.get_temperature_controller(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number,
+            instrument_name=instrument_name,
+            channel_type='resistance'
+        )
         
         
-        resistance = inst.get_resistance(channel_name=channel_name,
-                                         global_channel_number=global_channel_number)
+        resistance = inst.get_resistance(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number
+        )
 
        
         return resistance
@@ -2137,8 +2169,10 @@ class Control:
                 if mag_control_info:
                     print('Controller info for Magnicon:')
                     print('Channel list:', str(mag_control_info['channel_list']))
-                    print('Default active channel:', str(mag_control_info['default_active']))
-                    print('Reset active channel after every step:', str(mag_control_info['reset_active']))
+                    print('Default active channel:',
+                          str(mag_control_info['default_active']))
+                    print('Reset active channel after every step:',
+                          str(mag_control_info['reset_active']))
    
 
             if self._squid_controller_name == 'magnicon':
@@ -2152,9 +2186,11 @@ class Control:
         # ----------------
         if self._signal_generator_name == 'keysight':
             address = self._config.get_signal_generator_visa_address('keysight')
+            attenuation = self._config.get_signal_generator_attenuation('keysight')
             self._signal_generator_inst = (
                 KeysightFuncGenerator(address,
                                       visa_library=visa_library,
+                                      attenuation=attenuation,
                                       verbose=self._verbose,
                                       raise_errors=self._raise_errors)
             )
