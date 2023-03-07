@@ -478,9 +478,9 @@ class IV_dIdV(Sequencer):
                         offsets.append([offset])
                         offsets_err.append([offset_err])
 
-                        # std (after low pass filtering)
+                        # std 
                         nyq = sample_rate/2
-                        cut_off = 10000/nyq
+                        cut_off = 50000/nyq
                         b,a = signal.butter(2, cut_off)
                         traces = signal.filtfilt(b, a, traces, axis=1,
                                                  padtype='even')
@@ -493,7 +493,7 @@ class IV_dIdV(Sequencer):
 
 
                     # save
-                    bias_array = [[bias]]*nb_channels
+                    bias_array = [[-bias*1e-6]]*nb_channels
                     bias_err_array = [[0]]*nb_channels
                     
                     if online_iv_offset is None:
@@ -553,6 +553,17 @@ class IV_dIdV(Sequencer):
                     
                         ivobj.analyze()
                         
+
+                        # get signal gen amplitude
+                        #for  ichan in range(len(self._detector_channels)):
+                        #    r0 = ivobj.r0[0, ichan, -1]
+                        #    noise_std = online_iv_std[ichan, -1]
+                        #    print('trace_std = ' + str(noise_std))
+                        #    print('r0: ' + str(r0))
+                        #    sig_gen_current = noise_std *(r0+5e-3+2e-3)/5e-3
+                        #    sig_gen_volt = sig_gen_current*10000*1000
+                        #    print('Vsg [mV] = ' + str(sig_gen_volt))
+                                                    
                         
                             
                 # -----------
