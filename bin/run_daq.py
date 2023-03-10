@@ -97,7 +97,6 @@ if __name__ == "__main__":
     add_bor_didv = False
     add_eor_didv = False
     added_didv_time_sec = 60
-    didv_detector_channels = None
     split_series=False
     
         
@@ -385,6 +384,9 @@ if __name__ == "__main__":
         add_eor_didv = daq_config['add_series_end_didv']
 
 
+    # signal gen config
+    didv_signal_gen_config = dict()
+    
 
     # set settings
     if (add_bor_didv or add_eor_didv
@@ -397,7 +399,8 @@ if __name__ == "__main__":
             print('ERROR: instrument control required!')
             exit()
 
-        
+
+                 
         # voltage range
         if 'voltage_min' in didv_config.keys():
             didv_adc_config[adc_name]['voltage_min'] = (
@@ -415,48 +418,78 @@ if __name__ == "__main__":
                 float(didv_config['sample_rate'])
             )
 
-        # signal generator
-        if 'signal_gen_voltage' in didv_config.keys():
-            signal_gen_amp_mV = float(
-                didv_config['signal_gen_voltage'] 
-            )
-
-        if 'signal_gen_frequency' in didv_config.keys():
-            signal_gen_freq_hz = float(
-                didv_config['signal_gen_frequency'] 
-            )
-
         # trigger type
         didv_adc_config[adc_name]['trigger_type'] = 2
 
-            
-        # check
-        sig_freq = signal_gen_freq_hz
-        if (signal_gen_amp_mV is None
-            or signal_gen_freq_hz is None):
-        
-            if (add_bor_didv or add_eor_didv):
-                print('ERROR: For added dIdV, "signal_gen_voltage" '
-                      + 'and "signal_gen_frequency" arguments are '
-                      + 'required!')
-                exit()
-                
-            elif (trigger_type=='didv'
-                  and signal_gen_freq_hz is None):
 
-                sg_params = myinstrument.get_signal_gen_params()
-                sig_freq  = sg_params['frequency']
-                
-        # trace length
-        if 'nb_cycles' in didv_config.keys():
-            nb_cycles = float(
-                didv_config['nb_cycles']
+        # signal gen config and trace length
+        
+        voltage_config = dict()
+        if 'signal_gen_voltage_mV' in didv_config.keys():
+            voltage_config =  arg_utils.extract_didv_signal_gen_config(
+                didv_config['signal_gen_voltage_mV']
             )
-            fs = didv_adc_config[adc_name]['sample_rate']
-            didv_adc_config[adc_name]['nb_samples'] = int(
+        voltage_keys = list(voltage_config.keys())
+        voltage_keys.sort()
+            
+        frequency_config = dict()
+        if 'signal_gen_frequency_Hz'  in didv_config.keys():
+            frequency_config = arg_utils.extract_didv_signal_gen_config(
+                didv_config['signal_gen_frequency_Hz']
+            )
+
+        frequency_keys = list(frequency_config.keys())
+        frequency_keys.sort()
+
+        if voltage_keys != frequency_keys:
+            raise ValueError('ERROR: frequency and voltage need to have same format!')
+   
+        
+        if voltage_keys:
+
+            # initialize list to check channels
+            channel_list = list()
+            for chan in voltage_keys:
+                didv_signal_gen_config[chan] = dict()
+                didv_signal_gen_config[chan]['voltage'] = float(voltage_config[chan])
+                didv_signal_gen_config[chan]['frequency'] = float(frequency_config[chan])
+                channel_list.extend(chan.split(','))
+
+            for chan in detector_channels:
+                if ('all' not in channel_list
+                    and chan not in channel_list):
+                    raise ValueError(
+                        'ERROR: Missing voltage/frequency for '
+                        + 'channel ' + chan)
+        else:
+            sg_params = myinstrument.get_signal_gen_params()
+            didv_signal_gen_config['all'] = dict()
+            didv_signal_gen_config['all']['voltage'] = sg_params['voltage']*1000
+            didv_signal_gen_config['all']['frequency'] = sg_params['frequency']
+        
+      
+        
+
+
+
+            
+        # calculate trace length
+                        
+        # trace length
+        if 'nb_cycles' not in didv_config.keys():
+            raise ValueError('ERROR: "nb_cycles" parameter '
+                             + 'required!')
+                    
+        nb_cycles = float(didv_config['nb_cycles'])
+        fs = didv_adc_config[adc_name]['sample_rate']
+
+        for key, item  in didv_signal_gen_config.items():
+            sig_freq = item['frequency']
+            didv_signal_gen_config[key]['nb_samples'] = int(
                 round(nb_cycles*fs/sig_freq)
             )            
-            
+
+                
         # run time
         if 'didv_run_time' in daq_config.keys():
             added_didv_time_sec = (
@@ -465,29 +498,7 @@ if __name__ == "__main__":
                 )
             )
 
-        # didv channels
-        if 'didv_detector_channels' in daq_config.keys():
-            didv_detector_channels = (
-                daq_config['didv_detector_channels']
-            )
-
-
-        # let set signal generator
-        # (need to be done only once)
-        if signal_gen_amp_mV is not None:
-            myinstrument.set_signal_gen_params(
-                voltage=signal_gen_amp_mV
-            )
-        
-        if signal_gen_freq_hz is not None:
-            myinstrument.set_signal_gen_params(
-                frequency=signal_gen_freq_hz
-            )
-            
-        # make sure it is a square wave
-        myinstrument.set_signal_gen_params(
-            shape='square'
-        )
+     
         
                                
     # ====================================
@@ -582,74 +593,93 @@ if __name__ == "__main__":
 
     
     # data taking process lock 
-    mydaq.lock_daq = True
+    mydaq.lock_daq = False
 
     # log file
     #if log_file:
      #   mydaq.log_file = log_file
 
      
-    def run_didv(data_prefix='didv', comment='Beginning/End of Run dIdV'):
+    def run_didv(data_prefix='didv',
+                 didv_comment='Beginning/End of Run dIdV',
+                 didv_run_time=60):
         """
         Function to run BOR or EOR dIdV 
         """
         if verbose:
-            print('\nINFO: Starting '
-                  + comment)
-            
-        # set didV
-        for channel in detector_channels:
-
-
-            # check if subset of channels
-            if (didv_detector_channels is not None
-                and channel in didv_detector_channels):
-                continue
-
-            # turn on signal gen
-            myinstrument.set_signal_gen_onoff('on',
-                                              detector_channel=channel)
-            
-            # connect to TES
-            myinstrument.connect_signal_gen_to_tes(True,
-                                                   detector_channel=channel)
+            print('\nINFO: Starting dIdV "'
+                  + didv_comment + '"')
             
             
-        # sleep
-        time.sleep(2)
+        # loop channels
+        for chans, chan_config in didv_signal_gen_config.items():
 
+            if chans == 'all':
+                chans = detector_channels
+            else:
+                chans = chans.split(',')
 
-        # configure daq
-        mydaq.set_adc_config_from_dict(didv_adc_config)
-        detector_config = read_detector_settings()
-        mydaq.set_detector_config(detector_config)
+            # parameters
+            voltage_mv = chan_config['voltage']
+            frequency_hz = chan_config['frequency']
+            nb_samples =  chan_config['nb_samples']
+
+            didv_chans = list()
+            for chan in chans:
+
+                if chan not in  detector_channels:
+                    continue
+                didv_chans.append(chan)
+
+                # set signal gen
+                myinstrument.set_signal_gen_params(voltage=voltage_mv)
+                myinstrument.set_signal_gen_params(frequency=frequency_hz)
+                myinstrument.set_signal_gen_params(shape='square')
+                myinstrument.set_signal_gen_onoff('on')
+
+                # connect to TES
+                myinstrument.connect_signal_gen_to_tes(
+                    True, detector_channel=chan)
+                
+            # disconnect other channels
+            for other_chan in detector_channels:
+
+                if other_chan not in chans:
+                    myinstrument.connect_signal_gen_to_tes(
+                        False, detector_channel=other_chan)
+
+            # configure daq
+            didv_adc_config[adc_name]['nb_samples'] = nb_samples  
+            mydaq.set_adc_config_from_dict(didv_adc_config)
+            detector_config = read_detector_settings()
+            mydaq.set_detector_config(detector_config)
             
-        # sleep
-        time.sleep(5)
-        
-        # run
-        success = mydaq.run(run_time=added_didv_time_sec,
-                            run_type=run_purpose,
-                            run_comment=comment,
-                            group_name= group_name,
-                            group_comment=comment,
-                            data_prefix=data_prefix,
-                            data_path=data_path)
-        if not success:
-            print('ERROR: Data taking error. Exiting!')
-            mydaq.clear()
-            exit()
+                        
+            # sleep
+            time.sleep(5)
+
+            if verbose:
+                didv_chans = ','.join(didv_chans)
+                print('INFO: dIdV channels = ' + didv_chans)
+
+            
+            # run
+            success = mydaq.run(run_time=didv_run_time,
+                                run_type=run_purpose,
+                                run_comment=didv_comment,
+                                group_name= group_name,
+                                group_comment=comment,
+                                data_prefix=data_prefix,
+                                data_path=data_path)
+            if not success:
+                print('ERROR: Data taking error. Exiting!')
+                mydaq.clear()
+                exit()
         
         
 
         # turn off signal gen
         for channel in detector_channels:
-
-
-            # check if subset of channels
-            if (didv_detector_channels is not None
-                and channel in didv_detector_channels):
-                continue
 
             # turn on signal gen
             myinstrument.set_signal_gen_onoff('off',
@@ -676,15 +706,16 @@ if __name__ == "__main__":
 
         # display
         if verbose:
-            print('\nINFO: Starting data taking run ' + str(irun+1)
-                  + ' out of ' + str(nb_runs)
-                  + ' total runs')
-            
+            print('\n===========================================')
+            print('INFO: Starting series ' + str(irun+1)
+                  + ' out of ' + str(nb_runs) + ' total')
+            print('===========================================')
         
         # begin of run didv
         if add_bor_didv:
             run_didv(data_prefix='didv_bor',
-                     comment='Beginning of Run dIdV')
+                     didv_comment='Beginning of Run dIdV',
+                     didv_run_time=added_didv_time_sec)
             
 
         #  even/odd series handling
@@ -696,41 +727,38 @@ if __name__ == "__main__":
             else:
                 series_prefix = 'odd_' + series_prefix
 
-            
-        # set configuration
+        # didv
         if trigger_type == 'didv':
-            mydaq.set_adc_config_from_dict(didv_adc_config)
+            run_didv(data_prefix=series_prefix,
+                     didv_comment=comment,
+                     didv_run_time=run_time_sec)
         else:
             mydaq.set_adc_config_from_dict(adc_config)
+            detector_config = read_detector_settings()
+            mydaq.set_detector_config(detector_config)
             
+            # sleep
+            time.sleep(5)
         
-        #if not disable_control:
-        detector_config = read_detector_settings()
-        mydaq.set_detector_config(detector_config)
-
-    
-            
-        # sleep
-        time.sleep(5)
-        
-        # run
-        success = mydaq.run(run_time=run_time_sec ,
-                            run_type=run_purpose,
-                            run_comment=comment,
-                            group_name= group_name,
-                            group_comment=comment,
-                            data_prefix=series_prefix,
-                            data_path=data_path)
-        if not success:
-            print('ERROR: Data taking error. Exiting!')
-            mydaq.clear()
-            exit()
+            # run
+            success = mydaq.run(run_time=run_time_sec,
+                                run_type=run_purpose,
+                                run_comment=comment,
+                                group_name= group_name,
+                                group_comment=comment,
+                                data_prefix=series_prefix,
+                                data_path=data_path)
+            if not success:
+                print('ERROR: Data taking error. Exiting!')
+                mydaq.clear()
+                exit()
 
 
         # end of run dIdV
         if add_eor_didv:
             run_didv(data_prefix='didv_eor',
-                     comment='End of Run dIdV')
+                     didv_comment='End of Run dIdV',
+                     didv_run_time=added_didv_time_sec)
             
 
     print('INFO: Data taking run successfully done!')   

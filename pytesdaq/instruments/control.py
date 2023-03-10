@@ -523,11 +523,13 @@ class Control:
                 voltage = resistance*current/1000
 
             if voltage is not None:
-                self._signal_generator_inst.set_amplitude(voltage, unit='mVpp', source=signal_gen_num)
+                self._signal_generator_inst.set_amplitude(voltage, unit='mVpp',
+                                                          source=signal_gen_num)
 
             # frequency
             if frequency is not None:
-                self._signal_generator_inst.set_frequency(frequency, unit='Hz', source=signal_gen_num)
+                self._signal_generator_inst.set_frequency(frequency, unit='Hz',
+                                                          source=signal_gen_num)
 
 
             # offset
@@ -1035,6 +1037,15 @@ class Control:
         output_dict['voltage'] = []
         output_dict['current'] = []
 
+
+        # check if input channel
+        is_channel_defined = False
+        if (tes_channel is not None
+            or detector_channel is not None
+            or adc_channel is not None):
+            is_channel_defined = True
+
+        
         # magnicon
         if self._signal_generator_name == 'magnicon':
 
@@ -1097,7 +1108,8 @@ class Control:
                 output_dict['shape'] = self._signal_generator_inst.get_shape(source=signal_gen_num)
 
             # source
-            if self._squid_controller_name == 'feb':
+            if (is_channel_defined
+                and self._squid_controller_name=='feb'):
 
 
                 # get readout controller ID and Channel
@@ -1139,9 +1151,9 @@ class Control:
                 else:
                     output_dict['source'] = 'none'
             
-            else:
+            #else:
                 # FIXME: default to tes if not FEB
-                output_dict['source'] = 'tes'
+            #    output_dict['source'] = 'tes'
                 
         return output_dict
 

@@ -119,3 +119,47 @@ def convert_to_seconds(par):
     return par_sec
         
         
+def extract_didv_signal_gen_config(arg_list):
+    """
+    Extract signal gen config dictionary
+    separations are comma and space, and &
+    """
+    
+    output_dict = dict()
+
+    # check if list
+    if not isinstance(arg_list, list):
+        arg_list = [arg_list]
+
+    # loop list
+    for item in arg_list:
+        item = str(item).strip()
+        if item.replace('.','').isnumeric():
+            output_dict['all'] = float(item)
+            return  output_dict
+        
+        if ':' not in item:
+            raise ValueError(
+                'ERROR: Signal gen parameter format unrecognized!'
+                + '(' + item + ')')
+        
+        # split 
+        item = item.split(':')
+        chans = item[0].strip()
+        value = float(item[1].strip())
+        
+        # channel list
+        chans = chans.split('&')
+        
+        # trim channels and save in list
+        channels = None
+        for chan in chans:
+            chan = chan.strip()
+            if channels is None:
+                channels = chan
+            else:
+                channels = channels + ',' + chan
+                            
+        output_dict[channels] = value
+
+    return output_dict
