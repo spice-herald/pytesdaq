@@ -423,19 +423,19 @@ if __name__ == "__main__":
 
 
         # signal gen config and trace length
-        
         voltage_config = dict()
-        if 'signal_gen_voltage_mV' in didv_config.keys():
+        if 'signal_gen_voltage_mv' in didv_config.keys():
             voltage_config =  arg_utils.extract_didv_signal_gen_config(
-                didv_config['signal_gen_voltage_mV']
+                didv_config['signal_gen_voltage_mv']
             )
+
         voltage_keys = list(voltage_config.keys())
         voltage_keys.sort()
             
         frequency_config = dict()
-        if 'signal_gen_frequency_Hz'  in didv_config.keys():
+        if 'signal_gen_frequency_hz'  in didv_config.keys():
             frequency_config = arg_utils.extract_didv_signal_gen_config(
-                didv_config['signal_gen_frequency_Hz']
+                didv_config['signal_gen_frequency_hz']
             )
 
         frequency_keys = list(frequency_config.keys())
@@ -443,7 +443,6 @@ if __name__ == "__main__":
 
         if voltage_keys != frequency_keys:
             raise ValueError('ERROR: frequency and voltage need to have same format!')
-   
         
         if voltage_keys:
 
@@ -468,10 +467,6 @@ if __name__ == "__main__":
             didv_signal_gen_config['all']['frequency'] = sg_params['frequency']
         
       
-        
-
-
-
             
         # calculate trace length
                         
