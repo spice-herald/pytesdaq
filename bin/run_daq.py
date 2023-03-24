@@ -42,15 +42,21 @@ if __name__ == "__main__":
                         dest="acquire_cont", action="store_true",
                         help='Acquire continuous data')
     
-    parser.add_argument('--acquire-rand','--acquire-randoms',
+    parser.add_argument('--acquire-rand','--acquire_rand',
+                        '--acquire-randoms',
                         dest="acquire_rand", action="store_true",
                         help='Acquire randoms data')
 
-    parser.add_argument('--acquire-didv',
+    parser.add_argument('--acquire-didv','--acquire_didv',
                         dest="acquire_didv", action="store_true",
                         help='Acquire didv data')
 
-    parser.add_argument('--acquire-thresh','--acquire-threshold',
+    parser.add_argument('--acquire-exttrig','--acquire_exttrig',
+                        dest="acquire_exttrig", action="store_true",
+                        help='Acquire external trigger data')
+
+    parser.add_argument('--acquire-thresh','--acquire_thresh',
+                        '--acquire-threshold',
                         dest="acquire_thresh", action="store_true",
                         help='Acquire threshold trigger data')
 
@@ -141,12 +147,15 @@ if __name__ == "__main__":
     duration_sec = arg_utils.convert_to_seconds(args.duration)
     
     # check acquisition
-    trigger_types = {'continuous':1, 'didv':2,
+    trigger_types = {'continuous':1,
+                     'didv':2, 'exttrig':2,
                      'randoms':3, 'threshold':4}
+    
     trigger_list = list(trigger_types.keys())
     
     acquisition_args = [args.acquire_cont,
                         args.acquire_didv,
+                        args.acquire_exttrig,
                         args.acquire_rand,
                         args.acquire_thresh]
 
@@ -187,7 +196,8 @@ if __name__ == "__main__":
     adc_name = adc_list[0]
     adc_config  = dict()
     adc_config[adc_name] = exp_config.get_adc_setup(adc_name)
-        
+
+    
     # Thermometers
     disable_temperature_reading = False
     temperature_controllers = exp_config.get_temperature_controllers()
@@ -204,13 +214,10 @@ if __name__ == "__main__":
             
     # get data taking config    
     daq_config = exp_config.get_daq_config(trigger_type)
-
+       
     # connection table
     connection_table = exp_config.get_adc_connections()
     connection_dict = connection_utils.get_items(connection_table)
-    
-
-
     
     
     # ----------------------------
@@ -258,6 +265,22 @@ if __name__ == "__main__":
         )['detector_channel'].values
         detector_channels.append(detchan[0])
 
+
+    # ----------------------------
+    # Instantiate instrument
+    # ----------------------------
+
+    myinstrument = None
+    
+    if not disable_control:
+        
+        myinstrument = instrument.Control(
+            setup_file=setup_file,
+            dummy_mode=False,
+            verbose=verbose
+        )
+
+        
     
     # ----------------------------
     # ADC configuration
@@ -282,26 +305,33 @@ if __name__ == "__main__":
 
     # number of samples
     nb_samples = None
-    if  trigger_type != 'didv':
-        if 'trace_length' in daq_config.keys():
-            trace_length_sec = (
-                arg_utils.convert_to_seconds(
-                    daq_config['trace_length']
-                )
+    if 'trace_length' in daq_config.keys():
+        trace_length_sec = (
+            arg_utils.convert_to_seconds(
+                daq_config['trace_length']
             )
-            nb_samples = int(
-                round(int(adc_config[adc_name]['sample_rate'])
-                      *trace_length_sec)
-            )
-        elif 'nb_samples' in  daq_config.keys():
-            nb_samples = int(daq_config['nb_samples'])
-        else:
-            print('\nERROR: "trace_length" or "nb_samples" required!')
-            exit()
-            
-        adc_config[adc_name]['nb_samples'] = nb_samples    
-        
+        )
+        nb_samples = int(
+            round(int(adc_config[adc_name]['sample_rate'])
+                  *trace_length_sec)
+        )
 
+    elif 'nb_samples' in  daq_config.keys():
+        nb_samples = int(daq_config['nb_samples'])
+
+    elif 'nb_cycles' in  daq_config.keys():
+        nb_cycles = float(daq_config['nb_cycles'])
+        fs = adc_config[adc_name]['sample_rate']
+        sg_params = myinstrument.get_signal_gen_params()
+        sg_freq = sg_params['frequency']
+        nb_samples = int(round(nb_cycles*fs/sg_freq))
+        
+    else:
+        print('\nERROR: "trace_length" or "nb_samples" or "nb_cycles" required!')
+        exit()
+            
+    adc_config[adc_name]['nb_samples'] = nb_samples    
+   
     # ADC channel list
     adc_config[adc_name]['channel_list'] = adc_channels
   
@@ -309,24 +339,12 @@ if __name__ == "__main__":
     adc_config[adc_name]['trigger_type'] = int(
         trigger_types[trigger_type]
     )
-
-        
+    
+         
     # ====================================
-    # Read instruments settings
+    # Function to read instruments settings
     # ====================================
     
-    myinstrument = None
-    
-    if not disable_control:
-        
-        myinstrument = instrument.Control(
-            setup_file=setup_file,
-            dummy_mode=False,
-            verbose=verbose
-        )
-
-
-        
     def read_detector_settings():
         """
         Read detector settings
@@ -494,8 +512,7 @@ if __name__ == "__main__":
             )
 
      
-        
-                               
+                                  
     # ====================================
     # Build output Data path
     # ====================================
@@ -539,6 +556,8 @@ if __name__ == "__main__":
          data_prefix = 'cont'
     elif trigger_type == 'didv':
         data_prefix = 'didv'
+    elif trigger_type == 'exttrig':
+        data_prefix = 'exttrig'
     elif trigger_type == 'threshold':
         data_prefix = 'thresh'
     elif trigger_type == 'randoms':
