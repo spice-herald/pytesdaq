@@ -237,6 +237,15 @@ def _sc_noise(freqs, tload, squiddc, squidpole, squidn, rload, inductance):
     s_isquid = (squiddc * (1.0 + (squidpole / freqs)**squidn))**2.0
     return s_iloadsc + s_isquid
 
+def _get_current_offset_metadata(metadata, channel_name):
+    """
+    Helper function to get the current offset set by the slider on
+    the FEB controller labview script.
+    """
+    voltage_offset = metadata[0]['detector_config'][channel_name]['output_offset']
+    close_loop_norm = metadata[0]['detector_config'][channel_name]['close_loop_norm']
+    return voltage_offset/close_loop_norm
+
 class IVanalysis(object):
     """
     Class to aid in the analysis of an IV/dIdV sweep as processed by
@@ -749,7 +758,8 @@ class IVanalysis(object):
             )
 
 
-    def fit_tran_didv(self, lgcplot=False, lgcsave=False,**kwargs):
+    def fit_tran_didv(self, lgcplot=False, lgcsave=False, lp_cutoff=None,
+                      zoomfactor=None, **kwargs):
         """
         Function to fit all the didv data in the IV sweep data.
 
@@ -760,6 +770,11 @@ class IVanalysis(object):
         lgcsave : bool, optional
             If True, all the plots will be saved in the a folder
             Avetrace_noise/ within the user specified directory.
+        lp_cutoff: float, optional
+            Low pass filter cutoff for the displayed trace
+        zoomfactor: float, optional
+            Zoom in factor, if included shows a zoomed in version of the trace
+            around the peak
         **kwargs : dict
             Additional key word arguments to be passed to
             didvinitfromdata(). See Notes for description.
@@ -895,7 +910,18 @@ class IVanalysis(object):
                     saveplot=lgcsave,
                     savepath=self.figsavepath,
                     savename=f'didv_{row.qetbias:.3e}',
+                    lp_cutoff = lp_cutoff,
                 )
+
+                if zoomfactor is not None:
+                    didvobj_p.plot_zoomed_in_trace(
+                        saveplot=lgcsave,
+                        savepath=self.figsavepath,
+                        savename=f'didv_{row.qetbias:.3e}',
+                        lp_cutoff = lp_cutoff,
+                        zoomfactor = zoomfactor,
+                    ) 
+                
                 didvobj_p.plot_re_im_didv(
                     poles='all',
                     saveplot=lgcsave,
@@ -1784,3 +1810,48 @@ class IVanalysis(object):
             ylims_current=ylims_current,
             ylims_power=ylims_power,
         )
+
+
+    def get_offsets_dict(self, metadata, channel_name, lgcdiagnostics=False):
+        """
+        Function to get a dictionary of offsets of i0 and ibias used by
+        QETpy to calculate the i0, r0, p0, etc. of a given dIdV.
+
+        Parameters
+        ----------
+        metadata : array
+            Generated when loading traces. Can just be one element long.
+            Used to find the current offset set by the slider on the FEB
+            control labview script.
+
+        channel_name: str
+            Used to get the right channel out of the metadata
+
+        Returns
+        -------
+        offsets_dict: dict
+            A dictionary containing the various offsets used by QETpy
+            to calculate the biasparams dict, the dIdP, etc.
+
+        """
+        
+        output_offset_during_didv = _get_current_offset_metadata(metadata, channel_name)
+
+        IV_i0_offset = self.ivobj.ioff[0][1]
+        IV_i0_offset_err = self.ivobj.ioff_err[0][1]
+        IV_ibias_offset = self.ivobj.ibias_off[0][1]
+        IV_ibias_offset_err = self.ivobj.ibias_off_err[0][1]
+        
+        rp_measured = self.df['rp'][0]
+        
+        return_dict = {
+            "i0_off": IV_i0_offset,
+            "i0_off_err": IV_i0_offset_err,
+            "ibias_off": IV_ibias_offset,
+            "ibias_off_err": IV_ibias_offset_err,
+            "i0_changable_offset": output_offset_during_didv,
+            "rp": rp_measured,
+            "IVobj": self,
+        }
+
+        return return_dict

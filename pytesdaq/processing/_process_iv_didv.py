@@ -411,7 +411,7 @@ def process_ivsweep(ivfilepath, chans, autoresample_didv=False, dutycycle=0.5,
     if isinstance(ivfilepath, str):
         if os.path.isdir(ivfilepath):
             ivfilepath += '/'
-            files = sorted(glob(ivfilepath +'*'))
+            files = sorted(glob(ivfilepath +'*.hdf5'))
         else:
             files = [ivfilepath]
     else:
