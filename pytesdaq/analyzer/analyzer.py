@@ -441,11 +441,10 @@ class Analyzer:
             add180phase=analysis_config['add_180phase'][ichan]
 
             if add_autocuts:
-                cut = qp.autocuts(
+                cut = qp.autocuts_didv(
                     traces,
                     fs=sample_rate,
-                    is_didv=True,
-                    sgfreq=sg_freq,
+                    niter=1,
                 )
                 traces = traces[cut]
 
