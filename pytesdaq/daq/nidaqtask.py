@@ -193,7 +193,8 @@ class NITask(Task):
         # check required parameter
         for param in self._required_adc_config:
             if param not in config_dict:
-                print('ERROR from polaris::write_config:  Missing ADC configuration "' + param + '"!')
+                print('ERROR from polaris::write_config:  Missing ADC configuration "'
+                      + param + '"!')
                 return False
 
 
@@ -207,14 +208,14 @@ class NITask(Task):
         for chan in channel_list:
             channel_names.append(config_dict['device_name'] + '/ai' + str(chan))
         channel_names_flatten = flatten_channel_string(channel_names)
-
+      
         # set channels/voltage
-        ai_voltage_channels = self.ai_channels.add_ai_voltage_chan(str(channel_names_flatten),
-                                                                   max_val=float(config_dict['voltage_max']),
-                                                                   min_val=float(config_dict['voltage_min']))
+        ai_voltage_channels = self.ai_channels.add_ai_voltage_chan(
+            str(channel_names_flatten),
+            max_val=float(config_dict['voltage_max']),
+            min_val=float(config_dict['voltage_min'])
+        )
         
-
-
         # fill useful container
         self._nb_samples = int(config_dict['nb_samples'])
         self._nb_channels = len(channel_list)
@@ -255,8 +256,10 @@ class NITask(Task):
                                 
         # external trigger
         if config_dict['trigger_type']==2:
-            self.triggers.start_trigger.cfg_dig_edge_start_trig(trigger_source='/'+ config_dict['device_name'] 
-                                                                + '/pfi0')
+            self.triggers.start_trigger.cfg_dig_edge_start_trig(
+                trigger_source='/'+ config_dict['device_name'] 
+                + '/pfi0'
+            )
             
 
         # data mode
@@ -266,8 +269,10 @@ class NITask(Task):
             self._is_continuous =False
             
         # register callback function
-        self.register_every_n_samples_acquired_into_buffer_event(self._nb_samples,
-                                                                 self._read_callback)
+        self.register_every_n_samples_acquired_into_buffer_event(
+            self._nb_samples,
+            self._read_callback
+        )
 
         
         adc_conversion_factor = list()
@@ -364,10 +369,6 @@ class NITask(Task):
 
 
 
-
-
-
-
     def _read_callback(self,task_handle,
                        every_n_samples_event_type,
                        number_of_samples,
@@ -383,8 +384,10 @@ class NITask(Task):
             #curr_read_pos = self.in_stream.curr_read_pos
 
             if data_type=='int16':
-                self._ni_reader.read_int16(self._data_array,number_of_samples_per_channel=self._nb_samples,
-                                           timeout=nidaqmx.constants.WAIT_INFINITELY)
+                self._ni_reader.read_int16(
+                    self._data_array,number_of_samples_per_channel=self._nb_samples,
+                    timeout=nidaqmx.constants.WAIT_INFINITELY
+                )
                 
 
             self._event_counter+=1

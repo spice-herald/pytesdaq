@@ -86,4 +86,80 @@ def extract_list(arg_list):
                 
     return output_list
         
+
+
+def convert_to_seconds(par):
+    """
+    Function to convert a string to seconds
+    """
+    # make sure it is a string
+    par = str(par)
+    if par.isdigit():
+        return float(par)
     
+    seconds_per_unit = {'us': 1e-6, 'ms':1e-3, 's':1,
+                        'm':60, 'h':3600, 'd':86400,
+                        'w': 604800}
+
+    nstr = 1
+    if 'us' in par or 'ms' in par:
+        nstr = 2
+
+    # check
+    if par[-nstr:] not in seconds_per_unit.keys():
+        raise ValueError('ERROR: time unit "'
+                         + par[-nstr:] + '" unknown!')
+
+        
+    # conver to seconds
+    par_sec = (
+        float(par[:-nstr])*seconds_per_unit[par[-nstr:]]
+    )
+    
+    return par_sec
+        
+        
+def extract_didv_signal_gen_config(arg_list):
+    """
+    Extract signal gen config dictionary
+    separations are comma and space, and &
+    """
+    
+    output_dict = dict()
+
+    # check if list
+    if not isinstance(arg_list, list):
+        arg_list = [arg_list]
+
+    # loop list
+    for item in arg_list:
+        item = str(item).strip()
+        if item.replace('.','').isnumeric():
+            output_dict['all'] = float(item)
+            return  output_dict
+        
+        if ':' not in item:
+            raise ValueError(
+                'ERROR: Signal gen parameter format unrecognized!'
+                + '(' + item + ')')
+        
+        # split 
+        item = item.split(':')
+        chans = item[0].strip()
+        value = float(item[1].strip())
+        
+        # channel list
+        chans = chans.split('&')
+        
+        # trim channels and save in list
+        channels = None
+        for chan in chans:
+            chan = chan.strip()
+            if channels is None:
+                channels = chan
+            else:
+                channels = channels + ',' + chan
+                            
+        output_dict[channels] = value
+
+    return output_dict

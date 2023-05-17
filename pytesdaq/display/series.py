@@ -510,7 +510,9 @@ class Series:
                               'signal_gen_onoff': ('SG on/off', None),
                               'signal_gen_source': ('SG source', None),
                               'signal_gen_current': ('SG amplitude [uA]', 1e6),
-                              'signal_gen_frequency': ('SG frequency [Hz]', None)
+                              'signal_gen_frequency': ('SG frequency [Hz]', None),
+                              'temperature_MC':('MC Temperature [mK]', 1e3),
+                              'temperature_still':('Still Temperature [mK]', 1e3),
                               }
                     
             detconfig_group = 'detconfig' + adc_id[3:]
@@ -519,10 +521,7 @@ class Series:
                 
                 # convert to list if needed
                 detconfig = metadata['groups'][detconfig_group]
-                for key, val in detconfig.items():
-                    if not isinstance(val, list):
-                        detconfig[key] = [val]
-                        
+                
                 # loop channels
                 for ichan, chan in enumerate(detconfig['channel_list']):
                     channel_info = dict()
@@ -530,9 +529,12 @@ class Series:
                         if key not in detconfig:
                             channel_info[param_info[0]] = 'N/A'
                         else:
-                            val = detconfig[key][ichan]
+                            val = detconfig[key]
+                            if (isinstance(val, list)
+                                or isinstance(val, np.ndarray)):
+                                val = val[ichan]
                             if param_info[1] is not None:
-                                val = float(val) * param_info[1]
+                                val = float(val) * float(param_info[1])
                                 val = round(val*100)/100
                             channel_info[param_info[0]] = str(val)
                             

@@ -21,6 +21,7 @@ class Sequencer:
                   measurement_list=None,
                   comment='No comment',
                   detector_channels=None,
+                  saved_detector_channels=None,
                   tc_channels=None,
                   sequencer_file=None, setup_file=None,
                   sequencer_pickle_file=None,
@@ -46,7 +47,7 @@ class Sequencer:
           self._dummy_mode = dummy_mode
           self._facility = 1
           self._save_raw_data = True
-          self._group_name = 'None'
+          self._group_name = None
           self._fridge_run = None
           
 
@@ -64,35 +65,34 @@ class Sequencer:
           
           # setup files
           self._setup_file = setup_file
-          
           self._sequencer_pickle_file = sequencer_pickle_file
           self._sequencer_file = sequencer_file
 
 
-          # channels (can also be set in sequencer file)
+          # channels
+          # detector channels may be detector or TES readout name
           self._detector_channels = detector_channels
+          self._saved_detector_channels = saved_detector_channels
           self._tc_channels = tc_channels
           self._is_tc_channel_number = False
           
-
-          # channel tables
-          self._detector_connection_table = None
-          self._tc_connection_table = None
-          
-          
-                    
+                           
           # Instantiate config
           try:
-               self._config = settings.Config(sequencer_file=self._sequencer_file,
-                                              setup_file=self._setup_file)
+               self._config = settings.Config(
+                    daq_file=self._sequencer_file,
+                    setup_file=self._setup_file
+               )
           except Exception as e:
-               print('ERROR reading configuration files!')
                print(str(e))
-               exit(1)
-
+               raise ValueError('ERROR reading configuration files!')
+               
+               
           # Read measurement(s)  configuration
+          self._detector_connection_table = None
+          self._tc_connection_table = None
           self._read_measurement_config()
-
+       
 
           
           # redis (can be enable in sequncer.ini file)
@@ -171,6 +171,11 @@ class Sequencer:
                    'detector_channels' in self._measurement_config[measurement]):
                     channels = self._measurement_config[measurement]['detector_channels']
                     self._detector_channels = channels
+
+               if (self._saved_detector_channels is None and
+                   'saved_detector_channels' in self._measurement_config[measurement]):
+                    channels = self._measurement_config[measurement]['saved_detector_channels']
+                    self._saved_detector_channels = channels
                     
                # Tc channels
                if (self._tc_channels is None and
@@ -184,19 +189,27 @@ class Sequencer:
           # channel table
           if self._detector_channels is not None:
                self._detector_connection_table = self._config.get_adc_connections()
+               self._detector_channels = self._extract_detector_channels(
+                    self._detector_channels
+               )
+               if self._saved_detector_channels  is not None:
+                    self._saved_detector_channels = self._extract_detector_channels(
+                         self._saved_detector_channels
+                    )
 
-                       
-
-          # check channels
-          self._check_detector_channels()
-
+                    for chan in self._detector_channels:
+                         if chan not in self._saved_detector_channels:
+                              self._saved_detector_channels.append(chan)
+               else:
+                    self._saved_detector_channels = self._detector_channels
+                    
           # done if no detector channels
           if self._detector_channels is None:
                return
 
           # ADC parameter for measurement with detector channels
           adc_dict = dict()
-          for channel in  self._detector_channels:
+          for channel in  self._saved_detector_channels:
                adc_id, adc_chan = connection_utils.get_adc_channel_info(
                     self._detector_connection_table,
                     detector_channel=channel
@@ -312,26 +325,43 @@ class Sequencer:
           if self._tc_channels is not None:
                self._tc_connection_table = self._instrument.get_temperature_controllers_table()
                self._check_tc_channels()
-          
 
-          
-     def _check_detector_channels(self):
-          """
-          Check detector (SQUID readout) channels
-          """
-          
-          # check detector channels
-          if self._detector_channels is not None:
-               # connection info
-               items_dict = connection_utils.get_items(self._detector_connection_table)
+
+
                
-               for channel in self._detector_channels:
-                    if channel not in items_dict['detector_channel']:
-                         raise ValueError('Channel ' + channel + ' unrecognized. '
-                                          + 'Please check input or connections map in setup.ini)')
+     def _extract_detector_channels(self, channels):
+          """
+          Extract detector channels from mixed list
+          of detector OR TES readout channels
+          """
 
+          if channels is None:
+               return channels
 
+          channel_list = list()
+               
+          # connection info
+          items_dict = connection_utils.get_items(self._detector_connection_table)
+               
+          for channel in channels:
                     
+               if channel in items_dict['detector_channel']:
+                    channel_list.append(channel)
+               elif channel in items_dict['tes_channel']:
+                    detector_channel = self._detector_connection_table.query(
+                         'tes_channel == @channel')['detector_channel'].values
+                                        
+                    if len(detector_channel)!=1:
+                         raise ValueError('Channel ' + channel + ' is not unique!'
+                                          + 'Please check input or connections map in setup.ini)')
+                         
+                    channel_list.append(detector_channel[0])
+               else:
+                    raise ValueError('Channel ' + channel + ' unrecognized. '
+                                     + 'Please check input or connections map in setup.ini)') 
+        
+          return channel_list
+                              
 
      def _check_tc_channels(self):
           """

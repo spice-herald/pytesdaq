@@ -175,7 +175,8 @@ class DAQ:
         # facilty, fridge run
         facility_num = self._config.get_facility_num()
         fridge_run = self._config.get_fridge_run()
-        
+        fridge_run_start = self._config.get_fridge_run_start()
+          
         # data path
         if data_path is None:
             data_path = self._config.get_data_path()
@@ -194,6 +195,7 @@ class DAQ:
             run_config = dict()
             run_config['facility'] = facility_num
             run_config['fridge_run'] = fridge_run
+            run_config['fridge_run_start'] = fridge_run_start
             run_config['comment'] = '"' + run_comment + '"'
             run_config['run_purpose'] = run_purpose
             run_config['run_type'] = run_type
@@ -221,6 +223,8 @@ class DAQ:
 
 
     def read_single_event(self, data_array, do_clear_task=False):
+        """
+        """
 
         # only for "pydaqmx"
         if not self._driver_name=='pydaqmx':
@@ -231,6 +235,58 @@ class DAQ:
         self._driver.read_single_event(data_array=data_array, 
                                        do_clear_task=do_clear_task)
 
+
+
+    def read_many_events(self, nevents,
+                         adctovolt=False):
+        """
+        Read multiple events 
+        """
+
+        # only for "pydaqmx"
+        if not self._driver_name=='pydaqmx':
+            print('ERROR: "read_single_event" only available with "pydaqmx" driver')
+          
+        
+        # initialize array
+
+        daq_config = self._driver._adc_config
+        nsamples = daq_config['adc1']['nb_samples']
+        nchannels = len(daq_config['adc1']['channel_list'])
+
+        data_type = 'int16'
+        if adctovolt or adctoamp:
+            data_type = 'float64'
+
+        output_array =  np.zeros((nevents, nchannels, nsamples),
+                                 dtype=data_type)
+
+
+        # loop events
+        
+        event_array = np.zeros((nchannels, nsamples), dtype='int16')
+        for ievent in range(nevents):
+
+            # read single events
+            self.read_single_event(event_array)
+
+            # convert to volts/amps
+            if adctovolt:
+                
+                for ichan in range(nchannels):
+
+                    # convert to volts
+                    cal_coeff = daq_config['adc1']['adc_conversion_factor'][ichan][::-1]
+                    poly = np.poly1d(cal_coeff)
+                    output_array[ievent, ichan,:] = poly(event_array[ichan,:])
+                    
+            else:
+                output_array[ievent,:,:] = event_array
+                
+        return output_array
+                
+    
+        
 
     def clear(self):
         if self._driver_name=='pydaqmx':

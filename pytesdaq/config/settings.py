@@ -4,33 +4,51 @@ import os,string
 import pandas as pd
 import re
 import traceback
-from pytesdaq.utils import connection_utils
 from math import nan
 import os
 import sys
+import copy
+from datetime import datetime
+import time
+
+from pytesdaq.utils import connection_utils
+
+
 
 class Config:
     
-    def __init__(self, setup_file=None, sequencer_file=None, verbose=False):
+    def __init__(self, setup_file=None,
+                 daq_file=None,
+                 verbose=False):
         
     
-        # config files
-        self._setup_file = setup_file
-        self._sequencer_file = sequencer_file
+        # set config files
 
+        # experimental/detector config
+        self._setup_file = setup_file
         if setup_file is None or not setup_file:
             self._setup_file = self._get_ini_path('setup.ini')
-        if sequencer_file is None or not sequencer_file:
-            self._sequencer_file = self._get_ini_path('sequencer.ini')
-            
 
         if not os.path.isfile(self._setup_file):
             raise ValueError('Setup file "' + self._setup_file + '" not found!')
         elif verbose:
             print('INFO: Reading setup file ' + self._setup_file)
 
+        # data taking file
+        self._daq_file = str()
+        if daq_file is not None:
+            self._daq_file = daq_file
+            if not os.path.isfile(self._daq_file):
+                raise ValueError('Data taking file "' + self._daq_file + '" not found!')
+            elif verbose:
+                print('INFO: Reading data taking file ' + self._daq_file)
+
+        
+        # read files
+            
         self._cached_config = configparser.RawConfigParser()
-        self._cached_config.read([self._setup_file, self._sequencer_file])
+        self._cached_config.read([self._setup_file,
+                                  self._daq_file])
                 
         
 
@@ -44,12 +62,12 @@ class Config:
         self.reload_config()
         
     @property
-    def sequencer_file(self):
-        return self._sequencer_file
+    def daq_file(self):
+        return self._daq_file
         
-    @sequencer_file.setter
-    def sequencer_file(self,value):
-        self._sequencer_file=value
+    @daq_file.setter
+    def daq_file(self, value):
+        self._daq_file=value
         self.reload_config()
         
 
@@ -58,7 +76,8 @@ class Config:
     def reload_config(self):
         self._cached_config = None
         self._cached_config = configparser.RawConfigParser()
-        self._cached_config.read([self._setup_file, self._sequencer_file])
+        self._cached_config.read([self._setup_file,
+                                  self._daq_file])
 
 
         
@@ -114,10 +133,10 @@ class Config:
                         
             # case "iv_didv": get other individual sections
             if measurement_name == 'iv_didv':
-                output_setup['iv_didv'] = config_dict.copy()
+                output_setup['iv_didv'] = copy.deepcopy(config_dict)
                 for name in measurement_list:
                     # copy setup and update with individual setup
-                    output_setup[name] = config_dict.copy()
+                    output_setup[name] = copy.deepcopy(config_dict)
                 
                     if self._has_section(name):
                         iv_didv_config =  self._get_section(name)
@@ -263,6 +282,19 @@ class Config:
     
         return fridge_run
 
+    def get_fridge_run_start(self):
+        fridge_run_start = []
+        try:
+            datetime_str =  self._get_setting('setup','fridge_run_start')
+            datetime_obj = datetime. strptime(datetime_str,
+                                              '%m/%d/%Y %H:%M')
+            fridge_run_start = int(time.mktime(datetime_obj.timetuple()))
+        except:
+            raise ValueError('ERROR: Problem with "fridge_run_start" '
+                             + 'parameter in setup file! '
+                             + 'Expecting: fridge_run_start = mm/dd/yyyy HH:MM')
+        
+        return fridge_run_start
 
 
     def get_preamp_fix_gain(self, controller_name=None):
@@ -447,15 +479,12 @@ class Config:
                              + str(acd_id) + '"!')
 
 
-
-
-
-        
         # intialize
         param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source','signal_gen_current','signal_gen_frequency',
                       'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
+                      'parasitic_resistance',
                       'signal_gen_tes_resistance','close_loop_norm']
         
         detector_config = dict()
@@ -645,6 +674,31 @@ class Config:
         return address
 
 
+    def get_signal_generator_attenuation(self, device_name):
+        """
+        get function generator attenuation 
+
+        Parameters:
+        ----------        
+        device_name : str
+          signal generator name (field in .ini configuration file)
+ 
+        Returns:
+        --------
+            attenuation : float
+        """
+
+        key = device_name + '_attenuation'
+    
+        attenuation = 1
+        try:
+            attenuation =  float(self._get_setting('signal_generators', key))
+        except:
+            pass
+    
+        return attenuation
+
+
     def get_temperature_controller_setup(self, device_name):
         """
         get function generators
@@ -714,6 +768,23 @@ class Config:
                 
         
         return output_dict
+
+
+    def get_daq_config(self, trigger_type):
+        """
+        Get daq config by trigger type
+        """
+        if  not self._has_section(trigger_type):
+            print('ERROR: Trigger type "' + trigger_type + '" '
+                  + 'not recognized. Available types: '
+                  + 'continuous, randoms, didv, threshold')
+            print('Check code...')
+            return None
+
+        return self._get_section_dict(trigger_type)
+
+        
+        
     
 
     
@@ -749,7 +820,7 @@ class Config:
 
 
 
-    def _has_section(self,section):
+    def _has_section(self, section):
         """
         check is section exist
         

@@ -1,19 +1,25 @@
 import numpy as np
 import time
 import pprint as pprint
-
+import copy
 from pytesdaq.daq import daq
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.sequencer.sequencer import Sequencer
 from pytesdaq.utils import connection_utils
+from pytesdaq.utils import arg_utils
+from scipy import signal
+import qetpy as qp
+from datetime import datetime
+
 
 class IV_dIdV(Sequencer):
     
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
+                 tes_bias_sweep=True,
                  comment='No comment',
-                 detector_channels=None,
+                 sweep_channels=None, saved_channels=None,
                  sequencer_file=None, setup_file=None, sequencer_pickle_file=None,
                  dummy_mode=False,
                  do_relock=False, do_zero=False, do_zap=False,
@@ -25,7 +31,8 @@ class IV_dIdV(Sequencer):
         self._enable_rp = rp
         self._enable_rn = rn
         self._enable_temperature_sweep = temperature_sweep
-
+        self._enable_tes_bias_sweep = tes_bias_sweep
+        
         # relock/zap
         self._do_zap_tes = do_zap
         self._do_relock = do_relock
@@ -45,7 +52,8 @@ class IV_dIdV(Sequencer):
         super().__init__('iv_didv',
                          measurement_list=measurement_list,
                          comment=comment,
-                         detector_channels=detector_channels,
+                         detector_channels=sweep_channels,
+                         saved_detector_channels=saved_channels,
                          sequencer_file=sequencer_file,
                          setup_file=setup_file,
                          sequencer_pickle_file=sequencer_pickle_file,
@@ -150,9 +158,19 @@ class IV_dIdV(Sequencer):
             thermometer_global_num = None
             if 'thermometer_global_num' in sweep_config:
                 thermometer_global_num = int(sweep_config['thermometer_global_num'])
+                
             thermometer_name = None
             if 'thermometer_name' in sweep_config:
                 thermometer_name = sweep_config['thermometer_name']
+
+            # other thermometer measurement
+            monitoring_thermometer_names = None
+            if 'monitoring_thermometer_names' in sweep_config:
+                monitoring_thermometer_names = sweep_config[
+                    'monitoring_thermometer_names'
+                    ]
+                if not isinstance(monitoring_thermometer_names, list):
+                    monitoring_thermometer_names = [monitoring_thermometer_names]
 
             # heater
             heater_global_num = None
@@ -173,42 +191,53 @@ class IV_dIdV(Sequencer):
             tolerance = 0.4
             if 'temperature_tolerance_percent' in sweep_config:
                 tolerance = float(sweep_config['temperature_tolerance_percent'])
-                            
-            
+
+
+                
+        # ==========================
+        # LOOP Temperature 
+        # ==========================
         for istep in range(nb_temperature_steps):
             
             # change temperature
             temperature = None
+            monitoring_temperature_list = None
+            
             if self._enable_temperature_sweep:
                 
                 temperature = temperature_vect[istep]/1000
-                print('INFO: Setting temperature to ' + str(temperature*1000) +'mK!')
+                print('INFO: Setting temperature to '
+                      + str(temperature*1000) +'mK!')
 
                 
-                self._instrument.set_temperature(temperature,
-                                                 channel_name=thermometer_name,
-                                                 global_channel_number=thermometer_global_num,
-                                                 heater_channel_name=heater_name,
-                                                 heater_global_channel_number=heater_global_num,
-                                                 wait_temperature_reached=True,
-                                                 wait_cycle_time=5,
-                                                 wait_stable_time=wait_stable_time,
-                                                 max_wait_time=max_wait_time,
-                                                 tolerance=tolerance)
+                self._instrument.set_temperature(
+                    temperature,
+                    channel_name=thermometer_name,
+                    global_channel_number=thermometer_global_num,
+                    heater_channel_name=heater_name,
+                    heater_global_channel_number=heater_global_num,
+                    wait_temperature_reached=True,
+                    wait_cycle_time=5,
+                    wait_stable_time=wait_stable_time,
+                    max_wait_time=max_wait_time,
+                    tolerance=tolerance
+                )
             
                 
 
             # create sequencer directory
-            basename = str()
-            if self._enable_iv:
-                basename += '_iv'
-            if self._enable_didv:
-                basename += '_didv'
+            if (self._enable_tes_bias_sweep or
+                self._group_name is None):
+                basename = str()
+                if self._enable_iv:
+                    basename += '_iv'
+                if self._enable_didv:
+                    basename += '_didv'
         
-            if basename[0] == '_':
-                basename = basename[1:]
+                if basename[0] == '_':
+                    basename = basename[1:]
 
-            self._create_measurement_directories(basename)
+                self._create_measurement_directories(basename)
         
 
 
@@ -220,7 +249,8 @@ class IV_dIdV(Sequencer):
                     
                 print('INFO: Zapping TES  with bias ' + str(tes_bias_max) + 'uA') 
                 for channel in self._detector_channels:
-                    self._instrument.set_tes_bias(tes_bias_max, detector_channel=channel)
+                    self._instrument.set_tes_bias(tes_bias_max,
+                                                  detector_channel=channel)
                 time.sleep(5)
 
 
@@ -228,119 +258,314 @@ class IV_dIdV(Sequencer):
             # IV-dIdV:  TES bias loop
             sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
             tes_bias_vect = sweep_config['tes_bias_vect']
+            if not self._enable_tes_bias_sweep:
+                tes_bias_vect = [None]
+                
             nb_steps = len(tes_bias_vect)
             istep = 0
 
+                        
 
             # Instantiate DAQ
             self._daq = daq.DAQ(driver_name=self._daq_driver,
                                 verbose=self._verbose,
                                 setup_file=self._setup_file)
-                
 
-           
+
+
+            # Initialize online IV
+            nb_channels = len(self._detector_channels)
+            ivobj = None
+            online_iv_offset = None
+            online_iv_offset_err = None
+            online_iv_std = None
+            online_iv_tes_bias = None
+            online_iv_tes_bias_err = None
+          
+
+            # ==========================
+            # LOOP QET Bias
+            # ==========================
             for bias in tes_bias_vect:
 
                 # set bias all channels
                 istep+=1
-                print('INFO: Sequencer step #' + str(istep) + ' out of total '
-                      + str(nb_steps) + ' steps!')
-                print('INFO: Setting TES bias all channels to : '
-                      + str(bias) + 'uA!')
-                for channel in self._detector_channels:
-                    self._instrument.set_tes_bias(bias, detector_channel=channel)
+                if self._enable_tes_bias_sweep:
+                    print('INFO: Sequencer step #' + str(istep) + ' out of total '
+                          + str(nb_steps) + ' steps!')
+                    print('INFO: Setting TES bias all channels to : '
+                          + str(bias) + 'uA!')
+                    for channel in self._detector_channels:
+                        self._instrument.set_tes_bias(bias, detector_channel=channel)
                     
+                    # sleep
+                    #if tes_bias_change_sleep_time in sweep_config:
+                    print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
+                    time.sleep(sleeptime_s)
 
+
+                
                 # if step 1: tes zap, relock, zero
                 if istep==1:
 
                     # Relock
                     if self._do_relock:
-                        print('INFO: Relocking channel ' + channel) 
-                        self._instrument.relock(detector_channel=channel)
+
+                        # relock each channel
+                        for channel in self._detector_channels:
+                            print('INFO: Relocking channel ' + channel) 
+                            self._instrument.relock(detector_channel=channel)
                         
                     # Zero
                     if self._do_zero_offset:
 
-                        print('INFO: Zeroing offset channel ' + channel) 
-
+                        print('INFO: Zeroing channels offset') 
+                    
                         # instantiate nidaq
                         daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
 
-                        
-                        # setup ADC
-                        adc_id, adc_chan = connection_utils.get_adc_channel_info(
+
+                        # get corresponding ADC channels
+                        adc_dict = connection_utils.get_adc_channel_list(
                             self._detector_connection_table,
-                            detector_channel=channel
+                            detector_channel_list=self._detector_channels
                         )
 
+                        
+                        # set ADC
+                        sample_rate = None
                         setup_dict = dict()
-                        setup_dict[adc_id] = self._config.get_adc_setup(adc_id).copy()
-                        setup_dict[adc_id]['nb_samples'] = 20000
-                        setup_dict[adc_id]['channel_list'] = [adc_chan]
-                        setup_dict[adc_id]['trigger_type'] = 3
-
+                        for adc_id, adc_list in adc_dict.items():
+                            setup_dict[adc_id] = copy.deepcopy(
+                                self._config.get_adc_setup(adc_id)
+                            )
+                            setup_dict[adc_id]['nb_samples'] = 5000
+                            setup_dict[adc_id]['channel_list'] = adc_list
+                            setup_dict[adc_id]['trigger_type'] = 3
+                            sample_rate = setup_dict[adc_id]['sample_rate']
+                            
                         daq_online.set_adc_config_from_dict(setup_dict)
 
+                        # get data
+                        data_array = daq_online.read_many_events(100,
+                                                                 adctovolt=True)
 
-                        # initialize array
-                        data_array = np.zeros((1,20000), dtype=np.int16)
-                        data_buffer = None
-
-                        for ievent in range(50):
-
-                            # get event
-                            daq_online.read_single_event(data_array, do_clear_task=False)
-                         
-                            # normalize to volts
-                            data_array_norm = np.zeros_like(data_array, dtype=np.float64)
-                            cal_coeff = setup_dict[adc_id]['adc_conversion_factor'][0][::-1]
-                            poly = np.poly1d(cal_coeff)
-                            data_array_norm[0,:] = poly(data_array[0,:])
-            
-                            # save in buffer
-                            data_array_norm.shape +=(1,)
-            
-                            if data_buffer is None:
-                                data_buffer = data_array_norm
-                            else:
-                                data_buffer = np.append(data_buffer, data_array_norm, axis=2)
-
-                        
+                        # clear
                         daq_online.clear()
 
-                        # calc offset
-                        data_mean = np.mean(data_buffer, axis=2)
-                        offset = float(np.median(data_mean, axis=1))
+                       
+                        # loop channels and zero once for each
+                        for  ichan in range(len(self._detector_channels)):
 
-                        # zero
-                        driver_gain = self._instrument.get_output_total_gain(detector_channel=channel)
-                        current_offset = self._instrument.get_output_offset(detector_channel=channel)
-                        new_offset = current_offset-offset/driver_gain
-                        self._instrument.set_output_offset(new_offset, detector_channel=channel)
+
+                            traces = data_array[:,ichan,:]
+                            cut = qp.autocuts(traces,
+                                              fs=sample_rate)
+                            
+
+                            trace_mean = np.mean(traces, axis=0)
+                            offset = np.median(trace_mean)
+
+                         
+                            # detector channel
+                            channel = self._detector_channels[ichan]
+                          
+                            
+                            # zero
+                            driver_gain = self._instrument.get_output_total_gain(
+                                detector_channel=channel
+                            )
+                            current_offset = self._instrument.get_output_offset(
+                                detector_channel=channel
+                            )
+                            new_offset = current_offset-offset/driver_gain
+                            self._instrument.set_output_offset(
+                                new_offset, detector_channel=channel
+                            )
                         
 
-                    
-                # sleep
-                #if tes_bias_change_sleep_time in sweep_config:
-                print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
-                time.sleep(sleeptime_s)
-                
-
-
+                        
                 # get temperature
                 if self._enable_temperature_sweep:
+                    
                     temperature = self._instrument.get_temperature(
                         channel_name=thermometer_name,
                         global_channel_number=thermometer_global_num
                     )
-                    
-                    print('INFO: Temperature is '
-                          + str(temperature*1000) +'mK!')
-                
 
-             
+                    if thermometer_name is not None:
+                        print('INFO: ' + thermometer_name + ' temperature is '
+                              + str(temperature*1000) +'mK!')
+                    else:
+                         print('INFO: Temperature is '
+                               + str(temperature*1000) +'mK!')
+
+                    if monitoring_thermometer_names is not None:
+                        monitoring_temperature_list = list()
+                        for thermometer in monitoring_thermometer_names:
+                            monitoring_temperature_list.append(
+                                self._instrument.get_temperature(
+                                    channel_name=thermometer)
+                            )
+                            time.sleep(2)
+
+
+                            
+                # -----------
+                # Online IV
+                # ----------
+                if self._enable_tes_bias_sweep:
+
+
+                    # intialize 
+                    offsets = list()
+                    offsets_err = list()
+                    stds = list()
+                                        
                     
+                     # instantiate nidaq
+                    daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
+                    
+                    
+                    # get corresponding ADC channels
+                    adc_dict = connection_utils.get_adc_channel_list(
+                        self._detector_connection_table,
+                        detector_channel_list=self._detector_channels
+                    )
+                    
+                    
+                    # set ADC
+                    sample_rate = None
+                    setup_dict = dict()
+                    for adc_id, adc_list in adc_dict.items():
+                        setup_dict[adc_id] = copy.deepcopy(
+                            self._config.get_adc_setup(adc_id)
+                        )
+                        setup_dict[adc_id]['nb_samples'] = 5000
+                        setup_dict[adc_id]['channel_list'] = adc_list
+                        setup_dict[adc_id]['trigger_type'] = 3
+                        sample_rate = setup_dict[adc_id]['sample_rate']
+                        
+                    daq_online.set_adc_config_from_dict(setup_dict)
+
+                    # get data
+                    data_array = daq_online.read_many_events(100,
+                                                             adctovolt=True)
+
+                    # clear
+                    daq_online.clear()
+
+
+                    # loop channels and zero once for each
+                    for  ichan in range(len(self._detector_channels)):
+
+
+                        traces = data_array[:,ichan,:]
+                        cut = qp.autocuts(traces,
+                                          fs=sample_rate)
+                        
+                        traces = traces[cut]
+                        
+                        # convert to amps
+                        norm = self._instrument.get_volts_to_amps_close_loop_norm(
+                            detector_channel=channel
+                        )
+
+                        traces /= norm
+
+                        # offset
+                        offset, offset_err = qp.utils.calc_offset(traces)
+                        offsets.append([offset])
+                        offsets_err.append([offset_err])
+
+                        # std 
+                        nyq = sample_rate/2
+                        cut_off = 50000/nyq
+                        b,a = signal.butter(2, cut_off)
+                        traces = signal.filtfilt(b, a, traces, axis=1,
+                                                 padtype='even')
+
+                        traces_std = np.std(traces, axis=1)
+                        std_median = np.median(traces_std, axis=0)
+                        stds.append([std_median])
+                    
+
+
+
+                    # save
+                    bias_array = [[-bias*1e-6]]*nb_channels
+                    bias_err_array = [[0]]*nb_channels
+                    
+                    if online_iv_offset is None:
+                        online_iv_offset = np.array(offsets)
+                    else:
+                        online_iv_offset = np.append(
+                            online_iv_offset, offsets, axis=1
+                        )
+
+                    if online_iv_offset_err is None:
+                        online_iv_offset_err = np.array(offsets_err)
+                    else:
+                        online_iv_offset_err = np.append(
+                            online_iv_offset_err, offsets_err, axis=1
+                        )
+
+                    if online_iv_std is None:
+                        online_iv_std = np.array(stds)
+                    else:
+                        online_iv_std = np.append(
+                            online_iv_std, stds, axis=1
+                        )  
+                        
+                    if online_iv_tes_bias is None:
+                        online_iv_tes_bias = np.array(bias_array)
+                    else:
+                        online_iv_tes_bias = np.append(
+                            online_iv_tes_bias,  bias_array, axis=1
+                        )  
+
+                    if online_iv_tes_bias_err is None:
+                        online_iv_tes_bias_err = np.array(bias_err_array)
+                    else:
+                        online_iv_tes_bias_err = np.append(
+                            online_iv_tes_bias_err,  bias_err_array, axis=1
+                        )  
+
+
+                    # analyze
+                    if istep>=3:
+
+                        # analyze
+                        ivobj = qp.IBIS(
+                            dites=online_iv_offset,
+                            dites_err=online_iv_offset_err,
+                            ibias=online_iv_tes_bias,
+                            ibias_err=online_iv_tes_bias_err,
+                            rsh=5e-3,
+                            rsh_err=0.05*5e-3,
+                            rp_guess=np.array([2e-3]*nb_channels),
+                            rp_err_guess=np.zeros(nb_channels),
+                            chan_names=self._detector_channels,
+                            fitsc=False,
+                            normalinds=list(range(3)),
+                            scinds=None,
+                        )
+                    
+                        ivobj.analyze()
+                        
+
+                        # get signal gen amplitude
+                        #for  ichan in range(len(self._detector_channels)):
+                        #    r0 = ivobj.r0[0, ichan, -1]
+                        #    noise_std = online_iv_std[ichan, -1]
+                        #    print('trace_std = ' + str(noise_std))
+                        #    print('r0: ' + str(r0))
+                        #    sig_gen_current = noise_std *(r0+5e-3+2e-3)/5e-3
+                        #    sig_gen_volt = sig_gen_current*10000*1000
+                        #    print('Vsg [mV] = ' + str(sig_gen_volt))
+                                                    
+                        
+                            
                 # -----------
                 # IV
                 # ----------
@@ -369,11 +594,12 @@ class IV_dIdV(Sequencer):
                     
                     # get/set detector config metadata
                     det_config = dict()
-                    adc_channel_dict= connection_utils.get_adc_channel_list(
+                    adc_channel_dict = connection_utils.get_adc_channel_list(
                         self._detector_connection_table,
-                        detector_channel_list=self._detector_channels
+                        detector_channel_list=self._saved_detector_channels
                     )
 
+                                     
                     for adc_name in adc_channel_dict:
                         det_config[adc_name] = self._instrument.read_all(
                             adc_id=adc_name,
@@ -381,19 +607,32 @@ class IV_dIdV(Sequencer):
                         )
 
                         if temperature is not None:
-                            det_config[adc_name]['temperature'] = temperature
+                            key_temp = 'temperature'
+                            if thermometer_name  is not None:
+                                key_temp += '_' + thermometer_name.lower()
+                            elif thermometer_global_num is not None:
+                                key_temp += '_' + str(hermometer_global_num)
+                            det_config[adc_name][key_temp] = temperature
+
+                        if monitoring_temperature_list is not None:
+                            for itherm in range(len(monitoring_temperature_list)):
+                                det_config[adc_name][
+                                    'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                ] = monitoring_temperature_list[itherm]
                             
-                    
-                        
                     self._daq.set_detector_config(det_config)
                     
                     # take data
-                    run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
+                    if self._enable_tes_bias_sweep:
+                        run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
+                        print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                    else:
+                        run_comment = 'IV (bias sweep disabled)'
+                        print('INFO: Starting IV data taking (bias sweep disabled)!')
+
                     if self._enable_temperature_sweep:
                         run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-
-
-                    print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                        
                     success = self._daq.run(run_time=int(iv_config['run_time']),
                                             run_type=102,
                                             run_comment=run_comment,
@@ -424,11 +663,13 @@ class IV_dIdV(Sequencer):
                     
                         # signal generator
                         
-                        self._instrument.set_signal_gen_params(detector_channel=channel,source='tes', 
-                                                               voltage=didv_config['signal_gen_voltage'],
-                                                               current=didv_config['signal_gen_current'],
-                                                               frequency=didv_config['signal_gen_frequency'],
-                                                               shape='square')
+                        self._instrument.set_signal_gen_params(
+                            detector_channel=channel,source='tes', 
+                            voltage=didv_config['signal_gen_voltage'],
+                            current=didv_config['signal_gen_current'],
+                            frequency=didv_config['signal_gen_frequency'],
+                            shape='square'
+                        )
 
 
                     
@@ -453,7 +694,7 @@ class IV_dIdV(Sequencer):
                             det_config = dict()
                             adc_channel_dict = connection_utils.get_adc_channel_list(
                                 self._detector_connection_table,
-                                detector_channel_list=self._detector_channels
+                                detector_channel_list=self._saved_detector_channels
                             )
                             
                             for adc_name in adc_channel_dict:
@@ -461,20 +702,46 @@ class IV_dIdV(Sequencer):
                                     adc_id=adc_name,
                                     adc_channel_list=adc_channel_dict[adc_name]
                                 )
-                                if temperature is not None:
-                                    det_config[adc_name]['temperature'] = temperature
-                          
                                 
+
+                                if temperature is not None:
+                                    key_temp = 'temperature'
+                                    if thermometer_name  is not None:
+                                        key_temp += '_' + thermometer_name.lower()
+                                    elif thermometer_global_num is not None:
+                                        key_temp += '_' + str(hermometer_global_num)
+                                    det_config[adc_name][key_temp] = temperature
+
+                                if monitoring_temperature_list is not None:
+                                    for itherm in range(len(monitoring_temperature_list)):
+                                        det_config[adc_name][
+                                            'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                        ] = monitoring_temperature_list[itherm]
+                            
                             self._daq.set_detector_config(det_config)
 
                     
                             # take data
-                            run_comment = 'dIdV chan ' + str(channel) + ': TES bias = ' + str(bias) + 'uA'
+                            run_comment = ('dIdV chan ' + str(channel) + ': TES bias = '
+                                           + str(bias) + 'uA')
+                         
+                            if self._enable_tes_bias_sweep:
+                                run_comment = ('dIdV chan ' + str(channel)
+                                               + ': TES bias = ' + str(bias) + 'uA')
+                                print('INFO: Starting dIdV data taking for channel '
+                                      + str(channel)
+                                      + ' with TES bias = ' + str(bias) + 'uA!')
+                            else:
+                                run_comment = ('dIdV chan ' + str(channel)
+                                               + ' (bias sweep disabled)')
+                                print('INFO: Starting dIdV data taking for channel '
+                                      + str(channel)
+                                      + ' (bias sweep disabled)')
+
                             if self._enable_temperature_sweep:
                                 run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-                                
-                            print('INFO: Starting dIdV data taking for channel ' + str(channel)
-                                  + ' with TES bias = ' + str(bias) + 'uA!')
+
+                              
                             success = self._daq.run(run_time=int(didv_config['run_time']),
                                                     run_type=103,
                                                     run_comment=run_comment,
@@ -499,7 +766,7 @@ class IV_dIdV(Sequencer):
                         det_config = dict()
                         adc_channel_dict= connection_utils.get_adc_channel_list(
                             self._detector_connection_table,
-                            detector_channel_list=self._detector_channels
+                            detector_channel_list=self._saved_detector_channels
                         )
 
                         for adc_name in adc_channel_dict:
@@ -507,19 +774,35 @@ class IV_dIdV(Sequencer):
                                 adc_id=adc_name,
                                 adc_channel_list=adc_channel_dict[adc_name]
                             )
+
                             if temperature is not None:
-                                det_config[adc_name]['temperature'] = temperature
-                          
+                                key_temp = 'temperature'
+                                if thermometer_name  is not None:
+                                    key_temp += '_' + thermometer_name.lower()
+                                elif thermometer_global_num is not None:
+                                    key_temp += '_' + str(hermometer_global_num)
+                                det_config[adc_name][key_temp] = temperature
+
+                            if monitoring_temperature_list is not None:
+                                for itherm in range(len(monitoring_temperature_list)):
+                                    det_config[adc_name][
+                                        'temperature_' + monitoring_thermometer_names[itherm].lower()
+                                    ] = monitoring_temperature_list[itherm]
+                                                              
                         self._daq.set_detector_config(det_config)
 
 
                         # start run
-                        run_comment = 'dIdV: TES bias = ' + str(bias) + 'uA'
-                        if sweep_config['temperature_sweep']:
+                        if self._enable_tes_bias_sweep:
+                            run_comment = 'dIdV: ' + ' TES bias = ' + str(bias) + 'uA'
+                            print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                        else:
+                            run_comment = 'dIdV (bias sweep disabled)'
+                            print('INFO: Starting dIdV data taking (bias sweep disabled)!')
+
+                        if self._enable_temperature_sweep:
                             run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
-
-
-                        print('INFO: Starting dIdV data takibg with TES bias = ' + str(bias) + 'uA!')
+                      
                         success = self._daq.run(run_time=int(didv_config['run_time']),
                                                 run_type=103,
                                                 run_comment=run_comment,
@@ -535,17 +818,35 @@ class IV_dIdV(Sequencer):
             self._daq.clear()
 
 
+        # online IV
+        if (self._enable_tes_bias_sweep
+            and ivobj is not None):
+            
+            print('INFO: Making IV diagnostic plots!')
 
-        # Done temperature/tes sweep
+            diagnostic_path = self._raw_data_path + '/diagnostic/'
+            arg_utils.make_directories(diagnostic_path)
+                    
+            now = datetime.now()
+            series_date = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
+            series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
+            savename = series_date + '_' + series_time
+                      
+            ivobj.plot_all_curves(showfit=True, lgcsave=True,
+                                  savepath=diagnostic_path,
+                                  savename=savename)
+             
 
         # set heater back to 0%?
         if self._enable_temperature_sweep:
-            self._instrument.set_temperature(0,
-                                             channel_name=thermometer_name,
-                                             global_channel_number=thermometer_global_num,
-                                             heater_channel_name=heater_name,
-                                             heater_global_channel_number=heater_global_num,
-                                             wait_temperature_reached=False)
+            print('INFO: setting heater back to 0!')
+            self._instrument.set_temperature(
+                0,
+                channel_name=thermometer_name,
+                global_channel_number=thermometer_global_num,
+                heater_channel_name=heater_name,
+                heater_global_channel_number=heater_global_num,
+                wait_temperature_reached=False)
             
             
 

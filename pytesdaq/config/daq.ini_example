@@ -1,0 +1,138 @@
+########################################################
+#
+# Data taking configuration
+#
+# 4 configurations: continuous, randoms, didv, exttrig
+#
+# Usage example, 2 hours continuous data:
+#
+#    python bin/run_daq.py -c A,B,D --acquire-cont
+#           --duration 2h --comment "this is a comment"
+#           --run_purpose 1
+#
+########################################################
+
+
+[continuous] 
+
+# group name prefix 
+group_prefix = continuous
+
+# single series max time in seconds(s) or minutes (m)
+# if run "duration" longer than series max time
+# then run is splitted in multiple series
+# number of series within group = total duration / series max time
+# Recommendation: < 30 minutes data chunks/series
+series_max_time = 20m
+
+# split even/odd series (for blinding purpose)
+split_series = False
+
+# Beginning/end of series didv
+# (didv config based on "didv" field)
+# A short list (comma separated) of specific detector channels
+# can be specified with didv_detector_channel (keep commented or all
+# for all channels selected with run_daq
+add_series_start_didv = True
+add_series_end_didv = False
+didv_run_time = 300s
+
+
+# trace length in millisec (ms) or  seconds (s)
+# Alternatively use "nb_samples"
+trace_length = 10s
+# nb_samples = 12500000
+
+
+# sample rate
+sample_rate = 1250000
+
+# voltage min/max
+voltage_min = -5
+voltage_max = 5
+
+
+
+[didv]
+
+# channels that will be connected to  signal generator
+# other channels won't have test signal  connected to TES line
+# leave commented for all selected channels (argument -c)
+# 
+#  didv_detector_channel = chan1, chan2
+
+# group name prefix 
+group_prefix = didv
+
+
+# sample rate [Hz]
+sample_rate = 1250000
+
+# number of cycles test signal -> trace length
+nb_cycles = 4
+
+# voltage range (volts)
+voltage_min = -10
+voltage_max = 10
+
+
+# Signal generator voltage/frequency (optional)
+#
+# Parameters: signal_gen_voltage_mV, signal_gen_frequency_Hz
+# If commented, current settings are used 
+#
+# Syntax (for both frequency and voltage)
+#
+#   signal_gen_voltage_mV = 0.5
+#           -> single didv data with 0.5mV test signal on all channels
+#   or 
+#   signal_gen_voltage_mV = chan1:0.5, chan2:1, chan3&chan4:0.75 
+#           -> 3 dIdVs in series: (1) chan1 with 0.5 mV (2) chan2, (3) chan3 and chan4 with 0.75 mV
+#
+#   (white space allowed)
+#
+# IMPORT NOTE: frequency/voltage need to have same format!
+
+#signal_gen_voltage_mV = 100
+#signal_gen_frequency_Hz =  4
+# OR 
+signal_gen_voltage_mV = Melange025pcRight & Melange025pcLeft:0.25, Melange1pc1ch & Melange4pc1ch:0.5
+signal_gen_frequency_Hz = Melange025pcRight & Melange025pcLeft:80, Melange1pc1ch & Melange4pc1ch:80
+
+
+[exttrig] 
+# group name prefix 
+group_prefix = didq
+
+# trace length in millisec (ms) or  seconds (s)
+# Alternatively use "nb_samples" or "nb_cycles"
+nb_cycles = 2.1
+#trace_length = 100ms
+
+# sample rate
+sample_rate = 1250000
+
+# voltage min/max
+voltage_min = -10
+voltage_max = 10
+
+
+
+
+[randoms] 
+# group name prefix 
+group_prefix = randoms
+
+# trace length in millisec (ms) or  seconds (s)
+# Alternatively use "nb_samples"
+trace_length = 100ms
+
+# sample rate
+sample_rate = 1250000
+
+# voltage min/max
+voltage_min = -5
+voltage_max = 5
+
+
+

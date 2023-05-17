@@ -5,7 +5,7 @@ import multiprocessing
 from itertools import repeat
 from glob import glob
 
-from qetpy import calc_psd, autocuts, DIDV
+from qetpy import calc_psd, autocuts_noise, autocuts_didv, DIDV
 from qetpy.utils import calc_offset
 
 import pytesdaq.io.hdf5 as h5io
@@ -207,7 +207,7 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
             # apply cut
             cut_pass = True
             try:
-                cut = autocuts(traces_amps, fs=fs)
+                cut = autocuts_noise(traces_amps, fs=fs)
             except:
                 cut = np.ones(shape = traces_amps.shape[0], dtype=bool)
                 cut_pass = False 
@@ -269,8 +269,8 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
             # pile-up cuts
             cut_pass = True
             try:
-                cut = autocuts(
-                    traces_amps, fs=fs, is_didv=True, sgfreq=sgfreq,
+                cut = autocuts_didv(
+                    traces_amps, fs=fs,
                 )
             except:
                 cut = np.ones(shape = traces_amps.shape[0], dtype=bool)
