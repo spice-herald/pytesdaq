@@ -8,11 +8,6 @@ import stat
 import pickle
 import math
 import array
-
-#import ROOT
-#from ROOT.TVirtualFFT import FFT
-#from ctypes import *
-
 from multiprocessing import Pool
 from itertools import repeat
 from pathlib import Path
@@ -150,7 +145,7 @@ class OptimumFilt(object):
                  trigtemplate=None, lgcoverlap=True, merge_window=None):
         """
         Initialization of the FIR filter.
-
+        Changes: Save the filter as members, avoid re-calculation each time.
         Parameters
         ----------
         fs : float
@@ -190,10 +185,6 @@ class OptimumFilt(object):
         self.noisepsd = noisepsd
         self.lgcoverlap = lgcoverlap
         self.chan = chan_to_trigger
-
-        #rewrite with root fft
-        #self.fft_root = FFT(1, array.array('i',[raw_trace_length]),"R2C M K")
-        #self.ifft_root = FFT(1, array.array('i',[raw_trace_length]),"C2R M K")
         
         # calculate the time-domain optimum filter
         self.phi_freq = fft(self.template) / self.noisepsd
@@ -201,13 +192,6 @@ class OptimumFilt(object):
         self.phi = ifft(self.phi_freq).real
         # calculate the normalization of the optimum filter
         self.norm = np.dot(self.phi, self.template)
-        # calculate the filter in frequency space, matching data trace length
-        self.fast_length = next_fast_len(raw_trace_length, real=True)
-        print('next fast length=', next_fast_len(raw_trace_length, real=True))
-        self.phi_freq_long = np.conjugate( fft(self.phi, self.fast_length )) / self.norm
-
-        #self.trace_freq_re = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
-        #self.trace_freq_im = np.zeros(self.fast_length//2, dtype='d')#array.array('d',[0])
         
         # calculate the expected energy resolution
         self.resolution = 1/(np.dot(self.phi, self.template)/self.fs)**0.5
@@ -248,6 +232,7 @@ class OptimumFilt(object):
         Method to apply the FIR filter the inputted traces with
         specified times.
 
+        Changes: Add parameter filtered trace. If not none, use the input filtered trace, avoid re-calculation.
         Parameters
         ----------
         traces : ndarray
@@ -288,7 +273,6 @@ class OptimumFilt(object):
                 )
 
         if filteredTrace is None :
-        
             # Convert traces to amps (if needed)
             traces_amps = np.zeros((traces.shape[0],len(self.chan), traces.shape[2]),
                                    dtype=np.float64)
@@ -307,35 +291,13 @@ class OptimumFilt(object):
                 if do_invert:
                     traces_amps[:,ichan,:] *= -1
 
-                    
+                
             # calculate the total pulse by summing across channels for each trace
             pulsestot = np.sum(traces_amps, axis=1)
-            #t1 = time.time()
             #apply the FIR filter to each trace
             self.filts = np.array([correlate(trace, self.phi, mode="same", method='fft')/self.norm
                                    for trace in pulsestot])
-            ##t2 = time.time()
-            #filts = []
-            #for trace in pulsestot :
-            #    self.fft_root.SetPoints( np.pad(trace,(self.tracelength//2,self.fast_length-len(trace)),'edge')[:-self.tracelength//2])
-            #    self.fft_root.Transform()
-            #    self.fft_root.GetPointsComplex(self.trace_freq_re, self.trace_freq_im)
-            #    trace_filt_freq = self.phi_freq_long[:self.fast_length//2]*(self.trace_freq_re + 1j*self.trace_freq_im)
-            #    trace_filt_freq_re=np.array(np.real(trace_filt_freq))
-            #    trace_filt_freq_im=np.array(np.imag(trace_filt_freq))
-            #    self.ifft_root.SetPointsComplex(trace_filt_freq_re, trace_filt_freq_im)
-            #    self.ifft_root.Transform()
-            #    filt = np.zeros(self.fast_length, dtype='d')#array.array('d',[0])
-            #    self.ifft_root.GetPoints(filt)
-            #    filts.append(np.array(filt/self.fast_length))
-            #self.filts = np.array(filts)
-            #t3 = time.time()
-
-        #if filteredTrace is not None:
-        #    plt.plot(self.filts[0])
-        #    plt.plot(filteredTrace[0])
-        #    plt.plot(self.filts[0]-filteredTrace[0])
-        #    plt.show()
+        # if a filtered trace is passed, use it directly. For salting.
         else:
             self.filts = filteredTrace
 
@@ -359,8 +321,6 @@ class OptimumFilt(object):
             # also so that the traces that will be saved will be equal to the tracelength
             self.trigfilts[:, :cut_len//2] = 0.0
             self.trigfilts[:, -(cut_len//2) + (cut_len+1)%2:] = 0.0
-        #t4 = time.time()
-        #print('filter time',t1-t0, t2-t1, t3-t2, t4-t3)
 
     def eventtrigger(self, thresh, trigthresh=None, positivepulses=True):
         """
@@ -658,6 +618,7 @@ class ContinuousData:
                                          'does not exist!')
 
     def update_filters(self, nb_samples_raw_trace, debug=False):
+        # FIXME! Energy calibration for salting hard-coded here! 
         # prepare the filter
         filt_list = []
         self._filter_dict['filttemplate']=[]
@@ -1337,11 +1298,12 @@ class ContinuousData:
         return filt
 
     def _combine_sort_triggers(self, filt_list, filtcomb):
+        #change: make filtcomb a parameter. Reuse as a container, do not initialize each time.
 
         # make list of filt.chan for each filter
         # and combine into single long list for filters
         chancomb = list()
-        for filt in filt_list:#self._filt_list[process_id]:
+        for filt in filt_list:
             chancomb.extend([filt.chan] * len(filt.pulseamps))
 
         # combine self._filt_list lists into single long list
@@ -1421,30 +1383,6 @@ class ContinuousData:
             filt_list[ichan].eventtrigger(threshold[ichan], positivepulses=True)
 
 
-        #t1 = time.time()
-        # remove pileup -> FIXME: disable for now (keep?)
-        """
-        for ichan, chan_ind in enumerate(self._chan_array_ind):
-
-            piledup_ind, _, _ = self._find_pileup(filt_list[ichan].pulsetimes,
-                                                  filt_list[ichan].pulseamps,
-                                                  pileup_window)
-            chan = self._chan[ichan]
-            if debug:
-                print(f'INFO: Pileup on ADC channel {chan}: len(piledup_ind) = {len(piledup_ind)}')
-
-                import inspect
-                import pprint
-                attributes = inspect.getmembers(filt_list[ichan],
-                                                lambda a:not(inspect.isroutine(a)))
-                print('\n\n')
-                pprint.pprint([(a[0], type(a[1]), np.shape(a[1]))
-                               for a in attributes if not(a[0].startswith('__')
-                                                          and a[0].endswith('__'))])
-                print('\n\n')
-
-            filt_list[ichan] = self._remove_triggers(filt_list[ichan], piledup_ind)
-        """
         # combine and sort the multiple
         # filt_list objects into a single one
         chancomb = self._combine_sort_triggers(filt_list, filtcomb)
@@ -1565,8 +1503,6 @@ class ContinuousData:
                                 dataset_metadata=dataset_metadata)
                 if debug:
                     print(dataset_metadata)
-        #t3 = time.time()
-        #print('triger single trace time',t1-t0, t2-t0, t3-t0)
         if debug:
             #plot the raw traces and filtered traces with triggers aligned.
             fig, ax = plt.subplots(figsize=(20, 6))
@@ -1643,7 +1579,7 @@ class ContinuousData:
                 # scale to the sim energy
                 vb_corr=TES_energy_scale['TES_vb']-2*TES_energy_scale['TES_i0']*TES_energy_scale['TES_rl']
                 rl=TES_energy_scale['TES_rl']
-                e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18
+                e_init = np.trapz(template_amp*vb_corr - template_amp*template_amp*rl, dx=1./self._sample_rate) * 6.242e18 #FIXME!! Hard coded number!
 
                 for isim, amplitude_e in enumerate(energy* TES_energy_scale['detector_eff']):
                     template_scaled = (template/e_init * amplitude_e) #.astype(int) #DO digitization in the end!
@@ -1653,15 +1589,6 @@ class ContinuousData:
                         template_scaled *= -1
                         filttemplate_scaled *= -1
                     ## offset to the sampled time
-                    #paddingback = newtrace[ichan].size - self._nb_samples - simTime[isim]
-                    #if paddingback<0 :
-                    #    print("Error! Sim pulse truncated by the end of the trace record!")
-                    #    simTime[isim]+=paddingback
-                    #    paddingback = 0
-                    ##template_scaled = np.pad(template_scaled,
-                    ##                  (simTime[isim], paddingback),
-                    ##                  mode='constant',
-                    ##                  constant_values=(0,0))
                     salts_before_ADC[ichan,simTime[isim]:simTime[isim]+self._nb_samples] += template_scaled
                     salts_filtered  [ichan,simTime[isim]-self._nb_samples//2+1:simTime[isim]+self._nb_samples+self._nb_samples//2] += filttemplate_scaled
         #simulate the digitization: randomize the digits of each sample of the salt
@@ -1669,15 +1596,6 @@ class ContinuousData:
         newtrace += salts_after_ADC
         newtrace += (salts_before_ADC-salts_after_ADC-np.random.random_sample(trace.shape))>0
         newfilteredTrace += salts_filtered
-        #print((salts_before_ADC)[salts_before_ADC>0])
-        #print((salts_before_ADC-salts_after_ADC)[salts_before_ADC>0])
-        #print(np.random.random_sample(trace.shape)[salts_before_ADC>0])
-        #print(np.sum((salts_before_ADC-salts_after_ADC-np.random.random_sample(trace.shape))>0))
-        #for ichan in range(trace.shape[0]):
-        #    for isample in range(trace.shape[1]):
-        #        sample=salts_before_ADC[ichan,isample]
-        #        sample_digitized=np.floor(sample)
-        #        newtrace[ichan,isample] += sample_digitized+np.random.choice(2, p=[sample-sample_digitized,1+sample_digitized-sample] )
         simPulses = np.transpose([simTime,energy,simAmp])
         return newtrace, newfilteredTrace, simPulses
     
@@ -1761,17 +1679,6 @@ class ContinuousData:
                                   detector_config=output_metadata['detector_config'],
                                   adc_config=output_metadata['adc_config'])
                 h5writer_sim_diffrate.append(h5writer_sim_diffrate_oneE)
-                ##double rate to check the effect of rate difference.
-                #h5writer_sim_diffrate_oneE = h5io.H5Writer()
-                #h5writer_sim_diffrate_oneE.initialize(series_name=series_name,
-                #                data_path=self._output_path+"/diffrate_double_"+str(energy))
-                #h5writer_sim_diffrate_oneE.set_nb_events_per_dump_max(10000, int(2000*25000/self._nb_samples)) #flush every 100MB
-                #h5writer_sim_diffrate_oneE.set_metadata(file_metadata=output_metadata['file_metadata'],
-                #                  detector_config=output_metadata['detector_config'],
-                #                  adc_config=output_metadata['adc_config'])
-                #h5writer_sim_diffrate.append(h5writer_sim_diffrate_oneE)
-        
-
         # noise PSD (overwrite calculated PSD)
         if noise_psd is not None:
             if not isinstance(noise_psd, list):
@@ -1817,13 +1724,11 @@ class ContinuousData:
         trigger_counter = 0
         trigger_counter_50=0
         while(do_continue_loop):
-            if debug:
-                print("entererd continue loop!")
 
-            # read next event
-            # This is a single event! traces is 2d #channels,#bins
+            # read next event # This is a single event! traces is 2d #channels,#bins
             traces, info = h5reader.read_event(include_metadata=True,
                                                adc_name=self._adc_name)
+
             # check if successful
             if info['read_status'] != 0:
                 do_continue_loop = False
@@ -1848,11 +1753,8 @@ class ContinuousData:
                 
             if debug:
                 print(info)
-                #fig, ax = plt.subplots(figsize=(20, 6))
-                #ax.plot(np.arange(len(traces[0]))/1250e3+info['event_time'],traces[0])
-                #plt.show()
 
-            # trigger on one continuouse trace
+            # trigger on one continuouse trace.
             new_triggers, triggers_on_raw = self._acquire_trigger_single_trace(traces, info,
                                                             h5writer=h5writer, 
                                                             filt_list=filt_list,
@@ -1868,6 +1770,7 @@ class ContinuousData:
                 sim_energies = np.atleast_1d(sim_energies)
                 inject_n_sim = np.atleast_1d(inject_n_sim)
                 n_repeats = 1
+                # Salt with different energies and make coincidence with MC truth.
                 if sim_mode==1 :
                     if len(inject_n_sim)==2 : 
                         n_repeats = inject_n_sim[0]
@@ -1892,6 +1795,7 @@ class ContinuousData:
                                                      triggers_to_remove = triggers_on_raw,
                                                      verbose=verbose,
                                                      debug=debug)
+                # Salt with only one energy per file. Then loop over different energies.
                 if sim_mode==2 :
                     for i,energy in enumerate(sim_energies) :
                         if len(inject_n_sim)==2 : 
@@ -1905,26 +1809,7 @@ class ContinuousData:
                                                              TES_energy_scale=TES_energyscale_dict,
                                                              coincident_window=(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
                                                              usetemplate=sim_with_template)
-                            #traces_sim2, filteredTrace_sim2, sim_pulses2 = self._sim_inject_single_trace(traces, 
-                            #                                 filteredTrace,
-                            #                                 inject_n_sim[-1],
-                            #                                 np.atleast_1d(energy),
-                            #                                 norm,
-                            #                                 TES_energy_scale=TES_energyscale_dict,
-                            #                                 coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
-                            #                                 usetemplate=sim_with_template)
-                            #sim_pulses_double = np.append(sim_pulses1,sim_pulses2,axis=0)
-                            #traces_sim_double, filteredTrace_sim_double, sim_pulses_double = self._sim_inject_single_trace(traces, 
-                            #                                 filteredTrace,
-                            #                                 inject_n_sim[-1]*2,
-                            #                                 np.atleast_1d(energy),
-                            #                                 norm,
-                            #                                 TES_energy_scale=TES_energyscale_dict,
-                            #                                 coincident_window=coincident_window,#(self._nb_samples+200)/self._sample_rate/2,#coincident_window,
-                            #                                 usetemplate=sim_with_template,
-                            #                                 pulses=sim_pulses_double)
                             self._acquire_trigger_single_trace(traces_sim1, info,
-                                                            #h5writer=h5writer_sim_diffrate[2*i], 
                                                             h5writer=h5writer_sim_diffrate[i], 
                                                             filt_list=filt_list,
                                                             filtcomb=filtcomb,
@@ -1934,38 +1819,6 @@ class ContinuousData:
                                                             filteredTrace=filteredTrace_sim1,
                                                             verbose=verbose,
                                                             debug=debug)
-                            #self._acquire_trigger_single_trace(traces_sim2, info,
-                            #                                h5writer=h5writer_sim_diffrate[2*i], 
-                            #                                filt_list=filt_list,
-                            #                                filtcomb=filtcomb,
-                            #                                threshold=threshold,
-                            #                                coincident_window=coincident_window,
-                            #                                norm = norm,
-                            #                                filteredTrace=filteredTrace_sim2,
-                            #                                verbose=verbose,
-                            #                                debug=debug)
-                            #self._acquire_trigger_single_trace(traces_sim_double, info,
-                            #                                h5writer=h5writer_sim_diffrate[2*i+1], 
-                            #                                filt_list=filt_list,
-                            #                                filtcomb=filtcomb,
-                            #                                threshold=threshold,
-                            #                                coincident_window=coincident_window,
-                            #                                norm = norm,
-                            #                                filteredTrace=filteredTrace_sim_double,
-                            #                                verbose=verbose,
-                            #                                debug=debug)
-                            #self._acquire_trigger_single_trace(traces_sim_double, info,
-                            #                         h5writer=h5writer_sim,
-                            #                                filt_list=filt_list,
-                            #                                filtcomb=filtcomb,
-                            #                         threshold=threshold,
-                            #                         coincident_window=coincident_window,
-                            #                         norm = norm,
-                            #                         sim_pulses = sim_pulses_double,
-                            #                         filteredTrace=filteredTrace_sim_double,
-                            #                         triggers_to_remove = triggers_on_raw,
-                            #                         verbose=verbose,
-                            #                         debug=debug)
 
             # event counter
             trigger_counter += new_triggers
