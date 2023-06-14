@@ -166,7 +166,8 @@ if __name__ == "__main__":
         exit()
 
     trigger_type = trigger_list[trigger_inds[0]]
- 
+
+
     # ----------------------------
     # Intruments/DAQ config
     # ----------------------------
@@ -536,6 +537,7 @@ if __name__ == "__main__":
             daq_config['group_prefix']
         )
 
+              
     # make output group directory
     now = datetime.now()
     series_day = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
@@ -543,6 +545,8 @@ if __name__ == "__main__":
     group_name = group_prefix + '_I' + facility + '_D' + series_day + '_T' + series_time
     data_path += '/' + group_name
     arg_utils.make_directories(data_path)
+
+    group_timestamp = int(round(now.timestamp()))
 
     if verbose:
         print('\nINFO: Creating output directory!')
@@ -683,6 +687,7 @@ if __name__ == "__main__":
                                 run_comment=didv_comment,
                                 group_name= group_name,
                                 group_comment=comment,
+                                group_time=group_timestamp,
                                 data_prefix=data_prefix,
                                 data_path=data_path)
             if not success:
@@ -760,6 +765,7 @@ if __name__ == "__main__":
                                 run_comment=comment,
                                 group_name= group_name,
                                 group_comment=comment,
+                                group_time=group_timestamp,
                                 data_prefix=series_prefix,
                                 data_path=data_path)
             if not success:
