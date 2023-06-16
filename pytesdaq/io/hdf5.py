@@ -1475,6 +1475,8 @@ class H5Reader:
 
         # extract trigger
         if trigger_index is not None:
+
+            trigger_index = int(trigger_index)
     
             # number samples
             nb_samples = None
@@ -1492,24 +1494,24 @@ class H5Reader:
                 )
 
             # pre-trigger
-            nb_pretigger_samples = int(nb_samples/2)
+            nb_pretrigger_samples = int(nb_samples/2)
             if pretrigger_length_samples is not None:
-                nb_pretigger_samples = pretrigger_length_samples
+                nb_pretrigger_samples = pretrigger_length_samples
             elif pretrigger_length_msec is not None:
-                nb_pretigger_samples = int(
+                nb_pretrigger_samples = int(
                     fs*pretrigger_length_msec/1000
                 )
 
             # min/max index
-            trace_min_index = trigger_index - nb_pretigger_samples
-            trace_max_index = trace_min_index + nb_samples
+            trace_min_index = int(trigger_index - nb_pretrigger_samples)
+            trace_max_index = int(trace_min_index + nb_samples)
 
             if ((trace_min_index<0)
                 or (trace_max_index>traces_int.shape[-1])):
                 raise ValueError(
                     'ERROR: Unable to extract trigger. '
                     + ' Trace length too long!')
-                
+            
             traces_int = traces_int[...,trace_min_index:trace_max_index]
                         
                 
