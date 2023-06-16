@@ -1457,6 +1457,22 @@ class H5Reader:
         info['read_status'] = 0
         info['error_msg'] = ''
 
+        
+        # check if trigger index
+        if trigger_index is not None:
+            if (trace_length_msec is None 
+                and trace_length_samples is None):
+                print('WARNING: Unable to extract trace based on '
+                      + 'trigger index without trace length. '
+                      + 'Returning full trace!')
+                trigger_index = None
+        else:
+            if (trace_length_msec is not None 
+                or  trace_length_samples is not None):
+                  print('WARNING: Unable to use trace lenght argument'
+                        + ' without trigger info. '
+                        + 'Returning full trace!')
+
         # extract trigger
         if trigger_index is not None:
     
@@ -1678,7 +1694,6 @@ class H5Reader:
 
         """
 
-
         # =======================
         # Get list of files
         # =======================
@@ -1689,31 +1704,35 @@ class H5Reader:
         if event_list is not None:
             for event_dict in event_list:
                 if 'group_name' in event_dict.keys():
-                    group_names.append(event_dict['group_name'])
+                    group_names.append(str(event_dict['group_name']))
         
         # make unique
         group_names = list(set(group_names))
-
+     
         # loop file/path list to get list of files
         file_list  = list()
         if isinstance(filepaths, str):
             filepaths = [filepaths]
 
         for filepath in filepaths:
-
-            # case dictionary
+            
+            # case directory
             if os.path.isdir(filepath):
-
+                
                 search_list = list()
-                if group_names:
-                    for group_name in group_names:
-                        if group_name not in filepath:
-                            search_str = (filepath + '/'
-                                          + group_name
-                                          + '/*.hdf5')
-                            if search_str not in search_list:
-                                search_list.append(search_str)
-                else:
+                for group_name in group_names:
+                    # add group name to path if not
+                    # already in path
+                    if group_name not in filepath:
+                        filepath =  (filepath + '/'
+                                     + group_name)
+                        
+                    # add to search list
+                    search_str = filepath + '/*.hdf5'
+                    if search_str not in search_list:
+                        search_list.append(search_str)
+
+                if not search_list:
                     search_list = [filepath + '/*.hdf5']
 
                 # get files
@@ -1807,7 +1826,7 @@ class H5Reader:
 
             
             # build file name (without prefix)
-            series_num =  event_dict['series_number']
+            series_num =  int(event_dict['series_number'])
             series_name = extract_series_name(series_num)
             
             dump_num = int(event_dict['event_number']/100000)
@@ -1834,7 +1853,7 @@ class H5Reader:
 
             # double check group if available
             if 'group_name' in event_dict.keys():
-                group_name = event_dict['group_name']
+                group_name = str(event_dict['group_name'])
                 if group_name not in full_file_name:
                     raise ValueError(
                         'ERROR: Inconsistent group name. Unable to '
@@ -2122,177 +2141,3 @@ class H5Writer:
 
         
              
-
-def getrandevents(basepath, evtnums, seriesnums, cut=None, channels=None,
-                  sumchans=False, lgcplot=False, ntraces=1, nplot=20,
-                  seed=None, indbasepre=None):
-    """
-    Function for loading (and plotting) random events from a datasets.
-    Has functionality to pull randomly from a specified cut.
-
-    Parameters
-    ----------
-    basepath : str
-        The base path to the directory that contains the folders that
-        the event dumps are in. The folders in this directory should be
-        the series numbers.
-    evtnums : array_like
-        An array of all event numbers for the events in all datasets.
-    seriesnums : array_like
-        An array of the corresponding series numbers for each event
-        number in evtnums.
-    cut : array_like, optional
-        A boolean array of the cut that should be applied to the data.
-        If left as None, then no cut is applied.
-    channels : list, optional
-        A list of strings that contains all of the channels that should
-        be loaded. If left as None, all channels are loaded.
-    sumchans : bool, optional
-        A boolean flag for whether or not to sum the channels when
-        plotting. If False, each channel is plotted individually.
-        Default is False.
-    ntraces : int, str, optional
-        The number of traces to randomly load from the data (with the
-        cut, if specified). If all traces from a specfied cut are
-        desired, pass the string "all". Default is 1.
-    lgcplot : bool, optional
-        Logical flag on whether or not to plot the pulled traces.
-    nplot : int, optional
-        If lgcplot is True, the number of traces to plot.
-    seed : int, optional
-        A value to pass to np.random.seed if the user wishes to use
-        the same random seed each time getrandevents is called.
-    indbasepre : NoneType, int, optional
-        The number of indices up to which a trace should be averaged to
-        determine the baseline. This baseline will then be subtracted
-        from the traces when plotting. If left as None, no baseline
-        subtraction will be done.
-
-    Returns
-    -------
-    t : ndarray
-        The time values for plotting the events.
-    x : ndarray
-        Array containing all of the events that were pulled.
-    crand : ndarray
-        Boolean array that contains the cut on the loaded data.
-
-    """
-
-    if seed is not None:
-        np.random.seed(seed)
-
-    if isinstance(channels, str):
-        channels = [channels]
-
-    if not isinstance(evtnums, pd.Series):
-        evtnums = pd.Series(data=evtnums)
-    if not isinstance(seriesnums, pd.Series):
-        seriesnums = pd.Series(data=seriesnums)
-
-    if cut is None:
-        cut = np.ones(len(evtnums), dtype=bool)
-
-    if np.sum(cut) == 0:
-        raise ValueError(
-            "The inputted cut has no events, cannot load any traces."
-        )
-
-    if ntraces == 'all' or ntraces > np.sum(cut):
-        ntraces = np.sum(cut)
-        if ntraces > 1000:
-            warnings.warn(
-                "You are loading a large number of traces "
-                f"({ntraces}). Be careful with your RAM usage."
-            )
-
-    inds = np.random.choice(
-        np.flatnonzero(cut),
-        size=ntraces,
-        replace=False,
-    )
-
-    crand = np.zeros(len(evtnums), dtype=bool)
-    crand[inds] = True
-
-    h5_reader = H5Reader()
-
-    first_file = sorted(glob(f'{basepath}/**/*.hdf5', recursive=True))[0]
-
-    if channels is None:
-        connection_dict = h5_reader.get_connection_dict(
-            file_name=first_file,
-        )
-        channels = connection_dict['detector_chans']
-
-    fs_list = []
-    metadata = h5_reader.get_metadata(file_name=first_file)
-    for label in metadata['group_list']:
-        fs_list.append(metadata['groups'][label].get('sample_rate'))
-
-    fs = np.unique(list(filter(None, fs_list)))[0]
-
-    arr, metadata = h5_reader.read_many_events(
-        filepath=glob(f'{basepath}/*'),
-        event_nums=np.asarray(evtnums[cut & crand]),
-        series_nums=np.asarray(seriesnums[cut & crand]),
-        output_format=2,
-        include_metadata=True,
-        detector_chans=channels,
-        adctoamp=True,
-    )
-
-    if channels != metadata[0]['detector_chans']:
-        chans = [metadata[0]['detector_chans'].index(ch) for ch in channels]
-        x = arr[:, chans].astype(float)
-    else:
-        x = arr.astype(float)
-
-    t = np.arange(x.shape[-1])/fs
-
-    if lgcplot:
-        if nplot>ntraces:
-            nplot = ntraces
-
-        for ii in range(nplot):
-
-            fig, ax = plt.subplots(figsize=(10, 6))
-            if sumchans:
-                trace_sum = x[ii].sum(axis=0)
-
-                if indbasepre is not None:
-                    baseline = np.mean(trace_sum[..., :indbasepre])
-                else:
-                    baseline = 0
-
-                ax.plot(t * 1e6, trace_sum * 1e6, label="Summed Channels")
-            else:
-                colors = plt.cm.viridis(
-                    np.linspace(0, 1, num=x.shape[1]),
-                    alpha=0.5,
-                )
-                for jj, chan in enumerate(channels):
-                    label = f"Channel {chan}"
-
-                    if indbasepre is not None:
-                        baseline = np.mean(x[ii, jj, :indbasepre])
-                    else:
-                        baseline = 0
-
-                    ax.plot(
-                        t * 1e6,
-                        x[ii, jj] * 1e6 - baseline * 1e6,
-                        color=colors[jj],
-                        label=label,
-                    )
-            ax.grid()
-            ax.set_ylabel("Current [μA]")
-            ax.set_xlabel("Time [μs]")
-            ax.set_title(
-                f"Pulses, Evt Num {evtnums[crand].iloc[ii]}, "
-                f"Series Num {seriesnums[crand].iloc[ii]}"
-            )
-            ax.legend()
-
-    return t, x, crand
-  
