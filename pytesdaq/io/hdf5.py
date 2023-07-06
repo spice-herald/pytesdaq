@@ -1207,6 +1207,8 @@ class H5Reader:
         return connection_table
 
 
+
+    
     def _open_file(self, file_name, event_list=None,
                    rw_string='r', load_metadata=True):
         """
@@ -1436,85 +1438,32 @@ class H5Reader:
 
         
         """
-                    
+
+        # ===================================
+        # Get HDF5 dataset
+        # ===================================
+
         # check file open
         if self._current_file is None:
             raise ValueError('No file open!')
-        
+
         # get dataset
         dataset_name = 'event_' + str(event_index)
         dataset = self._current_file[adc_name][dataset_name]
-        
-        # read dataset
-        dims = dataset.shape
-        traces_int = np.zeros((dims[0],dims[1]), dtype=np.int16)
-        dataset.read_direct(traces_int)
-      
-        # get metadata
+        dataset_dims = dataset.shape
+
+        # get dataset metadata
         info = self._extract_metadata(dataset.attrs)
         info.update(self._extract_metadata(self._current_file.attrs))
         info.update(self._extract_metadata(self._current_file[adc_name].attrs))
         info['read_status'] = 0
         info['error_msg'] = ''
-
         
-        # check if trigger index
-        if trigger_index is not None:
-            if (trace_length_msec is None 
-                and trace_length_samples is None):
-                print('WARNING: Unable to extract trace based on '
-                      + 'trigger index without trace length. '
-                      + 'Returning full trace!')
-                trigger_index = None
-        else:
-            if (trace_length_msec is not None 
-                or  trace_length_samples is not None):
-                  print('WARNING: Unable to use trace lenght argument'
-                        + ' without trigger info. '
-                        + 'Returning full trace!')
+        
+        # ===================================
+        # Channel indices
+        # ===================================
 
-        # extract trigger
-        if trigger_index is not None:
-
-            trigger_index = int(trigger_index)
-    
-            # number samples
-            nb_samples = None
-            fs = info['sample_rate']
-            if trace_length_samples is not None:
-                nb_samples = trace_length_samples
-            elif trace_length_msec is not None:
-                nb_samples = int(
-                    fs*trace_length_msec/1000
-                )
-            else:
-                raise ValueError(
-                    'ERROR: Number of samples required to '
-                    + 'extract trace'
-                )
-
-            # pre-trigger
-            nb_pretrigger_samples = int(nb_samples/2)
-            if pretrigger_length_samples is not None:
-                nb_pretrigger_samples = pretrigger_length_samples
-            elif pretrigger_length_msec is not None:
-                nb_pretrigger_samples = int(
-                    fs*pretrigger_length_msec/1000
-                )
-
-            # min/max index
-            trace_min_index = int(trigger_index - nb_pretrigger_samples)
-            trace_max_index = int(trace_min_index + nb_samples)
-
-            if ((trace_min_index<0)
-                or (trace_max_index>traces_int.shape[-1])):
-                raise ValueError(
-                    'ERROR: Unable to extract trigger. '
-                    + ' Trace length too long!')
-            
-            traces_int = traces_int[...,trace_min_index:trace_max_index]
-                        
-                
         # extract list of adc channels, index correspond to array index!
         adc_nums_file = info['adc_channel_indices']
         if (not isinstance(adc_nums_file, list)
@@ -1584,13 +1533,11 @@ class H5Reader:
                         connections['controller_chans'][ind]
                     )
 
-
         # check number channels
         if not selected_array_indices or len(selected_array_indices)==0:
             raise ValueError('Unable to find selected channel(s). Check connection table!')
 
-        # extract array for selected channels
-        traces_int = traces_int[selected_array_indices,:]
+        # store info
         info['adc_channel_indices'] = selected_adc_nums
         info['adc_chans'] = selected_adc_nums
         info['detector_chans'] = selected_detector_chans
@@ -1599,12 +1546,101 @@ class H5Reader:
         info['adc_conversion_factor'] =  info['adc_conversion_factor'][selected_array_indices,:]
         info['voltage_range'] = info['voltage_range'][selected_array_indices,:]
 
-
         # get detector config
         detector_config = self.get_detector_config()
         info['detector_config'] = dict()
         for det in info['detector_chans']:
             info['detector_config'][det] = detector_config[det]
+
+
+            
+        # ===================================
+        # Trigger indices
+        # ===================================
+        
+        trace_min_index = None
+        trace_max_index = None
+
+        # check trigger index
+        if trigger_index is not None:
+            if (trace_length_msec is None 
+                and trace_length_samples is None):
+                print('WARNING: Unable to extract trace based on '
+                      + 'trigger index without trace length. '
+                      + 'Returning full trace!')
+                trigger_index = None
+        else:
+            if (trace_length_msec is not None 
+                or  trace_length_samples is not None):
+                  print('WARNING: Unable to use trace lenght argument'
+                        + ' without trigger info. '
+                        + 'Returning full trace!')
+
+        # extract trigger
+        if trigger_index is not None:
+
+            trigger_index = int(trigger_index)
+    
+            # number samples
+            nb_samples = None
+            fs = info['sample_rate']
+            if trace_length_samples is not None:
+                nb_samples = trace_length_samples
+            elif trace_length_msec is not None:
+                nb_samples = int(
+                    fs*trace_length_msec/1000
+                )
+            else:
+                raise ValueError(
+                    'ERROR: Number of samples required to '
+                    + 'extract trace'
+                )
+
+            # pre-trigger
+            nb_pretrigger_samples = int(nb_samples/2)
+            if pretrigger_length_samples is not None:
+                nb_pretrigger_samples = pretrigger_length_samples
+            elif pretrigger_length_msec is not None:
+                nb_pretrigger_samples = int(
+                    fs*pretrigger_length_msec/1000
+                )
+
+            # min/max index
+            trace_min_index = int(trigger_index - nb_pretrigger_samples)
+            trace_max_index = int(trace_min_index + nb_samples)
+
+            if (trace_min_index<0
+                or trace_max_index>dataset_dims[1]):
+                raise ValueError(
+                    'ERROR: Unable to extract trigger. '
+                    + ' Trace length too long!')
+            
+
+
+        # ===================================
+        # Extract trace
+        # ===================================
+
+
+        # initialize empty trace
+        slice_samples = None
+        dim_0 = len(selected_array_indices)
+        dim_1 = dataset_dims[1]
+        
+        if (trace_min_index is not None
+            and trace_max_index is not None):
+            dim_1 = trace_max_index-trace_min_index
+            slice_samples = slice(trace_min_index, trace_max_index)
+            
+        traces_int = np.empty((dim_0, dim_1), dtype=dataset.dtype)
+        
+        # Read the portion of the array using read_direct
+        for i, index in enumerate(selected_array_indices):
+            if  slice_samples is not None:
+                dataset.read_direct(traces_int[i],
+                                    np.s_[index, slice_samples])
+            else:
+                dataset.read_direct(traces_int[i], np.s_[index])
         
         
         # convert to volt/amps
