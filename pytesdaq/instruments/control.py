@@ -1604,17 +1604,20 @@ class Control:
         param_val = nan
         if not self._read_from_redis:
           
-            if self._squid_controller_name == 'feb':
+            if ('feb' in controller_id
+                and self._squid_controller_name=='feb'):
+
                 # CDMS FEB device
-                
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
               
                 subrack = int(feb_info[0])
                 slot = int(feb_info[1])
             
                 if self._debug:
-                    print('INFO: Getting setting "' + param_name + '" from FEB')
-                    print('(subrack = ' + str(subrack) + ', slot = ' + str(slot) + 
+                    print('INFO: Getting setting "'
+                          + param_name + '" from FEB')
+                    print('(subrack = ' + str(subrack)
+                          + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
                         
                 if self._dummy_mode:
@@ -1622,7 +1625,8 @@ class Control:
                 else:
 
                     if param_name == 'tes_bias':
-                        param_val = self._readout_inst.get_phonon_qet_bias(subrack, slot, controller_channel)
+                        param_val = self._readout_inst.get_phonon_qet_bias(
+                            subrack, slot, controller_channel)
 
                     elif param_name == 'squid_bias':
                         param_val = self._readout_inst.get_phonon_squid_bias(
@@ -1689,8 +1693,9 @@ class Control:
                     else:
                         pass
                 
-            elif self._squid_controller_name == 'magnicon':
-
+            elif ('magnicon' in controller_id
+                  and self._squid_controller_name=='magnicon'):
+                
                 if self._verbose:
                     print('INFO: Getting "' + param_name + ' for channel ' 
                           + str(controller_channel) + ' (Magnicon)')
@@ -1699,16 +1704,20 @@ class Control:
                 if not self._dummy_mode:
                     
                     if param_name == 'tes_bias':
-                        param_val = self._readout_inst.get_tes_current_bias(controller_channel)
+                        param_val = self._readout_inst.get_tes_current_bias(
+                            controller_channel)
 
                     elif param_name == 'squid_bias':
-                        param_val = self._readout_inst.get_squid_bias(controller_channel,'I')
+                        param_val = self._readout_inst.get_squid_bias(
+                            controller_channel,'I')
 
                     elif param_name == 'lock_point_voltage':
-                        param_val = self._readout_inst.get_squid_bias(controller_channel,'V')
+                        param_val = self._readout_inst.get_squid_bias(
+                            controller_channel,'V')
 
                     elif param_name == 'feedback_gain':
-                        param_val = self._readout_inst.get_GBP(controller_channel)
+                        param_val = self._readout_inst.get_GBP(
+                            controller_channel)
 
                     elif param_name == 'output_offset':
                         # No offset setting magnicon
@@ -1756,8 +1765,7 @@ class Control:
                     param_val= 1
 
             else:
-                print('ERROR: Unknown SQUID controller "' + 
-                      self._squid_controller_name + '"!')
+                param_val= 1
 
         else:
             print('ERROR: Reading from redis N/A')
@@ -1769,7 +1777,7 @@ class Control:
 
         
         
-    def _set_sensor_val(self,param_name,value, 
+    def _set_sensor_val(self,param_name, value, 
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None,adc_channel=None):
@@ -1803,7 +1811,8 @@ class Control:
         
         readback_val = None
 
-        if self._squid_controller_name == 'feb':
+        if ('feb' in controller_id and
+            self._squid_controller_name == 'feb'):
             # CDMS FEB device
             
             feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1869,7 +1878,8 @@ class Control:
                     self._readout_inst.connect_signal_generator_tes(subrack, slot, controller_channel, value)
                            
 
-        elif self._squid_controller_name == 'magnicon':
+        elif ('magnicon' in controller_id and
+              self._squid_controller_name == 'magnicon'):
             
             if self._verbose or self._debug:
                 print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
