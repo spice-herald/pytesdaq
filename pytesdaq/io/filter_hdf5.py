@@ -603,23 +603,36 @@ class FilterH5IO:
 
 
         """
-
+        
         # loop filter data and save data
         for chan_name, chan_dict in filter_dict.items():
-            for param_name, val in chan_dict.items():
 
-                # metadata
-                param_metadata_name = param_name + '_metadata'
-                if param_name==param_metadata_name:
+
+            # first get list of parameters
+            param_name_list = list()
+            for param_name in chan_dict.keys():
+                if '_metadata' in param_name:
                     continue
+                else:
+                    param_name_list.append(param_name)
+
+
+            # loop parameters and get value and metadata
+            for param_name in param_name_list:
                 
+                # parameter value
+                val = chan_dict[param_name]
+
+                # parameter metadata
                 metadata = None
-                if param_metadata_name in chan_dict:
-                    metadata = chan_dict[param_metadata_name]   
+                param_name_metadata = param_name + '_metadata'
+                if param_name_metadata in chan_dict.keys():
+                    metadata = chan_dict[param_name_metadata]
 
                 # save
                 self.save_param(chan_name, param_name, val,
-                                attributes=metadata, overwrite=overwrite)
+                                attributes=metadata,
+                                overwrite=overwrite)
                 
                     
 
@@ -797,7 +810,7 @@ class FilterH5IO:
             
         # check if key exist already
         file_keys = filter_file.keys()
-        if key in file_keys and not overwrite:
+        if (key in file_keys and not overwrite):
             raise ValueError('Key ' + key + ' already stored in '
                              + self._filter_file + '. Use "overwrite=True"'
                              + ' to overwrite or change file name')
