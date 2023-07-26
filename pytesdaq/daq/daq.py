@@ -162,7 +162,7 @@ class DAQ:
 
     def run(self, run_time=60, run_type=1, run_comment='No comment',
             group_name='None', group_comment='No comment',
-            data_prefix='raw', data_path=None,
+            group_time=None, data_prefix='raw', data_path=None,
             write_config=True, debug=False):
         
         success = False
@@ -181,8 +181,10 @@ class DAQ:
         if data_path is None:
             data_path = self._config.get_data_path()
 
-            
 
+        # series start time
+        time_now = int(round(time.time()))
+      
         # run polaris
         if self._driver_name=='polaris':
 
@@ -196,7 +198,12 @@ class DAQ:
             run_config['facility'] = facility_num
             run_config['fridge_run'] = fridge_run
             run_config['fridge_run_start'] = fridge_run_start
+            run_config['series_start'] = time_now
+            if group_time is not None:
+                run_config['group_start'] = group_time 
             run_config['comment'] = '"' + run_comment + '"'
+            run_config['data_purpose'] = run_purpose
+            run_config['data_type'] = run_type
             run_config['run_purpose'] = run_purpose
             run_config['run_type'] = run_type
             run_config['group_name'] = group_name

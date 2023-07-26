@@ -503,8 +503,7 @@ class Config:
         for adc_chan in adc_channel_list:
             item = 'detector_config' + str(adc_chan)
             if not self._has_setting(adc_id, item):
-                raise ValueError('ERROR in get_detector_config: No detector settings found for channel '
-                                 + str(adc_chan) + '!')
+                continue
 
             settings = self._get_comma_separated_setting(adc_id, item)
             for param in settings:
