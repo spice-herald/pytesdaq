@@ -171,7 +171,7 @@ class Remote(object):
             print('Known keys:')
             print(keys.keys())
             print('')
-            print('Our key:', keys['128.32.239.62'].keys())
+            #print('Our key:', keys['128.32.239.62'].keys())
             print('Server key:', key.get_name())
             print('')
             if self._hostname not in keys:

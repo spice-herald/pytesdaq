@@ -3,9 +3,9 @@ if __name__ == "__main__":
 
     
     # VISA Address
-    visa_address = 'GPIB0::9::INSTR'
+    #visa_address = 'GPIB0::9::INSTR'
     # visa_address = 'COM1'
-    visa_address = 'TCPIP::192.168.0.7::1234::SOCKET'
+    visa_address = 'TCPIP0::169.254.5.21::inst0::INSTR'
     
     # Instantiate instrument
     myinstrument = KeysightFuncGenerator(visa_address)

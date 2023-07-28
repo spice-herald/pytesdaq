@@ -421,7 +421,7 @@ class IV_dIdV(Sequencer):
 
                     # set detector
                     for channel in self._detector_channels:
-                    
+                        
                         # signal generator
                         
                         self._instrument.set_signal_gen_params(detector_channel=channel,source='tes', 
@@ -445,7 +445,7 @@ class IV_dIdV(Sequencer):
                             
                         # wait 5 seconds
                         time.sleep(5)
-                    
+                        
                         
                         if didv_config['loop_channels']:
                                                 
@@ -486,10 +486,10 @@ class IV_dIdV(Sequencer):
                             if not success:
                                 print('ERROR taking data! Stopping sequencer')
                                 return False
-                     
+                            '''
                             # turn off signal genrator
                             self._instrument.connect_signal_gen_to_tes(False, detector_channel=channel)
-                            
+                            '''
                          
 
                     # take data (if all channels)
