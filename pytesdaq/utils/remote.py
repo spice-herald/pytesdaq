@@ -9,7 +9,7 @@ import traceback
 import getpass
 from binascii import hexlify
 import paramiko
-from paramiko.py3compat import input, u
+from paramiko.util import u
 
 
 
