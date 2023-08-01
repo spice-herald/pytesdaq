@@ -173,12 +173,12 @@ class Config:
   
     def get_squid_controller(self):
         """
-        get SQUID/TES controller device name
+        get SQUID controller device name
         
         Returns:
            str - no type conversion happens here!
         """
-        controller=str()
+        controller = str()
         try:
             controller =  self._get_setting('setup','squid_controller')
         except:
@@ -186,7 +186,20 @@ class Config:
     
         return controller
 
-
+    def get_tes_controller(self):
+        """
+        get TES controller device name
+        
+        Returns:
+           str - no type conversion happens here!
+        """
+        controller = str()
+        try:
+            controller =  self._get_setting('setup','tes_controller')
+        except:
+            pass
+    
+        return controller
 
 
     def get_temperature_controllers(self):
