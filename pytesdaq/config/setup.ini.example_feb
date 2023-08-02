@@ -1,23 +1,45 @@
+####################################################################
+#
+# Run configuration (hardware, ADC connections, wiring)
+#
+# Each run the following parameters need to be modified:
+#    - fridge_run = # 
+#    - fridge_run_start = mm/dd/yyyy HH:MM
+#      (time the fridge was at base) 
+#    - controllers if changed
+#    - ADC connection
+#        - connection# = ... (see example below)
+#
+# ##################################################################
+
+
+
+
+
 [setup] 
 
 # Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge,
 #                  3 = UMass
 facility = 2
 
-# fridge run
-fridge_run = 6
+# Fridge run number and  date/time fridge was at base temperature
+# (syntax: mm/dd/yyyy HH:MM)
+fridge_run = 30
+fridge_run_start = 06/14/2023 20:00
+
 
 # data path 
 data_path = /sdata/runs
 
 # type of instruments used 
-squid_controller = feb
+#squid_controller = feb
+tes_controller = feb
 signal_generator = keysight
-temperature_controllers = lakeshore
-
+temperature_controllers = macrt
 
 # VISA Library (leave commented if standard path)
 visa_library = /usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0
+
 
 # ADC list
 enable_adc = adc1
@@ -38,11 +60,11 @@ device_name  = Dev1
 # default adc settings
 # (may be changed with run_daq.py arguments!)
 sample_rate = 1250000 
-nb_samples = 8192
-voltage_min = -5
-voltage_max = 5
+nb_samples = 1250000
+voltage_min = -10
+voltage_max = 10
 channel_list = 0-3
-trigger_type = 3
+trigger_type = 1
 trigger_channel = pfi0
 
 
@@ -53,32 +75,35 @@ trigger_channel = pfi0
 #   Controller ->  "controller:[name]_[channel]"
 #   TES wiring ->  "tes:[channel]  (optional if same as controller channel)
 #   Detector   ->  "detector:[name]_[channel]"  (set to "None" if no parameter
-connection0 = detector:TES25x100, tes:A, controller:feb1_A
-connection1 = detector:TES50x200, tes:B, controller:feb1_B
-connection2 = detector:TES25x100NoGlue, tes:C, controller:feb1_C
-connection3 = detector:TES50x200NoGlue, tes:D, controller:feb1_D
+connection0 = detector:Melange4pc1ch, tes:A, controller:feb1_A
+connection1 = detector:Melange1pc1ch, tes:B, controller:feb1_B
+connection2 = detector:Melange025pcLeft, tes:C, controller:feb1_C
+connection3 = detector:Melange025pcRight, tes:D, controller:feb1_D
+connection4 = detector:keysightTTL, controller:keysight_ttl
 
 
 
-
-# Electronics and detector readout configuration
+# Electronics and detector readout default configuration
 # 
-# shunt_resistance [Ohms]
-# squid_turn_ratio 
-# feedback_resistance [Ohms] (for FEB ONLY, magnicon->read from board)
-# 
-# Other parameters useful for processing/analysis  (ONLY IF DETECTOR CONTROL DISABLED!)
+# shunt_resistance [Ohms] 
+# squid_turn_ratio  
+# feedback_resistance [Ohms] (magnicon->not needed, read from board)
+# parasitic_resistance [Ohms] 
+
+# If SQUID and/or TES controller not enabled, other parameters
+# are needed for detector testing:
+
 #     tes_bias: [uAmps]
-#     close_loop_norm: Output gain * feedback resistance [Ohms] * squid_turn_ratio
-#     open_loop_norm:  Output gain * Preamp gain
+#     output_gain (for close/open loop calculation)
+#     preamp_gain (for open loop calculation)
 #     signal_gen_current:  [uAmps]
 #     signal_gen_frequency: [Hz]
 
-detector_config0 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
-detector_config1 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
-detector_config2 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
-detector_config3 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1240
-
+detector_config0 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0029
+detector_config1 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0039
+detector_config2 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00742
+detector_config3 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00301
+detector_config4 = output_gain: 1, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:1
 
 
 
@@ -117,8 +142,8 @@ feb2 = 1,7
 preamp_fix_gain = 1
 feedback_fix_gain = 21
 output_fix_gain = 1
-signal_gen_tes_resistance = 10000
-
+signal_gen_tes_resistance = 30000
+#signal_gen_tes_resistance = 10000
 # Note: FEB preamp fix gain is actually 20 but it is taken into account
 # with variable gain read from FEB
 
@@ -147,15 +172,15 @@ output_fix_gain = 1
 
 
 [signal_generators]
-keysight_visa_address = TCPIP::192.168.0.4::5025::SOCKET
-
-
+#keysight_visa_address = TCPIP::192.168.2:12::5025::SOCKET
+keysight_visa_address = GPIB::10::INSTR
+keysight_attenuation = 5.01
 
 [temperature_controllers]
 # Lakeshore
 
 # TCP or USB information
-lakeshore_setup  =  model:372, ip:192.168.0.3, tcp_port:7777
+lakeshore_setup  =  model:372, ip:192.168.2:11, tcp_port:7777
 
 # channel setup
 # Format:

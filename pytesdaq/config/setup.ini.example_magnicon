@@ -1,11 +1,31 @@
+####################################################################
+#
+# Run configuration (hardware, ADC connections, wiring)
+#
+# Each run the following parameters need to be modified:
+#    - fridge_run = # 
+#    - fridge_run_start = mm/dd/yyyy HH:MM
+#      (time the fridge was at base) 
+#    - controllers if changed
+#    - ADC connection
+#        - connection# = ... (see example below)
+#
+# ##################################################################
+
+
+
 [setup] 
 
-# Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge, 3 = UMass
+
+# Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge,
+#                  3 = UMass
 facility = 1
 
+# Fridge run number and  date/time fridge was at base temperature
+# (syntax: mm/dd/yyyy HH:MM)
+fridge_run = 30
+fridge_run_start = 06/14/2023 20:00
 
-# fridge run
-fridge_run = 10
 
 # raw data path
 # (run# with #=fridge_run appended to path automatically)

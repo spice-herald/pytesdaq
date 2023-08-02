@@ -12,7 +12,10 @@ if __name__ == "__main__":
     #visa_address = 'COM1'
 
     # GPIB
-    visa_address = 'GPIB0::9::INSTR'
+    #visa_address = 'GPIB0::9::INSTR'
+
+    # USB
+    visa_address = 'USB0::0x0957::0x2507::MY58000409::0::INSTR'
     
     
     # Instantiate instrument

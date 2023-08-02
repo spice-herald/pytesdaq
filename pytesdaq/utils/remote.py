@@ -18,7 +18,9 @@ class Remote(object):
     Use ssh connection to remote computer, using Python paramiko library
     """
 
-    def __init__(self, hostname='', port=22, username='', auth_method='rsa', auth_val='', log_file='demo.log'):
+    def __init__(self, hostname='', port=22, username='',
+                 auth_method='rsa', auth_val='',
+                 log_file='demo.log'):
         """
         Initialize class with hostname, port, username,
         authentication method (rsa, dss, or password),
@@ -171,7 +173,7 @@ class Remote(object):
             print('Known keys:')
             print(keys.keys())
             print('')
-            print('Our key:', keys['128.32.239.62'].keys())
+            #print('Our key:', keys['128.32.239.62'].keys())
             print('Server key:', key.get_name())
             print('')
             if self._hostname not in keys:
