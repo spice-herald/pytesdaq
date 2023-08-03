@@ -538,6 +538,8 @@ class Config:
                        
         return detector_config 
 
+
+    
     def get_visa_library(self):
         """
         get VISA Library
@@ -546,9 +548,10 @@ class Config:
             str - no type conversion happens here!
         """
         library_path = None
+        
         try:
-            if self._has_setting('setup','visa_library'):
-                library_path =  self._get_setting('setup','visa_library')
+            if self._has_setting('setup', 'visa_library'):
+                library_path =  self._get_setting('setup', 'visa_library')
         except:
             pass
     
@@ -563,6 +566,7 @@ class Config:
             str - no type conversion happens here!
         """
         address=str()
+        
         try:
             address =  self._get_setting('feb','visa_address')
         except:
@@ -587,6 +591,7 @@ class Config:
 
         return feb_info 
 
+    
     def get_polaris_info(self):
         """
         Get Polaris info from setup.ini file
@@ -669,49 +674,78 @@ class Config:
         return info
 
 
-    def get_signal_generator_visa_address(self, device_name):
+    
+    def get_device_visa_address(self, device_name):
         """
-        get function generators
-        
-        Returns:
-            str - no type conversion happens here!
+        get visa address of a device assuming:
+        [device_name]
+           visa_address = ...
+
         """
 
-        key = device_name + '_visa_address'
+        address = None
         
-        address=str()
-        try:
-            address =  self._get_setting('signal_generators',key)
-        except:
-            pass
-    
+        # back compatibility if device is "keysight"
+        if device_name == 'keysight':
+            key = 'keysight_visa_address'
+            if self._has_setting('signal_generators', key):
+                address =  str(self._get_setting('signal_generators', key))
+                return address
+            else:
+                # it has been rename to agilent33500B
+                device_name = 'agilent33500B'
+
+                
+        if self._has_setting(device_name, 'visa_address'):
+            address = str(self._get_setting(device_name, 'visa_address'))
+            
         return address
 
-
-    def get_signal_generator_attenuation(self, device_name):
+            
+    def get_device_parameters(self, device_name, parameter=None):
         """
-        get function generator attenuation 
+        get visa address of a device assuming:
+        [device_name]
+           visa_address = ...
 
-        Parameters:
-        ----------        
-        device_name : str
-          signal generator name (field in .ini configuration file)
- 
-        Returns:
-        --------
-            attenuation : float
         """
+        
+        # back compatibility if device is "keysight"
+        # (only "attenuation" available)
+        parameters = dict()
+        
+        if device_name == 'keysight':
 
-        key = device_name + '_attenuation'
-    
-        attenuation = 1
-        try:
-            attenuation =  float(self._get_setting('signal_generators', key))
-        except:
-            pass
-    
-        return attenuation
+            if self._has_section('signal_generators'):
+                key = 'keysight_attenuation'
+                if self._has_setting('signal_generators', key):
+                    parameters['attenuation'] = (
+                        float(self._get_setting('signal_generators', key))
+                    )
+                else:
+                    parameters['attenuation'] = None
+                    
+                if parameter == 'attenuation':
+                    return parameters['attenuation']
+                else:
+                    return parameters
+            else:
+                device_name = 'agilent33500B'
 
+        parameters = None
+        if self._has_section(device_name):
+            
+            parameters = self._get_section_dict(device_name)
+
+            if parameter is not None:
+                if parameter in parameters.keys():
+                    parameters = parameters[parameter]
+                else:
+                    parameters = None
+
+        return parameters
+
+        
 
     def get_temperature_controller_setup(self, device_name):
         """

@@ -26,7 +26,8 @@ class KeysightDSOX1200(InstrumentComm):
         # get idn
         self._device_idn = self.get_idn()
 
-
+        # signal generator attenuation
+        self._attenuation = attenuation
         
         
     def set_shape(self, shape):
@@ -129,7 +130,10 @@ class KeysightDSOX1200(InstrumentComm):
         None
         """
             
-  
+        # take into account  attenuation
+        amplitude *= self._attenuation
+        
+        
         # set amplitude
         command = ':WGEN:VOLT ' + str(amplitude)
         self.write(command)
@@ -157,6 +161,11 @@ class KeysightDSOX1200(InstrumentComm):
         command = ':WGEN:VOLT?'
         amplitude = float(self.query(command))
 
+
+        # attenuation
+        amplitude /= self._attenuation
+
+        
         return amplitude
 
 

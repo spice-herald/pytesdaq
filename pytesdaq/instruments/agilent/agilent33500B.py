@@ -3,7 +3,7 @@ from enum import Enum
 from pytesdaq.instruments.communication import InstrumentComm
 
 
-class KeysightFuncGenerator(InstrumentComm):
+class Agilent33500B(InstrumentComm):
     """
     Keysight function generators management
         
@@ -76,7 +76,8 @@ class KeysightFuncGenerator(InstrumentComm):
         if shape not in function_list:
 
             print('ERROR: Function type not recognized!')
-            print('Choice is "sine", "square","triangle", "ramp", "dc","arb", "noise", or "pulse"') 
+            print('Choice is "sine", "square","triangle", "ramp",'
+                  '"dc","arb", "noise", or "pulse"') 
             if self._raise_errors:
                 raise
             
@@ -99,7 +100,8 @@ class KeysightFuncGenerator(InstrumentComm):
            signal genertor output channel
 
         Returns: string
-          Shape name (lower case): sine, square,triangle, ramp, pulse, prbs, noise,arb,dc
+          Shape name (lower case): sine, square,triangle, ramp, 
+          pulse, prbs, noise,arb,dc
  
         """
 
@@ -163,7 +165,7 @@ class KeysightFuncGenerator(InstrumentComm):
             unit = 'Vpp'
 
 
-        # remove attenuation
+        # take into account  attenuation
         amplitude *= self._attenuation
             
         # set unit

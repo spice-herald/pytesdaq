@@ -11,7 +11,9 @@ from  pytesdaq.instruments.feb  import FEB
 from pytesdaq.instruments.magnicon import Magnicon
 from pytesdaq.instruments.lakeshore import Lakeshore
 from pytesdaq.instruments.imacrt import MACRT
-from  pytesdaq.instruments.keysight import KeysightFuncGenerator
+from  pytesdaq.instruments.keysight import keysightDSOX1200
+from  pytesdaq.instruments.keithley import keithley2400
+from  pytesdaq.instruments.agilent import Agilent33500B
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
@@ -2360,25 +2362,64 @@ class Control:
 
             if self._tes_controller_name == 'magnicon':
                 self._tes_controller_inst = magnicon_inst
-                
+
+        # ----------------
+        # Keithley2400
+        # ----------------
+        if self._tes_controller_name == 'keithley2400':
+            address = self._config.get_device_visa_address('keithley2400')
+            self._tes_controller_inst = (
+                Keithley2400(
+                    address,
+                    visa_library=visa_library,
+                    verbose=self._verbose,
+                    raise_errors=self._raise_errors)
+            )
+            
                     
         # ----------------
-        # Keysight
+        # Signal generator
         # ----------------
-                  
-        if self._signal_generator_name == 'keysight':
 
-            address = self._config.get_signal_generator_visa_address('keysight')
-            attenuation = self._config.get_signal_generator_attenuation('keysight')
-            self._signal_generator_inst = (
-                KeysightFuncGenerator(address,
-                                      visa_library=visa_library,
-                                      attenuation=attenuation,
-                                      verbose=self._verbose,
-                                      raise_errors=self._raise_errors)
-            )
+        if self._signal_generator_name is not None:
+            
+            address = self._config.get_device_visa_address(
+                self._signal_generator_name)
+            attenuation = self._config.get_device_parameters(
+                self._signal_generator_name, parameter='attenuation')
 
+            if address is None:
+                raise ValueError('ERROR: Unable to get signal generator visa address!')
 
+            if attenuation is None:
+                attenuation = 1.0
+            else:
+                attenuation = float(attenuation)
+
+                
+            if (self._signal_generator_name == 'keysight'
+                or self._signal_generator_name == 'agilent33500B'):
+                
+                self._signal_generator_inst = (
+                    Agilent33500B(address,
+                                  visa_library=visa_library,
+                                  attenuation=attenuation,
+                                  verbose=self._verbose,
+                                  raise_errors=self._raise_errors)
+                )
+
+            elif self._signal_generator_name == 'keysightDSOX1200':
+                self._signal_generator_inst = (
+                    KeysightDSOX1200(address,
+                                     visa_library=visa_library,
+                                     attenuation=attenuation,
+                                     verbose=self._verbose,
+                                     raise_errors=self._raise_errors)
+                )
+
+            else:
+                raise ValueError('ERROR: Unrecognized signal generator '
+                                 + self._signal_generator_name)
 
             
         # ----------------
