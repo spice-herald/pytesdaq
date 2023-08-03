@@ -29,7 +29,7 @@ class Keithley2400(InstrumentComm):
 
 
 
-    def enable_source(self):
+    def enable_output(self):
         """
         Enable source either voltage or current
         depending of the settings
@@ -38,7 +38,7 @@ class Keithley2400(InstrumentComm):
         self.write('OUTPUT ON')
 
 
-    def disable_source(self):
+    def disable_output(self):
         """
         Enable source either voltage or current
         depending of the settings
