@@ -777,6 +777,7 @@ class Control:
         Get output gain
         """
         output_variable_gain = 1
+        
         try:
             output_variable_gain = self._get_sensor_val(
                 'output_gain',
@@ -1312,7 +1313,7 @@ class Control:
             adc_id=adc_id,
             adc_channel_list=[adc_channel])
         
-        # extract shunt resistance
+        # extract squid loop ratio
         if ('squid_turn_ratio' in  detector_config and
             len(detector_config['squid_turn_ratio'])==1):
             squid_turn_ratio = detector_config['squid_turn_ratio'][0]
@@ -1632,14 +1633,10 @@ class Control:
                         adc_id=None, adc_channel=None):
         
         
-        if not self._dummy_mode and self._squid_controller_name is None:
-            print('ERROR: No SQUID controller, check config')
-            return nan
-
+        # dummy mode....
         if self._dummy_mode:
             return 1.0
             
-
         
         # get readout controller ID and Channel
         controller_id, controller_channel = (
@@ -1830,6 +1827,45 @@ class Control:
             else:
                 pass
 
+        elif self._squid_controller_name is None:
+
+            # get ADC id/number
+            if (tes_channel is not None or  detector_channel is not None):
+                adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                    self._connection_table,
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel
+                )
+
+            # get detector config
+            detector_config = self._config.get_detector_config(
+                adc_id=adc_id,
+                adc_channel_list=[adc_channel])
+            
+
+            if param_name == 'output_gain':
+                if ('output_gain' in  detector_config and
+                    len(detector_config['output_gain'])==1):
+                    param_val = float(detector_config['output_gain'][0])
+                else:
+                    raise ValueError(
+                        'ERROR: Unable to get output gain! Add controller'
+                        ' or "output_gain" parameter in setup.ini file')
+
+            if param_name == 'preamp_gain':
+                if ('preamp_gain' in  detector_config and
+                    len(detector_config['preamp_gain'])==1):
+                    param_val = float(detector_config['preamp_gain'][0])
+                
+
+                
+                
+        else:
+
+            raise ValueError('ERROR: Unrecognize SQUID controller')
+
+
+            
             
         return param_val
 

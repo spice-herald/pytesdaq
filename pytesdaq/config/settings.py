@@ -176,9 +176,10 @@ class Config:
         get SQUID controller device name
         
         Returns:
-           str - no type conversion happens here!
+           str or NoneType
         """
-        controller = str()
+        controller = None
+        
         try:
             controller =  self._get_setting('setup','squid_controller')
         except:
@@ -191,9 +192,10 @@ class Config:
         get TES controller device name
         
         Returns:
-           str - no type conversion happens here!
+           str or NoneType
         """
-        controller = str()
+        controller = None
+
         try:
             controller =  self._get_setting('setup','tes_controller')
         except:
@@ -210,7 +212,7 @@ class Config:
         Returns:
             list of strings - no type conversion happens here!
         """
-        controllers=list()
+        controllers = list()
         
         try:
             controllers =  self._get_comma_separated_setting('setup','temperature_controllers')
@@ -227,9 +229,9 @@ class Config:
         get signal generator device name
             
         Returns:
-             str - no type conversion happens here!
+             str o NoneType
         """
-        controller=str()
+        controller = None
         try:
             controller = self._get_setting('setup','signal_generator')
         except:
@@ -321,8 +323,8 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-
-        if self._has_setting(controller_name,'preamp_fix_gain') and controller_name is not None:
+        if (controller_name is not None
+            and self._has_setting(controller_name,'preamp_fix_gain')):
             preamp_fix_gain =  float(self._get_setting(controller_name,'preamp_fix_gain'))
             
             
@@ -342,8 +344,8 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-
-        if self._has_setting(controller_name,'feedback_fix_gain') and controller_name is not None:
+        if (controller_name is not None
+            and self._has_setting(controller_name,'feedback_fix_gain')):
             feedback_fix_gain =  float(self._get_setting(controller_name,'feedback_fix_gain'))
             
             
@@ -362,8 +364,8 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-        
-        if self._has_setting(controller_name,'output_fix_gain') and controller_name is not None:
+        if (controller_name is not None
+            and self._has_setting(controller_name,'output_fix_gain')):
             output_fix_gain =  float(self._get_setting(controller_name,'output_fix_gain'))
             
         return output_fix_gain
@@ -380,8 +382,8 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-        
-        if self._has_setting(controller_name,'signal_gen_tes_resistance') and controller_name is not None:
+        if (controller_name is not None
+            and self._has_setting(controller_name,'signal_gen_tes_resistance')):
             resistance  =  float(self._get_setting(controller_name,'signal_gen_tes_resistance'))
             
         return resistance
