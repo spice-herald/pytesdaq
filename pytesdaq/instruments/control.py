@@ -1649,7 +1649,7 @@ class Control:
             )
             
             output_dict['signal_gen_tes_resistance'].append(
-                resistance = self.get_signal_gen_resistance(
+                self.get_signal_gen_resistance(
                     tes_channel=tes_chan,
                     detector_channel=detector_chan,
                     adc_id=adc_chan_id,
