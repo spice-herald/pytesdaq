@@ -11,8 +11,8 @@ from  pytesdaq.instruments.feb  import FEB
 from pytesdaq.instruments.magnicon import Magnicon
 from pytesdaq.instruments.lakeshore import Lakeshore
 from pytesdaq.instruments.imacrt import MACRT
-from  pytesdaq.instruments.keysight import keysightDSOX1200
-from  pytesdaq.instruments.keithley import keithley2400
+from  pytesdaq.instruments.keysight import KeysightDSOX1200
+from  pytesdaq.instruments.keithley import Keithley2400
 from  pytesdaq.instruments.agilent import Agilent33500B
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
