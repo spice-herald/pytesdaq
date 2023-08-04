@@ -372,23 +372,6 @@ class Config:
 
 
     
-
-    def get_signal_gen_tes_resistance(self, controller_name=None):
-        """
-        Get SQUID readout output driver fix gain
-        """
-        resistance = nan
-
-        if controller_name is None:
-            controller_name = self.get_squid_controller()
-
-        if (controller_name is not None
-            and self._has_setting(controller_name,'signal_gen_tes_resistance')):
-            resistance  =  float(self._get_setting(controller_name,'signal_gen_tes_resistance'))
-            
-        return resistance
-
-
     
     def get_adc_list(self):
         adc_list = list()
@@ -499,8 +482,8 @@ class Config:
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source','signal_gen_current','signal_gen_frequency',
                       'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
-                      'parasitic_resistance',
-                      'signal_gen_tes_resistance','close_loop_norm']
+                      'parasitic_resistance', 'tes_bias_resistance',
+                      'signal_gen_resistance','close_loop_norm']
         
         detector_config = dict()
         for param in param_list:

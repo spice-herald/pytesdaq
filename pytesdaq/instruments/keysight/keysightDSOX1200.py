@@ -30,7 +30,7 @@ class KeysightDSOX1200(InstrumentComm):
         self._attenuation = attenuation
         
         
-    def set_shape(self, shape):
+    def set_shape(self, shape, **kwargs):
         """
         Set signal shape
 
@@ -74,7 +74,7 @@ class KeysightDSOX1200(InstrumentComm):
         
 
         
-    def get_shape(self):
+    def get_shape(self, **kwargs):
         """
         Get signal generator function
 
@@ -115,7 +115,7 @@ class KeysightDSOX1200(InstrumentComm):
 
 
 
-    def set_amplitude(self, amplitude):
+    def set_amplitude(self, amplitude, **kwargs):
 
         """
         Set signal amplitude in Volts
@@ -140,7 +140,7 @@ class KeysightDSOX1200(InstrumentComm):
         
 
         
-    def get_amplitude(self):
+    def get_amplitude(self, **kwargs):
         """
         Get signal amplitude in volts
        
@@ -171,7 +171,7 @@ class KeysightDSOX1200(InstrumentComm):
 
 
     
-    def set_offset(self, offset):
+    def set_offset(self, offset, **kwargs):
 
         """
         Set signal offset in volts
@@ -194,7 +194,7 @@ class KeysightDSOX1200(InstrumentComm):
 
 
         
-    def get_offset(self):
+    def get_offset(self, **kwargs):
         
         """
         Get signal offset
@@ -221,7 +221,7 @@ class KeysightDSOX1200(InstrumentComm):
 
           
     
-    def set_frequency(self, frequency):
+    def set_frequency(self, frequency, **kwargs):
 
         """
         Set signal frequency in Hz
@@ -243,7 +243,7 @@ class KeysightDSOX1200(InstrumentComm):
         
 
         
-    def get_frequency(self):
+    def get_frequency(self, **kwargs):
         """
         Get signal frequency
        
@@ -270,7 +270,7 @@ class KeysightDSOX1200(InstrumentComm):
     
 
 
-    def set_generator_onoff(self, output_onoff):
+    def set_generator_onoff(self, output_onoff, **kwargs):
         """
         Set generator output on/off
         
@@ -304,7 +304,7 @@ class KeysightDSOX1200(InstrumentComm):
 
         
         
-    def get_generator_onoff(self):
+    def get_generator_onoff(self, **kwargs):
         """
         Is generator output on/off?
         
