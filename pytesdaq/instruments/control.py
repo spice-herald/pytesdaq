@@ -2106,13 +2106,8 @@ class Control:
         """
         TBD
         """
-
-        if not self._dummy_mode and self._squid_controller_name is None:
-            print('ERROR: No SQUID controller, check config')
-            return nan
-            
         if self._dummy_mode:
-            return
+            return nan
 
         # get readout controller ID and Channel
         controller_id, controller_channel = (
