@@ -74,7 +74,7 @@ class Keithley2400(InstrumentComm):
             return source
 
     
-    def set_source(self, source, fixed=True, auto_range=True):
+    def set_source(self, source, fixed=True, autorange=True):
         """
         Set source: 'current' or 'voltage'
 
