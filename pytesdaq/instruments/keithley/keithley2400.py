@@ -95,7 +95,7 @@ class Keithley2400(InstrumentComm):
 
 
         # check argument
-        if (source == 'current' or source != 'voltage'):
+        if (source != 'current' and source != 'voltage'):
             raise ValueError('ERROR: argument "current" or '
                              '"voltage" expected')
         
