@@ -41,25 +41,22 @@ if __name__ == "__main__":
     # ---------------------------
     # set source
     keithley.set_source('voltage')
-    keithley.set_current_compliance(1e-3)
     
     # set current to 0.1 Volts
-    keithley.set_voltage(0.5)
+    keithley.set_voltage(25)
     
     
     # readback
     source  = keithley.get_source()
-    voltage = keithley.get_voltage()
+    current = keithley.get_voltage()
     print('Source is ' + source)
-    print('Voltage is ' + str(voltage) + ' Volts')
+    print('Voltage is ' + str(current) + ' Volts')
     
     
     
     # enable output
     print('Enabling output 2 seconds!')
-    keithley.showARM_current()
     keithley.enable_output()
-    keithley.get_current()
     
     # Wait for a moment to stabilize (optional)
     #time.sleep(2)

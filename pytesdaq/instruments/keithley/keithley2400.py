@@ -34,8 +34,8 @@ class Keithley2400(InstrumentComm):
         Enable source either voltage or current
         depending of the settings
         """
-
-        self.write('OUTPUT ON')
+        command = ':OUTP ON'
+        self.write(command)
 
 
     def disable_output(self):
@@ -194,7 +194,27 @@ class Keithley2400(InstrumentComm):
 
         command = ':SOUR:CURR:LEV ' + str(current)
         self.write(command)
+
+    def set_current_compliance(self,cmpl):
+        """
+        Set the complance limit of the supply in Amps
+
+        Arguments:
+        ---------
+        cmpl : float
+          cmpl limit
+
+        Return
+        ------
+        None
+        """
         
+        if abs(cmpl) > 1:
+            raise ValueError('ERROR: Max compliance set. Do not put this higher than 1mA!')
+
+        command = ':SENS:CURR:PROT ' + str(cmpl)
+        self.write(command)
+
 
     def get_current(self):
         """
@@ -210,5 +230,22 @@ class Keithley2400(InstrumentComm):
         """
 
 
-        current = self.query(':SOUR:CURR?')
-        return float(current)
+        command = 'MEAS:CURR?'
+        self.write(command)
+
+
+    def showARM_current(self):
+        """
+        Configure the device to show the current on the screen of the device
+        
+        Arguments:
+        ---------
+        None
+
+        Return
+        ------
+        None
+        """
+
+        command = "DISP:FORM:ENAB ARM,CURR"
+        self.write(command)
