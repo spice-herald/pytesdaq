@@ -230,9 +230,25 @@ class Keithley2400(InstrumentComm):
         """
 
 
+        current = self.query(':SOUR:CURR?')
+        return float(current)
+
+    def measure_current(self):
+        """
+        Measure current 
+
+        Arguments:
+        ---------
+        None
+
+        Return
+        ------
+        current : float
+        """
+
+
         command = 'MEAS:CURR?'
         self.write(command)
-
 
     def showARM_current(self):
         """

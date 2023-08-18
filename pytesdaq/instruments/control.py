@@ -2184,6 +2184,9 @@ class Control:
                     
                     voltage = resistance*value*1e-6
                     self._tes_controller_inst.set_voltage(voltage)
+                    self._tes_controller_inst.set_current_compliance(1e-5)
+                    self._tes_controller_inst.enable_output()
+                    self._tes_controller_inst.showARM_current()
                 else:
                     self._tes_controller_inst.set_current(value*1e-6)
 
