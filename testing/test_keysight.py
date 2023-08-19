@@ -8,7 +8,7 @@ if __name__ == "__main__":
     # visa_address = 'TCPIP::192.168.0.7::1234::SOCKET'
     visa_address = 'TCPIP0::169.254.5.21::inst0::INSTR'
     visa_address = 'TCPIP::131.243.51.117::inst0::INSTR'
-    visa_address = 'TCPIP::131.243.51.42::inst0::INSTR'
+    visa_address = 'TCPIP::131.243.51.234::inst0::INSTR'
     
     # Instantiate instrument
     myinstrument = Agilent33500B(visa_address, attenuation=1)

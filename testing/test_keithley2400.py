@@ -44,7 +44,7 @@ if __name__ == "__main__":
     keithley.set_current_compliance(1e-3)
     
     # set current to 0.1 Volts
-    keithley.set_voltage(0.5)
+    keithley.set_voltage(0.1)
     
     
     # readback
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     print('Enabling output 2 seconds!')
     keithley.showARM_current()
     keithley.enable_output()
-    keithley.get_current()
+    keithley.measure_current()
     
     # Wait for a moment to stabilize (optional)
     #time.sleep(2)
