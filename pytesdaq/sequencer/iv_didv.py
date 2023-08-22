@@ -1032,8 +1032,8 @@ class IV_dIdV(Sequencer):
                     raise ValueError('IV/dIdV sweep required bias vector if "use_tes_bias_vect" = true!')
                 else:
                     tes_bias_vect = [float(bias) for bias in config_dict['tes_bias_vect']]
-                    tes_bias_vect = np.unique(np.asarray(tes_bias_vect))
-                    tes_bias_vect = tes_bias_vect[::-1]
+                    tes_bias_vect = np.asarray(tes_bias_vect)
+                    #tes_bias_vect = tes_bias_vect[::-1]
              
             else:
                 required_parameter = ['use_negative_tes_bias',
