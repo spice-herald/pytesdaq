@@ -632,8 +632,7 @@ class IVanalysis(object):
                     saveplot=lgcsave,
                     savepath=self.figsavepath,
                     savename=f'didv_{didvn.qetbias:.3e}',
-                )
-                
+                )    
         self.rn_didv = np.mean(rtot_list) - self.rload
         self.rtot_list = rtot_list
         self.dt0_n = np.median(dt0_list)
