@@ -1122,6 +1122,40 @@ class H5Reader:
         return detector_config
 
 
+
+    def get_file_info(self, file_name=None):
+        """
+        Get file attributes
+        """
+
+        # check input 
+        if file_name is None and self._current_file is None:
+            error_msg = 'No file currently open and no "file_name" argument not provided!'
+            if self._raise_errors:
+                    raise ValueError(error_msg)
+            else:
+                print('ERROR: ' + error_msg)
+                print('Please open a file or provide a file name!')
+                return metadata
+
+        # open file if needed
+        if (file_name is not None
+            and self._current_file_name!=file_name):
+            
+            # check if a file already open
+            if self._current_file is not None:
+                self._close_file()
+
+            # open
+            self._open_file(file_name, event_list=None,
+                            load_metadata=False)
+            
+
+        # get attibutes
+        metadata = self._extract_metadata(self._current_file.attrs)
+        return  metadata
+
+    
                                     
     def get_connection_dict(self, file_name=None, adc_name='adc1', metadata=None):
         """
