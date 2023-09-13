@@ -632,7 +632,7 @@ class IVanalysis(object):
                     saveplot=lgcsave,
                     savepath=self.figsavepath,
                     savename=f'didv_{didvn.qetbias:.3e}',
-                )
+                )    
         self.rn_didv = np.mean(rtot_list) - self.rload
         self.rtot_list = rtot_list
         self.dt0_n = np.median(dt0_list)
@@ -1226,6 +1226,7 @@ class IVanalysis(object):
                     xlims=xlims,
                     ylims=ylims_power,
                 )
+                plt.show()
 
 
             res = energy_res_estimate(
@@ -1654,6 +1655,7 @@ class IVanalysis(object):
 
         if lgcplot:
             plot._plot_energy_res_vs_bias(
+                self,
                 r0s,
                 energy_res,
                 energy_res_err,
@@ -1664,6 +1666,22 @@ class IVanalysis(object):
                 lgcoptimum=lgcoptimum,
                 lgctau=lgctau,
                 energyscale=energyscale,
+            )
+            plt.show()
+        if lgcsave:
+            plot._plot_energy_res_vs_bias(
+                self,
+                r0s,
+                energy_res,
+                energy_res_err,
+                qets,
+                taus,
+                xlims,
+                ylims,
+                lgcoptimum=lgcoptimum,
+                lgctau=lgctau,
+                energyscale=energyscale,
+                lgcsave = lgcsave
             )
         if lgctau:
             return (
