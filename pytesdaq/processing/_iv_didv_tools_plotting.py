@@ -174,7 +174,7 @@ def _plot_rload_rn_qetbias(IVanalysisOBJ, lgcsave, xlims_rl, ylims_rl,
         plt.savefig(IVanalysisOBJ.figsavepath + 'rload_rtot_variation.png')
 
 
-def _plot_energy_res_vs_bias(r0s, energy_res, energy_res_err, qets, taus,
+def _plot_energy_res_vs_bias(IVanalysisOBJ, r0s, energy_res, energy_res_err, qets, taus,
                              xlims=None, ylims=None, lgctau=False,
                              lgcoptimum=False, figsavepath='', lgcsave=False,
                              energyscale=None):
@@ -184,6 +184,9 @@ def _plot_energy_res_vs_bias(r0s, energy_res, energy_res_err, qets, taus,
 
     Parameters
     ----------
+    IVanalysisOBJ : rqpy.IVanalysis
+        The IV analysis object that contains the data to use for
+        plotting.
     r0s : ndarray
         Array of r0 values (in Ohms).
     energy_res : ndarray
@@ -319,7 +322,8 @@ def _plot_energy_res_vs_bias(r0s, energy_res, energy_res_err, qets, taus,
             ax.legend(loc='upper center', handles=[plte, plttau])
 
     if lgcsave:
-        plt.savefig(f'{figsavepath}energy_res_vs_bias.png')
+        plt.savefig(IVanalysisOBJ.figsavepath + 'energy_res_vs_bias.png')
+        
 
 def _plot_didv_bias(data, xlims=(-.15,0.025), ylims=(0,.08), cmap='magma'):
     """
