@@ -244,7 +244,8 @@ def _get_current_offset_metadata(metadata, channel_name):
     """
     voltage_offset = metadata[0]['detector_config'][channel_name]['output_offset']
     close_loop_norm = metadata[0]['detector_config'][channel_name]['close_loop_norm']
-    return voltage_offset/close_loop_norm
+    output_gain = metadata[0]['detector_config'][channel_name]['output_gain']
+    return voltage_offset * output_gain/close_loop_norm
 
 class IVanalysis(object):
     """
