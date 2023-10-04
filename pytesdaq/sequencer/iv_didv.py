@@ -304,17 +304,16 @@ class IV_dIdV(Sequencer):
                     time.sleep(sleeptime_s)
 
 
+                # Relock
+                if self._do_relock:
+
+                    # relock each channel
+                    for channel in self._detector_channels:
+                        print('INFO: Relocking channel ' + channel) 
+                        self._instrument.relock(detector_channel=channel)
                 
                 # if step 1: tes zap, relock, zero
                 if istep==1:
-
-                    # Relock
-                    if self._do_relock:
-
-                        # relock each channel
-                        for channel in self._detector_channels:
-                            print('INFO: Relocking channel ' + channel) 
-                            self._instrument.relock(detector_channel=channel)
                         
                     # Zero
                     if self._do_zero_offset:

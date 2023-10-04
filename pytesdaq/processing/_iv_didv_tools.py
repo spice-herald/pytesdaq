@@ -1832,7 +1832,7 @@ class IVanalysis(object):
 
 
     def get_offsets_dict(self, metadata, channel_name, lgcdiagnostics=False,
-                        lgc_sweepbias_flipped=True):
+                        lgc_sweepbias_flipped=False):
         """
         Function to get a dictionary of offsets of i0 and ibias used by
         QETpy to calculate the i0, r0, p0, etc. of a given dIdV.
@@ -1851,7 +1851,7 @@ class IVanalysis(object):
             If True, prints out diagnostics
             
         lgc_sweepbias_flipped: boolean, optional
-            Defaults to True. If True, assumes that the bias for the IV sweep
+            Defaults to False. If True, assumes that the bias for the IV sweep
             from which the offset_dict was generated was flipped in polarity
             (i.e. multiplied by negative one). To contradict this, we just 
             multiply the ibias_offset by negative one. Defaults to True because
