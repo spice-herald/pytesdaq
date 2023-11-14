@@ -244,7 +244,8 @@ def _get_current_offset_metadata(metadata, channel_name):
     """
     voltage_offset = metadata[0]['detector_config'][channel_name]['output_offset']
     close_loop_norm = metadata[0]['detector_config'][channel_name]['close_loop_norm']
-    return voltage_offset/close_loop_norm
+    output_gain = metadata[0]['detector_config'][channel_name]['output_gain']
+    return voltage_offset * output_gain/close_loop_norm
 
 class IVanalysis(object):
     """
@@ -1830,7 +1831,8 @@ class IVanalysis(object):
         )
 
 
-    def get_offsets_dict(self, metadata, channel_name, lgcdiagnostics=False):
+    def get_offsets_dict(self, metadata, channel_name, lgcdiagnostics=False,
+                        lgc_sweepbias_flipped=False):
         """
         Function to get a dictionary of offsets of i0 and ibias used by
         QETpy to calculate the i0, r0, p0, etc. of a given dIdV.
@@ -1844,6 +1846,16 @@ class IVanalysis(object):
 
         channel_name: str
             Used to get the right channel out of the metadata
+            
+        lgcdiagnostics: boolean, optional
+            If True, prints out diagnostics
+            
+        lgc_sweepbias_flipped: boolean, optional
+            Defaults to False. If True, assumes that the bias for the IV sweep
+            from which the offset_dict was generated was flipped in polarity
+            (i.e. multiplied by negative one). To contradict this, we just 
+            multiply the ibias_offset by negative one. Defaults to True because
+            this is the default way we process IV sweeps.
 
         Returns
         -------
@@ -1860,7 +1872,18 @@ class IVanalysis(object):
         IV_ibias_offset = self.ivobj.ibias_off[0][1]
         IV_ibias_offset_err = self.ivobj.ibias_off_err[0][1]
         
-        rp_measured = self.df['rp'][0]
+        if lgc_sweepbias_flipped:
+            IV_ibias_offset *= -1
+        
+        i = 0
+        rp_measured = None
+        while rp_measured is None:
+            try:
+                rp_measured = self.df['rp'][i]
+            except KeyError:
+                i += 1
+        
+        output_offset = metadata[0]['detector_config'][channel_name]['output_offset']
         
         return_dict = {
             "i0_off": IV_i0_offset,
@@ -1868,6 +1891,7 @@ class IVanalysis(object):
             "ibias_off": IV_ibias_offset,
             "ibias_off_err": IV_ibias_offset_err,
             "i0_changable_offset": output_offset_during_didv,
+            "output_offset": output_offset,
             "rp": rp_measured,
             "IVobj": self,
         }
