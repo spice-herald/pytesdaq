@@ -1402,11 +1402,11 @@ class H5Reader:
         """
         
         metadata_dict = dict()
-        for key,value in attributes.items():
+        for key, value in attributes.items():
             if isinstance(value, bytes):
                 value = value.decode()
             elif isinstance(value, np.ndarray):
-                if value.dtype == np.object:
+                if value.dtype == object:
                     value = value.astype(str)
                 # a few particular cases
                 if key == 'run_purpose':
