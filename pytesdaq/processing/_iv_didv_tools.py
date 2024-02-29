@@ -64,7 +64,11 @@ def _check_df(df, channels=None):
 
     for ii, chan in enumerate(channels):
         chancut = df.channels == chan
-        check_data = Counter(df.qetbias[chancut].values)
+        vals = df.qetbias[chancut].values
+        # Round to 3 decimal places (scientific notation) to avoid bit precision errors
+        for jj, val in enumerate(vals):
+            vals[jj] = float(np.format_float_scientific(val, 3))
+        check_data = Counter(vals)
         if np.all(np.array(list(check_data.values())) == 2):
             check = True
         else:
