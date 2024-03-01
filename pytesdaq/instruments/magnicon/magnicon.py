@@ -1024,7 +1024,7 @@ class Magnicon(object):
 
 
 
-    def set_generator_params(self, controller_channel, gen_num, gen_freq, source, waveform, phase_shift, freq_div, half_pp_offset, pp_amplitude):
+    def set_generator_params(self, controller_channel, gen_num, gen_freq=None, source=None, waveform=None, phase_shift=None, freq_div=None, half_pp_offset=None, pp_amplitude=None):
         """
         Set parameters for internal source generator:
         Arguments: generator number (1 or 2), generator frequency (Hz),
@@ -1033,7 +1033,10 @@ class Magnicon(object):
             phase shift (0, 90, 180, or 270),
             frequency divider (0 for off, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024),
             half peak-peak offset (ON or OFF),
-            peak-peak amplitude (uA or uV)
+            peak-peak amplitude (uA or uV).
+            Any of the arguments except generator number can also be "None"; in this case,
+            the code will read all the arguments from Magnicon, and only change the
+            parameters which are not "None."
         Returns: coerced peak-peak amplitude and coerced frequency,
             or -1000 for both if failed.
         """
@@ -1041,21 +1044,47 @@ class Magnicon(object):
         if gen_num not in [1, 2]:
             print('Invalid generator number, not setting')
             return -1000., -1000.
-        if source not in ['Ib', 'Vb', 'Phib', 'I']:
+        if source not in ['Ib', 'Vb', 'Phib', 'I', None]:
             print('Invalid source, not setting')
             return -1000., -1000.
-        if waveform not in ['triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise']:
+        if waveform not in ['triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise', None]:
             print('Invalid waveform, not setting')
             return -1000., -1000.
-        if phase_shift not in [0, 90, 180, 270]:
-            print('Invalid phase shift, not setting')
-            return -1000., -1000.
-        if freq_div not in [0, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]:
+        if freq_div not in [0, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, None]:
             print('Invalid frequency divider, not setting')
             return -1000., -1000.
-        if half_pp_offset not in ['ON', 'OFF']:
+        if phase_shift not in [0, 90, 180, 270, None]:
+            print('Invalid phase shift, not setting')
+            return -1000., -1000.
+        if half_pp_offset not in ['ON', 'OFF', None]:
             print('Invalid half peak-peak offset, not setting')
             return -1000., -1000.
+
+        # If any of the parameters are None, then don't set them. In order to do this,
+        # we need to read all of the parameters first.
+        if (source is None) or (waveform is None) or (gen_freq is None) or (freq_div is None) or \
+            (phase_shift is None) or (pp_amplitude is None) or (half_pp_offset is None):
+        
+            source_pre, waveform_pre, gen_freq_pre, freq_div_pre, phase_shift_pre, pp_amplitude_pre, half_pp_offset_pre = \
+                self.get_generator_params(controller_channel, gen_num)
+            if source_pre == 'FAIL':
+                print('You want to set <7 parameters, but the parameters could not be read.')
+                return -1000., -1000.
+        
+            if source is None:
+                source = source_pre
+            if waveform is None:
+                waveform = waveform_pre
+            if gen_freq is None:
+                gen_freq = gen_freq_pre
+            if freq_div is None:
+                freq_div = freq_div_pre
+            if phase_shift is None:
+                phase_shift = phase_shift_pre
+            if pp_amplitude is None:
+                pp_amplitude = pp_amplitude_pre
+            if half_pp_offset is None:
+                half_pp_offset = half_pp_offset_pre
 
         if freq_div == 0:
             command = '.\\set_generator_params.exe %d %d %d %f %s %s %d off %s %f\n' % \
