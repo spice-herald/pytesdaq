@@ -19,7 +19,7 @@ __all__ = [
 
 
 def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
-                    lgcverbose):
+                    lgcverbose, force_didv=None):
     """
     Helper function to process data from noise or dIdV series as part
     of an IV/dIdV sweep. See Notes for more details on what parameters
@@ -43,6 +43,9 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
         between 0 and 1.
     lgcverbose : bool
         If True, the series number being processed will be displayed.
+    force_didv : bool or None
+        If not None, allows the user to force a set value for is_didv.
+        This functionality is not implemented for multiprocessing.
 
     Returns
     -------
@@ -176,6 +179,8 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
         # check if IV or dIdV processing
         is_didv = (detector_settings[chan]['signal_gen_onoff']=='on' and
                    detector_settings[chan]['signal_gen_source']=='tes')
+        if force_didv is not None:
+            is_didv = force_didv
                  
 
         # convert  to amps
@@ -281,6 +286,7 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
                 traces_amps[cut], fs=fs, sgfreq=sgfreq, is_didv=True,
             )
 
+
             # Average pulse
             avgtrace = np.mean(traces_amps[cut], axis = 0)
 
@@ -331,7 +337,7 @@ def _process_ivfile(filepath, chans, autoresample_didv, dutycycle,
 
 def process_ivsweep(ivfilepath, chans, autoresample_didv=False, dutycycle=0.5,
                     lgcverbose=False, lgcsave=True, nprocess=1, savepath='',
-                    savename='IV_dIdV_DF'):
+                    savename='IV_dIdV_DF', force_didv=None):
     """
     Function to process data for an IV/dIdV sweep. See Notes for
     more details on what parameters are calculated.
@@ -372,6 +378,16 @@ def process_ivsweep(ivfilepath, chans, autoresample_didv=False, dutycycle=0.5,
         Abosolute path to save DataFrame.
     savename : str, optional
         The name of the processed DataFrame to be saved.
+    force_didv : array or list or string, optional
+        An array or list with length equivalent to the number of files
+        to scan, or the string 'name'. Allows the user to force a set value
+        for is_didv in _process_ivfile(). If force_didv is a list or array,
+        each element should be True or False, corresponding to the forced
+        value of is_didv. If force_didv is the string 'name', the filename
+        will be used. If 'didv' is in the filename, is_didv will be True;
+        otherwise, it will be False. By default, this is None, in which
+        case no value is forced. This functionality is not implemented
+        for multiprocessing.
 
     Returns
     -------
@@ -417,15 +433,24 @@ def process_ivsweep(ivfilepath, chans, autoresample_didv=False, dutycycle=0.5,
     else:
         files = ivfilepath
 
+    # Decide whether to force the is_didv variable
+    if force_didv is None and nprocess == 1:
+        force_didv = np.full(len(files), None)
+    elif force_didv == 'name' and nprocess == 1:
+        force_didv = np.zeros_like(files, dtype=bool)
+        for i, filepath in enumerate(files):
+            force_didv[i] = 'didv' in filepath.split('/')[-1]
+
     if nprocess == 1:
         results = []
-        for filepath in files:
+        for i, filepath in enumerate(files):
             results.append(_process_ivfile(
                 filepath,
                 chans,
                 autoresample_didv,
                 dutycycle,
                 lgcverbose,
+                force_didv[i],
             ))
     else:
         pool = multiprocessing.Pool(processes=int(nprocess))
