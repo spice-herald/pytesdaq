@@ -64,7 +64,11 @@ def _check_df(df, channels=None):
 
     for ii, chan in enumerate(channels):
         chancut = df.channels == chan
-        check_data = Counter(df.qetbias[chancut].values)
+        vals = df.qetbias[chancut].values
+        # Round to 3 decimal places (scientific notation) to avoid bit precision errors
+        for jj, val in enumerate(vals):
+            vals[jj] = float(np.format_float_scientific(val, 3))
+        check_data = Counter(vals)
         if np.all(np.array(list(check_data.values())) == 2):
             check = True
         else:
@@ -237,15 +241,58 @@ def _sc_noise(freqs, tload, squiddc, squidpole, squidn, rload, inductance):
     s_isquid = (squiddc * (1.0 + (squidpole / freqs)**squidn))**2.0
     return s_iloadsc + s_isquid
 
-def _get_current_offset_metadata(metadata, channel_name):
+def _get_current_offset_metadata(metadata, channel_name, 
+                                 lgc_calibrated_offsets=False, 
+                                 calibration_dict=None):
     """
     Helper function to get the current offset set by the slider on
     the FEB controller labview script.
     """
+    
     voltage_offset = metadata[0]['detector_config'][channel_name]['output_offset']
     close_loop_norm = metadata[0]['detector_config'][channel_name]['close_loop_norm']
     output_gain = metadata[0]['detector_config'][channel_name]['output_gain']
-    return voltage_offset * output_gain/close_loop_norm
+        
+    if lgc_calibrated_offsets:
+        print("Using calibrated offsets approach")
+        if calibration_dict is None:
+            raise ValueError('ERROR: must include calibration_dict if '
+                             'lgc_calibration_on is True (i.e. being used)!'
+                             'Check offset dicts')
+                             
+        elif (output_gain != 50):
+            raise ValueError('ERROR: calibration only done for a gain of 50')
+            
+        elif (calibration_dict['model'] == 'twopartlinear'):
+            m1, m2, b1, b2 = calibration_dict['params']
+            if output_offset > 0.0:
+                i0_variable_offset = voltage_offset * m1 + b1
+            else:
+                i0_variable_offset = voltage_offset * m2 + b2
+                
+        elif (calibration_dict['model'] == 'lookup_extrapolated'):
+            offsets_arr = calibration_dict['params']['lookup_x']
+            currents_arr = calibration_dict['params']['lookup_y']
+            params_low = calibration_dict['params']['params_low']
+            params_high = calibration_dict['params']['params_high']
+            
+            def linear(x, m, b):
+                return x*m + b
+            
+            if voltage_offset in offsets_arr:
+                i0_variable_offset = currents_arr[list(offsets_arr).index(voltage_offset)]
+            elif voltage_offset > 0.0:
+                i0_variable_offset = linear(voltage_offset, *params_high)
+            else:
+                i0_variable_offset =  linear(voltage_offset, *params_low)
+                
+        else:
+            raise ValueError('ERROR: unknown calibration_dict model')
+
+        return i0_variable_offset
+    else:
+        print("Using uncalibrated offsets approach")
+        return voltage_offset * output_gain/close_loop_norm
 
 class IVanalysis(object):
     """
@@ -1832,7 +1879,7 @@ class IVanalysis(object):
 
 
     def get_offsets_dict(self, metadata, channel_name, lgcdiagnostics=False,
-                        lgc_sweepbias_flipped=False):
+                        lgc_sweepbias_flipped=False, calibration_dict=None):
         """
         Function to get a dictionary of offsets of i0 and ibias used by
         QETpy to calculate the i0, r0, p0, etc. of a given dIdV.
@@ -1856,6 +1903,9 @@ class IVanalysis(object):
             (i.e. multiplied by negative one). To contradict this, we just 
             multiply the ibias_offset by negative one. Defaults to True because
             this is the default way we process IV sweeps.
+            
+        calibration_dict : dict, optional
+            Used to calibrate the offsets
 
         Returns
         -------
@@ -1865,7 +1915,12 @@ class IVanalysis(object):
 
         """
         
-        output_offset_during_didv = _get_current_offset_metadata(metadata, channel_name)
+        output_offset_during_iv_cal = _get_current_offset_metadata(metadata, channel_name, 
+                                                                 lgc_calibrated_offsets=True, 
+                                                                 calibration_dict=calibration_dict)
+        output_offset_during_iv_uncal = _get_current_offset_metadata(metadata, channel_name, 
+                                                                 lgc_calibrated_offsets=False, 
+                                                                 calibration_dict=calibration_dict)
 
         IV_i0_offset = self.ivobj.ioff[0][1]
         IV_i0_offset_err = self.ivobj.ioff_err[0][1]
@@ -1890,10 +1945,12 @@ class IVanalysis(object):
             "i0_off_err": IV_i0_offset_err,
             "ibias_off": IV_ibias_offset,
             "ibias_off_err": IV_ibias_offset_err,
-            "i0_changable_offset": output_offset_during_didv,
+            "i0_changable_offset_cal": output_offset_during_iv_cal,
+            "i0_changable_offset_uncal": output_offset_during_iv_uncal,
             "output_offset": output_offset,
             "rp": rp_measured,
             "IVobj": self,
+            "calibration_dict": calibration_dict, 
         }
 
         return return_dict

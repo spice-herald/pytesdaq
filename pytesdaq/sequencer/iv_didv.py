@@ -306,7 +306,7 @@ class IV_dIdV(Sequencer):
 
                 # Relock
                 if self._do_relock:
-
+                
                     # relock each channel
                     for channel in self._detector_channels:
                         print('INFO: Relocking channel ' + channel) 

@@ -450,8 +450,8 @@ class Control:
                               adc_id=None, adc_channel=None,
                               signal_gen_num=1, source=None,
                               voltage=None, current=None, offset=None,
-                              frequency=None, shape=None, phase_shift=0,
-                              freq_div=0, half_pp_offset='OFF'):
+                              frequency=None, shape=None, phase_shift=None,
+                              freq_div=None, half_pp_offset=None):
 
         """
         Set signal generator parameters
@@ -502,13 +502,21 @@ class Control:
             source_magnicon = 'I'
             if source == 'feedback':
                 source_magnicon = 'Ib'
+            if frequency is not None:
+                frequency = float(frequency)
+            if phase_shift is not None:
+                phase_shift = int(phase_shift)
+            if freq_div is not None:
+                freq_div = int(freq_div)
+            if current is not None:
+                current = float(current)
 
             readback_amp, readback_freq = (
                 self._signal_generator_inst.set_generator_params(
                     int(controller_channel), int(signal_gen_num), 
-                    float(frequency), source_magnicon, shape, 
-                    int(phase_shift), int(freq_div), half_pp_offset, 
-                    float(current))
+                    frequency, source_magnicon, shape,
+                    phase_shift, freq_div, half_pp_offset,
+                    current)
             )
             
 
@@ -516,10 +524,11 @@ class Control:
         else:
 
             # shape
-            if shape is not None:
-                if shape == 'sawtoothpos' or shape == 'sawtoothneg':
-                    shape = 'ramp'
-                self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
+            if shape is None:
+                shape = 'square'
+            elif (shape == 'sawtoothpos' or shape == 'sawtoothneg'):
+                shape = 'ramp'
+            self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
             
             # amplitude
             if voltage is None and current is not None:
