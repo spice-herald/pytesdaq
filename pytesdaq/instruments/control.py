@@ -464,9 +464,6 @@ class Control:
         offset: DC offset in mV
         """
         
-        
-
-
         # check parameters
         if voltage is not None and current is not None:
             print('ERROR: Set signal generator amplitude either with "current" or "voltage", not both!')
@@ -524,11 +521,17 @@ class Control:
         else:
 
             # shape
-            if shape is None:
-                shape = 'square'
-            elif (shape == 'sawtoothpos' or shape == 'sawtoothneg'):
-                shape = 'ramp'
-            self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
+            if shape is not None:
+                
+                if (shape == 'sawtoothpos' or shape == 'sawtoothneg'):
+                    shape = 'ramp'
+                elif shape not in ['triangle', 'square', 'sine', 'noise','ramp']:
+                    raise ValueError('ERROR: Unrecognized signal generatoir shape!  '
+                                     'Available shapes: '
+                                     '"triangle", "square", "sine", "noise", '
+                                     '"ramp", "sawtoothpos", "sawtoothneg"')
+                
+                self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
             
             # amplitude
             if voltage is None and current is not None:
@@ -545,15 +548,11 @@ class Control:
                 self._signal_generator_inst.set_frequency(
                     frequency, unit='Hz',
                     source=signal_gen_num)
-                
-
+         
             # offset
             if offset is not None:
                 self._signal_generator_inst.set_offset(
                     offset, unit='mV', source=signal_gen_num)
-
-
-                
             # source
             if source is not None:
 
