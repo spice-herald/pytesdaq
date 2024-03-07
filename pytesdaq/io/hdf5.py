@@ -13,7 +13,8 @@ from pytesdaq.utils import connection_utils
 
 __all__ = ['H5Reader', 'H5Writer',
            'extract_series_num', 'extract_series_name',
-           'extract_dump_num']
+           'extract_dump_num',
+           'convert_length_msec_to_samples']
 
 def extract_series_num(series_name):
     """
@@ -120,6 +121,31 @@ def extract_dump_num(file_name):
           
     return dump_num
 
+
+def convert_length_msec_to_samples(trace_length_msec, fs):
+    """
+    Convert trace length in msec to samples
+
+    Parameters
+    ----------
+    trace_length : float
+      trace length in milli sec
+
+    fs : float
+      sample rate 
+
+    Return
+    ------
+    
+    nb_samples : int
+      trace length samples
+ 
+    """
+
+
+    nb_samples = int(round(fs*trace_length_msec/1000))
+    return nb_samples
+    
 
 
 
