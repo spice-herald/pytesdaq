@@ -1915,9 +1915,12 @@ class IVanalysis(object):
 
         """
         
-        output_offset_during_iv_cal = _get_current_offset_metadata(metadata, channel_name, 
-                                                                 lgc_calibrated_offsets=True, 
-                                                                 calibration_dict=calibration_dict)
+        if calibration_dict is not None:
+            output_offset_during_iv_cal = _get_current_offset_metadata(metadata, channel_name, 
+                                                                      lgc_calibrated_offsets=True, 
+                                                                      calibration_dict=calibration_dict)
+        else:
+            output_offset_during_iv_cal = None
         output_offset_during_iv_uncal = _get_current_offset_metadata(metadata, channel_name, 
                                                                  lgc_calibrated_offsets=False, 
                                                                  calibration_dict=calibration_dict)
