@@ -3,7 +3,7 @@ from enum import Enum
 from pytesdaq.instruments.communication import InstrumentComm
 
 
-class KeysightFuncGenerator(InstrumentComm):
+class Agilent33500B(InstrumentComm):
     """
     Keysight function generators management
         
@@ -38,8 +38,67 @@ class KeysightFuncGenerator(InstrumentComm):
 
         # signal generator attenuation
         self._attenuation = attenuation
+
+        self.set_auto_range(1)
+
+    def set_auto_range(self, auto, source=1):
+
+        # check input
+        if isinstance(auto, int):
+            if auto==0:
+                auto = 'OFF'
+            else:
+                auto = 'ON'
+            
+        auto = auto.upper()
+
+        if auto != 'ON' and auto != 'OFF':
+            print('ERROR: Argument should be "on" or "off"')
+            if self._raise_errors:
+                raise
+            else:
+                return None
+        command = 'SOURCE' + str(source) +':VOLTAGE:RANGE:AUTO ' + str(auto)
+        #command = 'SOURCE1:VOLTAGE:RANGE:AUTO OFF'
+        print(command)
+        self.write(command)
         
         
+
+    def set_load_resistance(self, load='infinity',source=1):
+        """
+        Set output load
+
+        Parameters
+        ---------
+        load: int or string
+            'infinity' or 'inf'
+            'minimum' or 'min'
+            'maximum' or 'max'
+            'default' or 'def'
+            or resistance value in Ohm
+        """
+        # check input
+        if isinstance(load, int):
+            if load<50:
+                load = 50
+            if load>1e6:
+                load = 'infinity'
+        else:
+            load_list = ['infinity', 'inf', 'maximum','max', 'minimum', 'min',
+                         'default', 'def']
+            if load not in load_list:
+
+                print('ERROR: Load type not recognized!')
+                print('Choice is "inf", "max", "min", or "def"')
+                if self._raise_errors:
+                    raise
+
+        # set load
+        command = 'OUTPUT' + str(source) + ':LOAD ' + str(load)
+        self.write(command)
+
+
         
     def set_shape(self, shape,source=1):
         """
@@ -76,7 +135,8 @@ class KeysightFuncGenerator(InstrumentComm):
         if shape not in function_list:
 
             print('ERROR: Function type not recognized!')
-            print('Choice is "sine", "square","triangle", "ramp", "dc","arb", "noise", or "pulse"') 
+            print('Choice is "sine", "square","triangle", "ramp",'
+                  '"dc","arb", "noise", or "pulse"') 
             if self._raise_errors:
                 raise
             
@@ -99,7 +159,8 @@ class KeysightFuncGenerator(InstrumentComm):
            signal genertor output channel
 
         Returns: string
-          Shape name (lower case): sine, square,triangle, ramp, pulse, prbs, noise,arb,dc
+          Shape name (lower case): sine, square,triangle, ramp, 
+          pulse, prbs, noise,arb,dc
  
         """
 
@@ -163,7 +224,7 @@ class KeysightFuncGenerator(InstrumentComm):
             unit = 'Vpp'
 
 
-        # remove attenuation
+        # take into account  attenuation
         amplitude *= self._attenuation
             
         # set unit
@@ -228,7 +289,6 @@ class KeysightFuncGenerator(InstrumentComm):
         # attenuation
         amplitude /= self._attenuation
         
-
         if convert_mVpp:
             amplitude *= 1000
 
@@ -266,14 +326,13 @@ class KeysightFuncGenerator(InstrumentComm):
                      
         if unit == 'mV':
             offset = float(offset)/1000
-            
-     
+
+        # take into account  attenuation
+        offset *= self._attenuation
+                   
         # set offset
         command = 'SOUR' + str(source) + ':VOLT:OFFS ' + str(offset)
         self.write(command)
-
-
-
         
     def get_offset(self, unit='V', source=1):
         
@@ -297,8 +356,6 @@ class KeysightFuncGenerator(InstrumentComm):
 
 
         """
-
-
         unit_list = ['V', 'mV']
 
         if unit not in unit_list:
@@ -313,6 +370,9 @@ class KeysightFuncGenerator(InstrumentComm):
         command = 'SOUR' + str(source) + ':VOLT:OFFS?'
         offset = float(self.query(command))
 
+        # attenuation
+        offset /= self._attenuation
+              
         if unit=='mV':
             offset *= 1000
 
@@ -360,8 +420,7 @@ class KeysightFuncGenerator(InstrumentComm):
         # set frequency
         command = 'SOUR' + str(source) + ':FREQ ' + str(frequency)
         self.write(command)
-        
-
+    
         
     def get_frequency(self, unit='Hz', source=1):
         """
