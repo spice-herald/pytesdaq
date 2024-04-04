@@ -22,6 +22,7 @@ class Keithley2400(InstrumentComm):
         """
 
         # connect to instrument
+        #self._inst.clear()
         self.connect()
 
         # get idn
@@ -35,6 +36,7 @@ class Keithley2400(InstrumentComm):
         depending of the settings
         """
         command = ':OUTP ON'
+        
         self.write(command)
 
 
@@ -74,7 +76,7 @@ class Keithley2400(InstrumentComm):
             return source
 
     
-    def set_source(self, source, fixed=True, autorange=True):
+    def set_source(self, source, fixed=True, autorange=False):
         """
         Set source: 'current' or 'voltage'
 
@@ -163,10 +165,11 @@ class Keithley2400(InstrumentComm):
         ------
         voltage : float
         """
-
-
+        self._inst.clear()
+        
         voltage = self.query(':SOUR:VOLT?')
         return float(voltage)
+
 
 
 
@@ -216,6 +219,26 @@ class Keithley2400(InstrumentComm):
         self.write(command)
 
 
+    def set_current_measurement_range(self,Crange):
+        """
+        Set the measurment range limit of the supply in Amps
+
+        Arguments:
+        ---------
+        range : float
+          range limit
+
+        Return
+        ------
+        None
+        """
+    
+
+        command = ':SENS:CURR:RANG ' + str(Crange)
+        print("Current measure set to fixed range")
+        self.write(command)
+
+
     def get_current(self):
         """
         Get current 
@@ -229,7 +252,7 @@ class Keithley2400(InstrumentComm):
         current : float
         """
 
-
+        self._inst.clear()
         current = self.query(':SOUR:CURR?')
         return float(current)
 
@@ -246,9 +269,12 @@ class Keithley2400(InstrumentComm):
         current : float
         """
 
-
-        command = 'MEAS:CURR?'
+        #command = 'MEAS:CURR?'
+        # the MEAS command will do the configuration at the same time. READ will keep existing scensing setting
+        command = ':READ?'
         self.write(command)
+        #print("measure_current::self.write(':READ?' !!!!!!!!!!!!")
+        #time.sleep(0.2)
 
     def showARM_current(self):
         """
@@ -265,3 +291,4 @@ class Keithley2400(InstrumentComm):
 
         command = "DISP:FORM:ENAB ARM,CURR"
         self.write(command)
+

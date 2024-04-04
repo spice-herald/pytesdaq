@@ -38,8 +38,67 @@ class Agilent33500B(InstrumentComm):
 
         # signal generator attenuation
         self._attenuation = attenuation
+
+        self.set_auto_range(1)
+
+    def set_auto_range(self, auto, source=1):
+
+        # check input
+        if isinstance(auto, int):
+            if auto==0:
+                auto = 'OFF'
+            else:
+                auto = 'ON'
+            
+        auto = auto.upper()
+
+        if auto != 'ON' and auto != 'OFF':
+            print('ERROR: Argument should be "on" or "off"')
+            if self._raise_errors:
+                raise
+            else:
+                return None
+        command = 'SOURCE' + str(source) +':VOLTAGE:RANGE:AUTO ' + str(auto)
+        #command = 'SOURCE1:VOLTAGE:RANGE:AUTO OFF'
+        print(command)
+        self.write(command)
         
         
+
+    def set_load_resistance(self, load='infinity',source=1):
+        """
+        Set output load
+
+        Parameters
+        ---------
+        load: int or string
+            'infinity' or 'inf'
+            'minimum' or 'min'
+            'maximum' or 'max'
+            'default' or 'def'
+            or resistance value in Ohm
+        """
+        # check input
+        if isinstance(load, int):
+            if load<50:
+                load = 50
+            if load>1e6:
+                load = 'infinity'
+        else:
+            load_list = ['infinity', 'inf', 'maximum','max', 'minimum', 'min',
+                         'default', 'def']
+            if load not in load_list:
+
+                print('ERROR: Load type not recognized!')
+                print('Choice is "inf", "max", "min", or "def"')
+                if self._raise_errors:
+                    raise
+
+        # set load
+        command = 'OUTPUT' + str(source) + ':LOAD ' + str(load)
+        self.write(command)
+
+
         
     def set_shape(self, shape,source=1):
         """

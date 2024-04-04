@@ -515,6 +515,17 @@ class Control:
             )
         
         else:
+            # load
+            resistance = self.get_signal_gen_resistance(
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+            
+            if resistance == nan:
+                raise ValueError('ERROR: Signal generator resistance not available '
+                                 'in config file!')
+            self._signal_generator_inst.set_load_resistance(int(resistance))
             
             # shape
             if shape is not None:
@@ -525,15 +536,6 @@ class Control:
             
             # amplitude
             if voltage is None and current is not None:
-                resistance = self.get_signal_gen_resistance(
-                    tes_channel=tes_channel,
-                    detector_channel=detector_channel,
-                    adc_id=adc_id,
-                    adc_channel=adc_channel)
-                
-                if resistance == nan:
-                    raise ValueError('ERROR: Signal generator resistance not available '
-                                     'in config file!')
                 voltage = resistance*current/1000
 
             if voltage is not None:
@@ -1901,6 +1903,31 @@ class Control:
                 # convert to uAmps
                 param_val *= 1e6 
           
+            elif self._tes_controller_name == 'agilent33500B':
+
+                ## get parameter
+                #keithley_params = self._config.get_device_parameters('keithley2400')
+
+                ## voltage source ?
+                voltage_source = True
+                #if 'voltage_source' in keithley_params:
+                #    voltage_source = keithley_params['voltage_source']
+
+                if voltage_source:
+                    resistance =  self.get_tes_bias_resistance(
+                        tes_channel=tes_channel,
+                        detector_channel=detector_channel,
+                        adc_id=adc_id,
+                        adc_channel=adc_channel
+                    )
+
+                    voltage = self._tes_controller_inst.get_offset()
+                    param_val = voltage/resistance
+                else:
+                    param_val = self._tes_controller_inst.get_current()
+
+                # convert to uAmps
+                param_val *= 1e6 
 
             else:
                 print('ERROR: Unknown TES controller!')
@@ -2184,8 +2211,9 @@ class Control:
                     
                     voltage = resistance*value*1e-6
                     self._tes_controller_inst.set_source('voltage')
+                    self._tes_controller_inst.set_current_measurement_range(1e-2)
                     self._tes_controller_inst.set_voltage(voltage)
-                    self._tes_controller_inst.set_current_compliance(1e-3)
+                    self._tes_controller_inst.set_current_compliance(1e-2)
                     self._tes_controller_inst.showARM_current()
                     self._tes_controller_inst.enable_output()
                     self._tes_controller_inst.measure_current()
@@ -2200,6 +2228,20 @@ class Control:
                         tes_channel=tes_channel,
                         detector_channel=detector_channel,
                         adc_id=adc_id, adc_channel=adc_channel)
+            elif self._tes_controller_name == 'agilent33500B':
+                resistance =  self.get_tes_bias_resistance(
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel,
+                    adc_id=adc_id,
+                    adc_channel=adc_channel
+                )
+                
+                voltage = resistance*value*1e-6
+                self._tes_controller_inst.set_load_resistance(int(resistance))
+                self._tes_controller_inst.set_shape('dc')
+                self._tes_controller_inst.set_offset(voltage)
+                self._tes_controller_inst.set_generator_onoff('on')
+                
                     
             else:
                 raise ValueError('ERROR: Unknown TES controller!')
@@ -2459,6 +2501,20 @@ class Control:
                     raise_errors=self._raise_errors)
             )
             
+        # ----------------
+        # agilent33500B
+        # ----------------
+        if self._tes_controller_name == 'agilent33500B':
+            address = self._config.get_device_visa_address('agilent33500B')
+            attenuation = self._config.get_device_parameters(
+                self._signal_generator_name, parameter='attenuation')
+            self._tes_controller_inst = (
+                    Agilent33500B(address,
+                                  visa_library=visa_library,
+                                  attenuation=attenuation,
+                                  verbose=self._verbose,
+                                  raise_errors=self._raise_errors)
+            )
                     
         # ----------------
         # Signal generator

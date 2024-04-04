@@ -1,14 +1,12 @@
 from  pytesdaq.instruments.agilent import Agilent33500B
+import sys
 if __name__ == "__main__":
 
+    setpoint = float(sys.argv[1])
     
     # VISA Address
-    # visa_address = 'GPIB::10::INSTR'
-    # visa_address = 'COM1'
-    # visa_address = 'TCPIP::192.168.0.7::1234::SOCKET'
-    visa_address = 'TCPIP0::169.254.5.21::inst0::INSTR'
-    visa_address = 'TCPIP::131.243.51.117::inst0::INSTR'
-    visa_address = 'TCPIP::131.243.51.234::inst0::INSTR'
+    #visa_address = 'USB0::2391::9991::MY62000634::0::INSTR'
+    visa_address = 'TCPIP::192.168.10.1::inst0::INSTR'
     
     # Instantiate instrument
     myinstrument = Agilent33500B(visa_address, attenuation=1)
@@ -18,7 +16,7 @@ if __name__ == "__main__":
     print('Device name: ' + idn)
 
     # set amplitude Vpp
-    myinstrument.set_amplitude(0.005)
+    myinstrument.set_amplitude(0.01)
     
     # get amplitude
     amplitude = myinstrument.get_amplitude()
@@ -36,4 +34,9 @@ if __name__ == "__main__":
     shape = myinstrument.get_shape()
     print('Shape = ' + shape )
 
-    myinstrument.set_generator_onoff(0)
+    myinstrument.set_load_resistance(2047)
+    myinstrument.set_shape('dc')
+    myinstrument.set_offset(setpoint) #V
+    myinstrument.set_generator_onoff('on')
+
+
