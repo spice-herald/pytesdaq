@@ -1606,7 +1606,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._rshunt_spinbox.setMaximum(100000)
         self._rshunt_spinbox.setProperty('value', 5.0)
         self._rshunt_spinbox.setObjectName('rshuntSpinBox')
-        self._rshunt_spinbox.setDecimals(1)
+        self._rshunt_spinbox.setDecimals(3)
 
         step_type = QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
         self._rshunt_spinbox.setStepType(step_type)
@@ -1623,7 +1623,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._rp_spinbox.setMaximum(100000)
         self._rp_spinbox.setProperty('value', 2.5)
         self._rp_spinbox.setObjectName('rpSpinBox')
-        self._rp_spinbox.setDecimals(1)
+        self._rp_spinbox.setDecimals(3)
         self._rp_spinbox.setStepType(step_type)
 
 
@@ -1638,7 +1638,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._r0_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
         self._r0_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
         self._r0_spinbox.setMaximum(100000)
-        self._r0_spinbox.setProperty('value', 200)
+        self._r0_spinbox.setProperty('value', 100)
         self._r0_spinbox.setObjectName('r0SpinBox')
         self._r0_spinbox.setDecimals(1)
         self._r0_spinbox.setStepType(step_type)

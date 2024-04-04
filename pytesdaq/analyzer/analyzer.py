@@ -476,8 +476,16 @@ class Analyzer:
                                      dtype=np.float64)
                 
             data_array_truncated[ichan,:] = (didv_inst._tmean - didv_inst._offset)*norm
-          
-            
+
+            # apply low pass
+            nyq = sample_rate/2
+            cut_off = 30000/nyq
+            b,a = signal.butter(2, cut_off)
+            data_array_truncated[ichan,:] = (
+                signal.filtfilt(b, a, data_array_truncated[ichan,:], axis=-1,
+                                padtype='even')
+            )
+                        
             # fit
             result = None
             if do_fit_1pole:

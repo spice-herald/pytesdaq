@@ -143,8 +143,7 @@ class IV_dIdV(Sequencer):
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
             
-        
-                
+                      
         # Temperature loop
         temperature_vect = []
         nb_temperature_steps = 1
@@ -304,17 +303,17 @@ class IV_dIdV(Sequencer):
                     time.sleep(sleeptime_s)
 
 
-                
+                # Relock
+                if self._do_relock:
+
+                    # relock each channel
+                    for channel in self._detector_channels:
+                        print('INFO: Relocking channel ' + channel) 
+                        self._instrument.relock(detector_channel=channel)
+
+
                 # if step 1: tes zap, relock, zero
                 if istep==1:
-
-                    # Relock
-                    if self._do_relock:
-
-                        # relock each channel
-                        for channel in self._detector_channels:
-                            print('INFO: Relocking channel ' + channel) 
-                            self._instrument.relock(detector_channel=channel)
                         
                     # Zero
                     if self._do_zero_offset:
@@ -449,7 +448,7 @@ class IV_dIdV(Sequencer):
                     daq_online.set_adc_config_from_dict(setup_dict)
 
                     # get data
-                    data_array = daq_online.read_many_events(100,
+                    data_array = daq_online.read_many_events(200,
                                                              adctovolt=True)
 
                     # clear

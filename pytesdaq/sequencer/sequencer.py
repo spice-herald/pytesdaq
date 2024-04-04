@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 import shutil
 import stat
-
+import copy
 
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
@@ -234,15 +234,18 @@ class Sequencer:
 
           # loop measurements
           for measurement in  self._measurement_list:
+
+               # copy adc_dict
+               adc_dict_meas = copy.deepcopy(adc_dict)
+
                
                # measurement config
                config_dict = self._measurement_config[measurement]
-
                
                # dIdV flag
                is_didv_used = (measurement != 'iv'
                                and  measurement != 'noise')
-
+          
                # check dIdV parameters
                if is_didv_used:
                     required_parameters.extend(required_parameters_didv)
@@ -256,11 +259,11 @@ class Sequencer:
                                                + '! Please check configuration')
                          
                # ADC parameters
-               for adc_id in adc_dict:
-                    for item,value in adc_dict[adc_id].items():
+               for adc_id in adc_dict_meas:
+                    for item,value in adc_dict_meas[adc_id].items():
                          if item in config_dict:
                               value = config_dict[item]
-                              adc_dict[adc_id][item] = value
+                              adc_dict_meas[adc_id][item] = value
 
                     # calculate number of samples (dIdV fit)
                     nb_samples = 0
@@ -271,13 +274,14 @@ class Sequencer:
                               float(config_dict['nb_cycles'])*sample_rate/signal_gen_freq
                          )
                     elif 'trace_length_ms' in config_dict:
-                         nb_samples= round(float(config_dict['trace_length_ms'])*sample_rate/1000)
+                         nb_samples = round(
+                              float(config_dict['trace_length_ms'])*sample_rate/1000
+                         )
                     elif 'trace_length_adc' in config_dict:
                          nb_samples = int(config_dict['trace_length_adc'])
                     else:
                          raise ValueError('Nb of cycles or trace length required for "'
-                                          + measurement + '" measurement!')
-                    
+                                          + measurement + '" measurement!')                  
 
                     # trigger
                     trigger_type = 1
@@ -285,18 +289,21 @@ class Sequencer:
                          trigger_type = 2
                
                     # add parameters
-                    for adc_id in adc_dict:
-                         adc_dict[adc_id]['nb_samples'] = int(nb_samples)
-                         adc_dict[adc_id]['trigger_type'] =  trigger_type
+                    for adc_id in adc_dict_meas:
+                         adc_dict_meas[adc_id]['nb_samples'] = int(nb_samples)
+                         adc_dict_meas[adc_id]['trigger_type'] =  trigger_type
                          if trigger_type==2:
                               trigger_channel = '/Dev1/pfi0'
-                              if ('device_name' in adc_dict[adc_id] and 
-                                  'trigger_channel' in  adc_dict[adc_id]):
-                                   trigger_channel = '/' + adc_dict[adc_id]['device_name'] + '/' 
-                                   trigger_channel += adc_dict[adc_id]['trigger_channel']
-                              adc_dict[adc_id]['trigger_channel'] = trigger_channel
+                              if ('device_name' in adc_dict_meas[adc_id] and 
+                                  'trigger_channel' in  adc_dict_meas[adc_id]):
+                                   trigger_channel = (
+                                        '/' + adc_dict_meas[adc_id]['device_name']
+                                        + '/'
+                                        + adc_dict_meas[adc_id]['trigger_channel']
+                                   )
+                              adc_dict_meas[adc_id]['trigger_channel'] = trigger_channel
 
-               self._measurement_config[measurement]['adc_setup'] = adc_dict
+               self._measurement_config[measurement]['adc_setup'] = adc_dict_meas
 
                          
                          
