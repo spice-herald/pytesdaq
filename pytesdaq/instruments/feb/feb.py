@@ -677,7 +677,7 @@ class FEB(InstrumentComm):
         data = 0
         if setting == FEBSettings.SENSORBIAS.value:
             if self._is_modified:
-                data = int(round(4095.0 * (500.0 + value) / 1000.0))
+                data = int(round(4095.0 * (166.67 + value) / 333.33))
             else:
                 data = int(round(4095.0 * (2000.0 + value) / 4000.0)) 
         if setting == FEBSettings.SQUIDBIAS.value:
@@ -713,7 +713,7 @@ class FEB(InstrumentComm):
 
         if setting == FEBSettings.SENSORBIAS.value:
             if self._is_modified:
-                output_val = 1000.0 * float(decimal_result) / 4095.0 - 500.0
+                output_val = 333.33 * float(decimal_result) / 4095.0 - 166.67
             else:
                 output_val = 4000.0 * float(decimal_result) / 4095.0 - 2000.0
         elif setting == FEBSettings.SQUIDBIAS.value:

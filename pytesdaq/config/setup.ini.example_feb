@@ -13,9 +13,6 @@
 # ##################################################################
 
 
-
-
-
 [setup] 
 
 # Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge,
@@ -24,21 +21,21 @@ facility = 2
 
 # Fridge run number and  date/time fridge was at base temperature
 # (syntax: mm/dd/yyyy HH:MM)
-fridge_run = 30
-fridge_run_start = 06/14/2023 20:00
+fridge_run = 41
+fridge_run_start = 04/03/2024 03:00
 
 
 # data path 
 data_path = /sdata/runs
 
 # type of instruments used 
-#squid_controller = feb
+squid_controller = feb
 tes_controller = feb
-signal_generator = keysight
+signal_generator = agilent33500B
 temperature_controllers = macrt
 
 # VISA Library (leave commented if standard path)
-visa_library = /usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0
+#visa_library = /usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0
 
 
 # ADC list
@@ -75,48 +72,44 @@ trigger_channel = pfi0
 #   Controller ->  "controller:[name]_[channel]"
 #   TES wiring ->  "tes:[channel]  (optional if same as controller channel)
 #   Detector   ->  "detector:[name]_[channel]"  (set to "None" if no parameter
-connection0 = detector:Melange4pc1ch, tes:A, controller:feb1_A
-connection1 = detector:Melange1pc1ch, tes:B, controller:feb1_B
-connection2 = detector:Melange025pcLeft, tes:C, controller:feb1_C
-connection3 = detector:Melange025pcRight, tes:D, controller:feb1_D
-connection4 = detector:keysightTTL, controller:keysight_ttl
+connection0 = detector:NoDeviceA, tes:A, controller:feb1_A
+connection1 = detector:NoDeviceB, tes:B, controller:feb1_B
+connection2 = detector:NoDeviceD, tes:C, controller:feb1_C
+connection3 = detector:CPDv21Al2O3, tes:D, controller:feb1_D
 
 
+#connection4 = detector:keysightTTL, controller:keysight_ttl
 
-# Electronics and detector readout default configuration
+
+#  Electronics and detector readout configuration 
+# if not set by SQUID/TES/SG controllers
 # 
-# shunt_resistance [Ohms] 
-# squid_turn_ratio  
-# feedback_resistance [Ohms] (magnicon->not needed, read from board)
-# parasitic_resistance [Ohms] 
-
-# If SQUID and/or TES controller not enabled, other parameters
-# are needed for detector testing:
-
-#     tes_bias: [uAmps]
-#     output_gain (for close/open loop calculation)
-#     preamp_gain (for open loop calculation)
-#     signal_gen_current:  [uAmps]
-#     signal_gen_frequency: [Hz]
-
-detector_config0 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0029
-detector_config1 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0039
-detector_config2 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00742
-detector_config3 = output_gain: 1, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00301
-detector_config4 = output_gain: 1, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:1
+#  shunt_resistance [Ohms] 
+#  squid_turn_ratio  
+#  feedback_resistance [Ohms] (magnicon->not needed, read from board)
+#  parasitic_resistance [Ohms] (if known)
+#  tes_bias_resistance: [Ohms]
+#  output_gain (for close/open loop calculation)
+#  preamp_gain (for open loop calculation)
+#  signal_gen_resistance: [Ohms]  -> resistance in the TES line
+#     
 
 
+detector_config0 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0029
+detector_config1 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00365
+detector_config2 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00265
+detector_config3 = shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0024
 
 
 [polaris_daq]
-lib = /data/DAQ/nidaq/lib/libnidaq.so
+lib = /data/daq/nidaq/lib/libnidaq.so
 fcn = NIdaq
 enable = true 
 next = recorder
 
 
 [polaris_recorder]
-lib = /data/DAQ/nidaq/lib/libnidaq.so
+lib = /data/daq/nidaq/lib/libnidaq.so
 fcn = HDF5Recorder
 enable = true
 next = daq
@@ -148,7 +141,6 @@ signal_gen_tes_resistance = 30000
 # with variable gain read from FEB
 
 
-
 [magnicon]
 # Details of remote connection
 hostname = 128.32.239.62
@@ -168,13 +160,11 @@ feedback_fix_gain = 1
 output_fix_gain = 1
 
 
+[agilent33500B]
+#visa_address = TCPIP::192.168.2:12::5025::SOCKET
+visa_address =  GPIB::10::INSTR
+attenuation = 5.01
 
-
-
-[signal_generators]
-#keysight_visa_address = TCPIP::192.168.2:12::5025::SOCKET
-keysight_visa_address = GPIB::10::INSTR
-keysight_attenuation = 5.01
 
 [temperature_controllers]
 # Lakeshore

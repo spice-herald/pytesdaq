@@ -1,0 +1,144 @@
+####################################################################
+#
+# Run configuration (hardware, ADC connections, wiring)
+#
+# Each run the following parameters need to be modified:
+#    - fridge_run = # 
+#    - fridge_run_start = mm/dd/yyyy HH:MM
+#      (time the fridge was at base) 
+#    - controllers if changed
+#    - ADC connection
+#        - connection# = ... (see example below)
+#
+# ##################################################################
+
+
+[setup] 
+
+# Facility number: 1 = McKinsey Leiden Fridge, 2 = Pyle Cryoconcept Fridge,
+#                  3 = UMass  4 = LBL Blue Fors
+facility = 4
+
+# Fridge run number and  date/time fridge was at base temperature
+# (syntax: mm/dd/yyyy HH:MM)
+fridge_run = 12
+fridge_run_start = 03/08/2024 19:00
+
+# raw data base path (run# directory automatically   created)
+data_path = /home/mwilliams/data
+
+# INSTRUMENTS controllers
+#tes_controller = keithley2400
+tes_controller = agilent33500B
+signal_generator = agilent33500B
+
+# instruments or driver not available, keep commented
+# squid_controller = starcryo 
+# temperature_controllers = lakeshore
+
+
+# ADC list
+enable_adc = adc1
+
+# database (FIXME -> Not implemented yet)
+enable_redis = false
+enable_sql = false
+
+# readback instrument values (FIXME -> Not implemented yet)
+enable_readback = false
+
+
+
+[adc1]
+device_name  = Dev8
+
+# default adc settings
+# (may be changed with run_daq.py arguments!)
+sample_rate = 1250000 
+nb_samples = 125000
+voltage_min = -10
+voltage_max = 10
+channel_list = 0-3
+trigger_type = 1
+trigger_channel = pfi0
+
+
+
+# NI ADC connection information
+# connection# (# ADC channel 0-7) = ...
+#      Controller ->  "controller:[name]_[channel]"
+#      TES wiring ->  "tes:[channel]  (optional if same as controller channel)
+#      Detector   ->  "detector:[name]_[channel]"  (set to "None" if no parameter
+connection0 = detector:Si_4percent, controller:starcryo1_1
+connection1 = detector:W1D4_center, controller:starcryo1_2
+connection2 = detector:W1E3, controller:starcryo1_3
+connection3 = detector:W2A5_TES100x25, controller:starcryo1_4
+#connection4 = detector:PCB_AccelZ, controller:NONE_5
+#connection5 = detector:PCB_AccelY, controller:NONE_6
+#connection6 = detector:PCB_AccelX, controller:NONE_7
+
+
+#  Electronics and detector readout configuration if not set by SQUID/TES/SG controllers
+# 
+#  shunt_resistance [Ohms] 
+#  squid_turn_ratio  
+#  feedback_resistance [Ohms] (magnicon->not needed, read from board)
+#  parasitic_resistance [Ohms] (if known)
+#  tes_bias_resistance: [Ohms]
+#  output_gain (for close/open loop calculation)
+#  preamp_gain (for open loop calculation)
+#  signal_gen_resistance: [Ohms]  -> resistance in the TES line
+#     
+
+detector_config0 = tes_bias_resistance: 1700, signal_gen_resistance: 2047, output_gain: 1, shunt_resistance: 0.002, squid_turn_ratio:10, feedback_resistance:100000
+detector_config1 = tes_bias_resistance: 40000, signal_gen_resistance: 2047, output_gain: 1, shunt_resistance: 0.002, squid_turn_ratio:10, feedback_resistance:100000
+detector_config2 = tes_bias_resistance: 2047, signal_gen_resistance: 2047, output_gain: 1, shunt_resistance: 0.002, squid_turn_ratio:10, feedback_resistance:100000
+detector_config3 = tes_bias_resistance: 20000, signal_gen_resistance: 2047, output_gain: 1, shunt_resistance: 0.002, squid_turn_ratio:10, feedback_resistance:100000
+
+[polaris_daq]
+lib = /lib/libnidaq.so
+fcn = NIdaq
+enable = true 
+next = recorder
+
+
+[polaris_recorder]
+lib = /lib/libnidaq.so
+fcn = HDF5Recorder
+enable = true
+next = daq
+
+[agilent33500B]
+#visa_address = TCPIP::131.243.51.44::inst0::INSTR
+visa_address = TCPIP::192.168.10.1::inst0::INSTR
+attenuation = 1.0
+
+[keithley2400]
+visa_address = ASRL3::INSTR
+voltage_source = true
+
+
+[temperature_controllers]
+# Lakeshore
+
+# TCP or USB information
+lakeshore_setup  =  model:372, ip:192.168.2:11, tcp_port:7777
+
+# channel setup
+# Format:
+#    lakeshore_chan[1-16] = name:[unique name], type:[RX, CX, or FR], serial:[...]
+#    "type" and "serial" are optional is resistance only measurement or temperature
+#    curve loaded in lakeshore
+# lakeshore_chan1 = name:TES1, global_number:1
+# lakeshore_chan2 = name:MF3, global_number:2
+# lakeshore_chan3 = name:MF2, global_number:3
+# lakeshore_heater0 = name:heaterMCls, global_number:30
+
+
+
+[redis]
+enable = false
+host = 127.0.0.1
+port = 6379
+password = None
+data_stream = NIstream

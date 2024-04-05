@@ -237,13 +237,7 @@ class Analyzer:
             
         
         return data_array_norm
-        
-
-
-    
-
-
-
+     
     
     def calc_psd(self, data_array, sample_rate):
         """
@@ -281,8 +275,6 @@ class Analyzer:
         offset = np.mean(data_array, axis=1)
         return offset
 
-
-    
             
     def fit_didv(self, data_array=None, sample_rate=None, unit='Amps',
                  mask=None, fit_config=None, add_autocuts=True):
@@ -475,8 +467,18 @@ class Analyzer:
                 fit_array = np.zeros((nb_channels,nb_samples),
                                      dtype=np.float64)
                 
-            data_array_truncated[ichan,:] = (didv_inst._tmean - didv_inst._offset)*norm
-          
+            data_array_truncated[ichan,:] = (didv_inst._tmean
+                                             - didv_inst._offset)*norm
+
+            # apply low pass
+            nyq = sample_rate/2
+            cut_off = 30000/nyq
+            b,a = signal.butter(2, cut_off)
+            data_array_truncated[ichan,:] = (
+                signal.filtfilt(b, a, data_array_truncated[ichan,:], axis=-1,
+                                padtype='even')
+            )
+            
             
             # fit
             result = None
@@ -519,7 +521,8 @@ class Analyzer:
                 result['infinite_l']['r0'] = r0_infinite
                 result['infinite_l']['i0'] = i0_infinite
                 result['infinite_l']['p0'] = p0_infinite
-            
+
+                
 
                 
             # Add result to list
@@ -612,14 +615,16 @@ class Analyzer:
             nb_to_delete = self._nb_events_running_avg-self._analysis_config['nb_events_avg']+1
             
             # data buffer
-            self._data_buffer = np.delete(self._data_buffer, list(range(nb_to_delete)), axis=2)
+            self._data_buffer = np.delete(self._data_buffer,
+                                          list(range(nb_to_delete)), axis=2)
 
             # cut buffer
             if self._analysis_config['enable_pileup_rejection']:
                 for cut_name,val in self._cut_buffer.items():
-                    self._cut_buffer[cut_name] = np.delete(val,
-                                                            list(range(nb_to_delete)),
-                                                            axis=1)
+                    self._cut_buffer[cut_name] = np.delete(
+                        val,
+                        list(range(nb_to_delete)),
+                        axis=1)
                 
         # append elements
         self._data_buffer = np.append(self._data_buffer, data_array, axis=2)
@@ -801,10 +806,7 @@ class Analyzer:
         
 
         return cuts_val
-    
-
   
-
         
         
     def _initialize_config(self):
@@ -827,7 +829,7 @@ class Analyzer:
         self._analysis_config['tes_bias'] = None
         self._analysis_config['rshunt'] = 0.005
         self._analysis_config['rp'] = 0.003
-        self._analysis_config['r0'] = 0.2
+        self._analysis_config['r0'] = 0.1
         self._analysis_config['dt'] = 2e-6
         self._analysis_config['add_180phase'] = False
         self._analysis_config['fit_didv'] = False

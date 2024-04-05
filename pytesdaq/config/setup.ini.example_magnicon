@@ -40,6 +40,7 @@ data_path = ./
 # If multiple lakeshore, use lakeshore1, lakeshore2, etc.
 squid_controller = magnicon
 signal_generator = magnicon
+tes_controller = magnicon
 temperature_controllers = lakeshore, macrt
 
 

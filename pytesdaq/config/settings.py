@@ -176,9 +176,9 @@ class Config:
         get SQUID controller device name
         
         Returns:
-           str - no type conversion happens here!
+           str or NoneType
         """
-        controller = str()
+        controller = None
         try:
             controller =  self._get_setting('setup','squid_controller')
         except:
@@ -191,16 +191,17 @@ class Config:
         get TES controller device name
         
         Returns:
-           str - no type conversion happens here!
+           str or NoneType
         """
-        controller = str()
+        
+        controller = None
         try:
-            controller =  self._get_setting('setup','tes_controller')
+            controller =  self._get_setting(
+                'setup','tes_controller')
         except:
             pass
     
         return controller
-
 
     def get_temperature_controllers(self):
         """
@@ -210,16 +211,15 @@ class Config:
         Returns:
             list of strings - no type conversion happens here!
         """
-        controllers=list()
+        controllers = list()
         
         try:
-            controllers =  self._get_comma_separated_setting('setup','temperature_controllers')
+            controllers =  self._get_comma_separated_setting(
+                'setup','temperature_controllers')
         except:
             pass
         
         return controllers
-
-
 
 
     def get_signal_generator(self):
@@ -227,16 +227,15 @@ class Config:
         get signal generator device name
             
         Returns:
-             str - no type conversion happens here!
+             str o NoneType
         """
-        controller=str()
+        controller = None
         try:
             controller = self._get_setting('setup','signal_generator')
         except:
             pass
     
         return controller
-
 
 
     def enable_redis(self):
@@ -321,14 +320,13 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-
-        if self._has_setting(controller_name,'preamp_fix_gain') and controller_name is not None:
-            preamp_fix_gain =  float(self._get_setting(controller_name,'preamp_fix_gain'))
-            
+        if (controller_name is not None
+            and self._has_setting(controller_name,'preamp_fix_gain')):
+            preamp_fix_gain =  float(self._get_setting(controller_name,
+                                                       'preamp_fix_gain'))
+                   
             
         return preamp_fix_gain
-
-
     
     
     def get_feedback_fix_gain(self, controller_name=None):
@@ -342,15 +340,12 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-
-        if self._has_setting(controller_name,'feedback_fix_gain') and controller_name is not None:
-            feedback_fix_gain =  float(self._get_setting(controller_name,'feedback_fix_gain'))
-            
+        if (controller_name is not None
+            and self._has_setting(controller_name,'feedback_fix_gain')):
+            feedback_fix_gain =  float(self._get_setting(controller_name,
+                                                         'feedback_fix_gain'))
             
         return feedback_fix_gain
-
-
-
 
     
     def get_output_fix_gain(self, controller_name=None):
@@ -362,36 +357,20 @@ class Config:
         if controller_name is None:
             controller_name = self.get_squid_controller()
 
-        
-        if self._has_setting(controller_name,'output_fix_gain') and controller_name is not None:
-            output_fix_gain =  float(self._get_setting(controller_name,'output_fix_gain'))
-            
+        if (controller_name is not None
+            and self._has_setting(controller_name,'output_fix_gain')):
+            output_fix_gain =  float(self._get_setting(controller_name,
+                                                       'output_fix_gain'))
+                   
         return output_fix_gain
 
-
     
-
-    def get_signal_gen_tes_resistance(self, controller_name=None):
-        """
-        Get SQUID readout output driver fix gain
-        """
-        resistance = nan
-
-        if controller_name is None:
-            controller_name = self.get_squid_controller()
-
-        
-        if self._has_setting(controller_name,'signal_gen_tes_resistance') and controller_name is not None:
-            resistance  =  float(self._get_setting(controller_name,'signal_gen_tes_resistance'))
-            
-        return resistance
-
-
     
     def get_adc_list(self):
         adc_list = list()
         try:
-            adc_list =  self._get_comma_separated_setting('setup','enable_adc')
+            adc_list =  self._get_comma_separated_setting('setup',
+                                                          'enable_adc')
         except:
             pass
         
@@ -484,11 +463,13 @@ class Config:
 
         # check arguments
         if  adc_id is None or adc_channel_list is None:
-            raise ValueError('ERROR in get_detector_config: "adc_id" and "adc_channel_list" required!')
+            raise ValueError('ERROR in get_detector_config: "adc_id" and '
+                             '"adc_channel_list" required!')
 
         adc_list = self.get_adc_list()
         if adc_id not in adc_list:
-            raise ValueError('ERROR in get_detector_config: No information in setup file for "'
+            raise ValueError('ERROR in get_detector_config: No information '
+                             + 'in setup file for "'
                              + str(acd_id) + '"!')
 
 
@@ -497,20 +478,17 @@ class Config:
                       'output_gain','preamp_gain','feedback_polarity','feedback_mode',
                       'signal_source','signal_gen_current','signal_gen_frequency',
                       'squid_turn_ratio','shunt_resistance', 'feedback_resistance',
-                      'parasitic_resistance',
-                      'signal_gen_tes_resistance','close_loop_norm']
-        
+                      'parasitic_resistance', 'tes_bias_resistance',
+                      'signal_gen_resistance','close_loop_norm']
+             
         detector_config = dict()
         for param in param_list:
             detector_config[param] = list()
-            
 
         # store channel lost
         detector_config['adc_name'] = adc_id
         detector_config['channel_type'] = 'adc'
         detector_config['channel_list'] = adc_channel_list
-
-
             
         # loop channel list
         for adc_chan in adc_channel_list:
@@ -525,7 +503,9 @@ class Config:
                 param_val = float(param_split[1])
 
                 # some conversion needed
-                if param_name=='tes_bias' or param_name=='squid_bias' or param_name=='signal_gen_current':
+                if (param_name=='tes_bias'
+                    or param_name=='squid_bias'
+                    or param_name=='signal_gen_current'):
                     param_val = param_val/1000000.0
                 if param_name=='lock_point_voltage':
                     param_val = param_val/1000.0
@@ -544,6 +524,7 @@ class Config:
             str - no type conversion happens here!
         """
         library_path = None
+        
         try:
             if self._has_setting('setup','visa_library'):
                 library_path =  self._get_setting('setup','visa_library')
@@ -560,7 +541,7 @@ class Config:
         Returns:
             str - no type conversion happens here!
         """
-        address=str()
+        address = str()
         try:
             address =  self._get_setting('feb','visa_address')
         except:
@@ -665,52 +646,78 @@ class Config:
             traceback.print_exc()
 
         return info
-
-
-    def get_signal_generator_visa_address(self, device_name):
-        """
-        get function generators
-        
-        Returns:
-            str - no type conversion happens here!
-        """
-
-        key = device_name + '_visa_address'
-        
-        address=str()
-        try:
-            address =  self._get_setting('signal_generators',key)
-        except:
-            pass
     
+    def get_device_visa_address(self, device_name):
+        """
+        get visa address of a device assuming:
+        [device_name]
+           visa_address = ...
+
+        """
+
+        address = None
+        
+        # back compatibility if device is "keysight"
+        if device_name == 'keysight':
+            key = 'keysight_visa_address'
+            if self._has_setting('signal_generators', key):
+                address =  str(self._get_setting('signal_generators', key))
+                return address
+            else:
+                # it has been rename to agilent33500B
+                device_name = 'agilent33500B'
+
+                
+        if self._has_setting(device_name, 'visa_address'):
+            address = str(self._get_setting(device_name, 'visa_address'))
+            
         return address
 
-
-    def get_signal_generator_attenuation(self, device_name):
-        """
-        get function generator attenuation 
-
-        Parameters:
-        ----------        
-        device_name : str
-          signal generator name (field in .ini configuration file)
- 
-        Returns:
-        --------
-            attenuation : float
-        """
-
-        key = device_name + '_attenuation'
     
-        attenuation = 1
-        try:
-            attenuation =  float(self._get_setting('signal_generators', key))
-        except:
-            pass
-    
-        return attenuation
+    def get_device_parameters(self, device_name, parameter=None):
+        """
+        get visa address of a device assuming:
+        [device_name]
+           visa_address = ...
 
+        """
+        
+        # back compatibility if device is "keysight"
+        # (only "attenuation" available)
+        parameters = dict()
+        
+        if device_name == 'keysight':
 
+            if self._has_section('signal_generators'):
+                key = 'keysight_attenuation'
+                if self._has_setting('signal_generators', key):
+                    parameters['attenuation'] = (
+                        float(self._get_setting('signal_generators', key))
+                    )
+                else:
+                    parameters['attenuation'] = None
+                    
+                if parameter == 'attenuation':
+                    return parameters['attenuation']
+                else:
+                    return parameters
+            else:
+                device_name = 'agilent33500B'
+
+        parameters = None
+        if self._has_section(device_name):
+            
+            parameters = self._get_section_dict(device_name)
+
+            if parameter is not None:
+                if parameter in parameters.keys():
+                    parameters = parameters[parameter]
+                else:
+                    parameters = None
+
+        return parameters
+
+   
     def get_temperature_controller_setup(self, device_name):
         """
         get function generators
@@ -795,10 +802,7 @@ class Config:
 
         return self._get_section_dict(trigger_type)
 
-        
-        
-    
-
+      
     
     def _get_ini_path(self, ini_filename):
         """
@@ -829,7 +833,6 @@ class Config:
              
         """
         return self._cached_config.items(section) 
-
 
 
     def _has_section(self, section):
@@ -867,8 +870,6 @@ class Config:
         """
         return self._cached_config.get(section, name) 
 
-
-    
 
     def _has_setting(self, section, name):
         """
