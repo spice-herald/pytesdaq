@@ -521,9 +521,16 @@ class Control:
                 self._signal_generator_inst.set_offset(
                     offset/1000, unit='V',
                     source=signal_gen_num)
-                
+
+            # phase
+            if phase_shift is not None:
+                self._signal_generator_inst.set_phase(
+                    phase_shift,
+                    source=signal_gen_num)
+
             # source
-            if source is not None:
+            if (source is not None
+                and self._squid_controller_name == 'feb'):
 
                 # get readout controller ID and Channel
                 controller_id, controller_channel = (
@@ -1703,13 +1710,12 @@ class Control:
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None, adc_channel=None):
-        
-        
-        if not self._dummy_mode and self._squid_controller_name is None:
-            print('ERROR: No SQUID controller, check config')
-            return nan
-
+        """
+        Get state of SQUID or TES controllers
+        """
+    
         if self._dummy_mode:
+            print('WARNING: Dummy mode enabled. Doing nothing.')
             return 1.0
              
         # get readout controller ID and Channel
@@ -1728,7 +1734,7 @@ class Control:
         # TES paramaters
         if param_name == 'tes_bias':
 
-            if self._tes_controller_name=='feb':
+            if self._tes_controller_name == 'feb':
 
                 # get channel info
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1811,7 +1817,7 @@ class Control:
         
                 
         # SQUID parameters
-        if self._squid_controller_name=='feb':
+        if self._squid_controller_name == 'feb':
             
             # CDMS FEB device
             feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1891,7 +1897,7 @@ class Control:
             else:
                 pass
                 
-        elif self._squid_controller_name=='magnicon':
+        elif self._squid_controller_name == 'magnicon':
             
             if self._verbose:
                 print('INFO: Getting "' + param_name + '" for channel ' 
