@@ -149,7 +149,7 @@ if __name__ == "__main__":
             channel = tes_channel 
         elif detector_channel_list is not None:
             detector_channel = str(detector_channel_list[ichan])
-            channel = tes_channel 
+            channel = detector_channel
 
         # -----------
         # TES bias
