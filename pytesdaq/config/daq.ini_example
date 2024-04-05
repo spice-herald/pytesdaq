@@ -33,16 +33,14 @@ split_series = False
 # A short list (comma separated) of specific detector channels
 # can be specified with didv_detector_channel (keep commented or all
 # for all channels selected with run_daq
-add_series_start_didv = True
+add_series_start_didv = False
 add_series_end_didv = False
-didv_run_time = 300s
+didv_run_time = 120s
 
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
 trace_length = 10s
-# nb_samples = 12500000
-
 
 # sample rate
 sample_rate = 1250000
@@ -76,6 +74,9 @@ voltage_min = -10
 voltage_max = 10
 
 
+# maximum series time
+series_max_time = 90s
+
 # Signal generator voltage/frequency (optional)
 #
 # Parameters: signal_gen_voltage_mV, signal_gen_frequency_Hz
@@ -93,28 +94,50 @@ voltage_max = 10
 #
 # IMPORT NOTE: frequency/voltage need to have same format!
 
-#signal_gen_voltage_mV = 100
-#signal_gen_frequency_Hz =  4
-# OR 
+signal_gen_voltage_mV = 5
+signal_gen_frequency_Hz =  80
+
+# OR if channels have different settings: 
 signal_gen_voltage_mV = Melange025pcRight & Melange025pcLeft:0.25, Melange1pc1ch & Melange4pc1ch:0.5
 signal_gen_frequency_Hz = Melange025pcRight & Melange025pcLeft:80, Melange1pc1ch & Melange4pc1ch:80
 
 
-[exttrig] 
+[exttrig]
+
 # group name prefix 
-group_prefix = didq
+group_prefix = exttrig
+
+# single series max time in seconds(s) or minutes (m)
+# if run "duration" longer than series max time
+# then run is splitted in multiple series
+# number of series within group = total duration / series max time
+# Recommendation: < 30 minutes data chunks/series
+series_max_time = 90s
+
+# split even/odd series (for blinding purpose)
+split_series = False
+
+# Beginning/end of series didv
+# (didv config based on "didv" field)
+# A short list (comma separated) of specific detector channels
+# can be specified with didv_detector_channel (keep commented or all
+# for all channels selected with run_daq
+add_series_start_didv = True
+add_series_end_didv = False
+didv_run_time = 120s
+
 
 # trace length in millisec (ms) or  seconds (s)
-# Alternatively use "nb_samples" or "nb_cycles"
-nb_cycles = 2.1
-#trace_length = 100ms
+# Alternatively use "nb_samples"
+trace_length = 50ms
+
 
 # sample rate
 sample_rate = 1250000
 
 # voltage min/max
-voltage_min = -10
-voltage_max = 10
+voltage_min = -5
+voltage_max = 5
 
 
 

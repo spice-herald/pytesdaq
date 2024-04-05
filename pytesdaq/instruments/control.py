@@ -11,13 +11,14 @@ from  pytesdaq.instruments.feb  import FEB
 from pytesdaq.instruments.magnicon import Magnicon
 from pytesdaq.instruments.lakeshore import Lakeshore
 from pytesdaq.instruments.imacrt import MACRT
-from  pytesdaq.instruments.keysight import KeysightFuncGenerator
+from  pytesdaq.instruments.keysight import KeysightDSOX1200
+from  pytesdaq.instruments.keithley import Keithley2400
+from  pytesdaq.instruments.agilent import Agilent33500B
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
 from math import nan
 import pandas as pd
-from IPython.display import display
 
 class Control:
     """
@@ -44,7 +45,7 @@ class Control:
         self._squid_controller_name = self._config.get_squid_controller()
         self._squid_controller_inst = None
         
-        # SQUID Controller
+        # TES Controller
         self._tes_controller_name = self._config.get_tes_controller()
         self._tes_controller_inst = None
         
@@ -52,7 +53,7 @@ class Control:
         self._signal_generator_name = self._config.get_signal_generator()
         self._signal_generator_inst = None
         
-        # Temperatuer controllers (multiple controller allowed)
+        # Temperature controllers (multiple controller allowed)
         self._temperature_controller_name_list = (
             self._config.get_temperature_controllers()
         )
@@ -72,8 +73,6 @@ class Control:
              
         # readback 
         self._enable_readback = self._config.enable_redis()
-
-
         
 
     def __del__(self):
@@ -122,8 +121,6 @@ class Control:
         return self._temperature_controller_name_list
 
     
-            
-
     def set_tes_bias(self, bias, 
                      tes_channel=None,
                      detector_channel=None,
@@ -165,8 +162,6 @@ class Control:
         return True
     
 
-
-
     def set_lock_point(self, lock_point, 
                        tes_channel=None,
                        detector_channel=None,
@@ -187,15 +182,11 @@ class Control:
 
         return True
     
-
-
  
     def set_feedback_gain(self, gain, 
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
         """
         Set Feedback gain (magnicon: gain-bw product) [Hz]
         
@@ -210,15 +201,11 @@ class Control:
             return False
 
         return True
-    
-
-
+  
     def set_preamp_gain_bandwidth(self, gain, 
                                   tes_channel=None,
                                   detector_channel=None,
                                   adc_id=None, adc_channel=None):
-        
-
         """
         Set preamp gain, and for magnicon bandwidth
         """
@@ -234,14 +221,10 @@ class Control:
         return True
 
 
-
-
     def set_output_offset(self, offset, 
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
         """
         Set output offset
         """
@@ -256,15 +239,10 @@ class Control:
 
         return True
     
-
-
     def set_output_gain(self, gain, 
                         tes_channel=None,
                         detector_channel=None,
                         adc_id=None, adc_channel=None):
-        
-
-
         """
         Set output gain
         """
@@ -284,8 +262,6 @@ class Control:
                               tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None):
-        
-
         """
         Set feedback loop polarity
         invert = True
@@ -307,8 +283,6 @@ class Control:
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
         """
         Set feedback mode: 'open' or 'close'
         """
@@ -329,8 +303,6 @@ class Control:
                detector_channel=None,
                adc_id=None, adc_channel=None,
                num_relock=2):
-        
-
         """
         Relock (open/close)
 
@@ -359,21 +331,14 @@ class Control:
             # sleep 2 seconds
             time.sleep(2)
 
-    
-
 
     def set_signal_source(self, source, 
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
         """
         Set readout source ('preamp' or 'feedback') 
         """
-
-        
-
         try:
             self._set_sensor_val('signal_source', source,
                                  tes_channel=tes_channel,
@@ -385,9 +350,6 @@ class Control:
 
         return True   
 
-
-
-    
 
     def set_signal_gen_onoff(self, on_off_flag, signal_gen_num=1, tes_channel=None,
                              detector_channel=None, adc_id=None, adc_channel=None):
@@ -404,9 +366,7 @@ class Control:
             print('INFO: Setting signal generator #' + str(signal_gen_num) + ' ' +
                   on_off_flag)
             return
-        
-        
-        
+          
         if self._signal_generator_name == 'magnicon':
 
             # get readout controller ID and Channel (FIXME: Is it necessary)
@@ -463,10 +423,7 @@ class Control:
         shape: 'triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise'
         offset: DC offset in mV
         """
-        
-        
-
-
+  
         # check parameters
         if voltage is not None and current is not None:
             print('ERROR: Set signal generator amplitude either with "current" or "voltage", not both!')
@@ -480,8 +437,6 @@ class Control:
             print('INFO: Setting signal generator #' + str(signal_gen_num))
             return
 
-
-
         # initialize readback values
         readback_amp = nan
         readback_freq = nan
@@ -491,11 +446,12 @@ class Control:
 
             # get readout controller ID and Channel
             controller_id, controller_channel = (
-                connection_utils.get_controller_info(self._connection_table,
-                                                     tes_channel=tes_channel,
-                                                     detector_channel=detector_channel,
-                                                     adc_id=adc_id,
-                                                     adc_channel=adc_channel)
+                connection_utils.get_controller_info(
+                    self._connection_table,
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel,
+                    adc_id=adc_id,
+                    adc_channel=adc_channel)
             )
             
             # convert some parameters
@@ -518,26 +474,40 @@ class Control:
                     phase_shift, freq_div, half_pp_offset,
                     current)
             )
-            
-
+   
         # External function generator
         else:
 
+            # load resistance
+            resistance = self.get_signal_gen_resistance(
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+
+            resistance = float(resistance)
+            
+            if resistance == nan:
+                raise ValueError(f'ERROR: Signal generator resistance '
+                                 f'not available in config file!')
+            
+            self._signal_generator_inst.set_load_resistance(resistance)
+            
             # shape
             if shape is None:
-                shape = 'square'
-            elif (shape == 'sawtoothpos' or shape == 'sawtoothneg'):
-                shape = 'ramp'
-            self._signal_generator_inst.set_shape(shape, source=signal_gen_num)
+                if (shape == 'sawtoothpos'
+                    or shape == 'sawtoothneg'):
+                    shape = 'ramp'
+                self._signal_generator_inst.set_shape(
+                    shape, source=signal_gen_num)
             
             # amplitude
             if voltage is None and current is not None:
-                resistance = float(self._config.get_signal_gen_tes_resistance())
                 voltage = resistance*current/1000
 
             if voltage is not None:
                 self._signal_generator_inst.set_amplitude(
-                    voltage, unit='mVpp',
+                    voltage/1000, unit='Vpp',
                     source=signal_gen_num)
 
             # frequency
@@ -545,17 +515,22 @@ class Control:
                 self._signal_generator_inst.set_frequency(
                     frequency, unit='Hz',
                     source=signal_gen_num)
-                
-
+  
             # offset
             if offset is not None:
                 self._signal_generator_inst.set_offset(
-                    offset, unit='mV', source=signal_gen_num)
+                    offset/1000, unit='V',
+                    source=signal_gen_num)
 
+            # phase
+            if phase_shift is not None:
+                self._signal_generator_inst.set_phase(
+                    phase_shift,
+                    source=signal_gen_num)
 
-                
             # source
-            if source is not None:
+            if (source is not None
+                and self._squid_controller_name == 'feb'):
 
                 # get readout controller ID and Channel
                 controller_id, controller_channel = (
@@ -589,15 +564,7 @@ class Control:
                     adc_id=adc_id,
                     adc_channel=adc_channel)
                 
-                            
-            
-            # phase shift, half_pp_offset, not implemented
-                        
-            
-
-
-
-
+        
     def connect_signal_gen_to_feedback(self, do_connect, 
                                     tes_channel=None,
                                     detector_channel=None,
@@ -607,9 +574,6 @@ class Control:
         """
         Set signal generator feedback connection (True) or feedback (False)
         """
-        
-        
-
         try:
             self._set_sensor_val('signal_gen_feedback_connection',bool(do_connect),
                                  tes_channel=tes_channel,
@@ -621,19 +585,15 @@ class Control:
 
         return True   
 
-
-
+    
     def connect_signal_gen_to_tes(self, do_connect, 
                                   tes_channel=None,
                                   detector_channel=None,
                                   adc_id=None, adc_channel=None):
-        
-        
+           
         """
         Set  connection signal generator TES line (True) or tes (False)
         """
-        
-        
 
         try:
             self._set_sensor_val('signal_gen_tes_connection', bool(do_connect),
@@ -647,31 +607,21 @@ class Control:
         return True   
 
 
-
-
-
     def get_tes_bias(self, 
                      tes_channel=None,
                      detector_channel=None,
                      adc_id=None, adc_channel=None):
         
-
-
         """
         Get TES bias 
         """
-        bias = nan
-        #try:
         bias = self._get_sensor_val(
             'tes_bias',
             tes_channel=tes_channel,
             detector_channel=detector_channel,
             adc_id=adc_id, adc_channel=adc_channel
         )
-            
-        #except:
-        #    print('ERROR getting TES bias')
-            
+                  
         return bias
         
         
@@ -679,9 +629,7 @@ class Control:
                        tes_channel=None,
                        detector_channel=None,
                        adc_id=None, adc_channel=None):
-        
-
-
+   
         """
         Get SQUID bias 
         """
@@ -699,15 +647,11 @@ class Control:
         return bias
 
 
-
-
     def get_lock_point(self, 
                        tes_channel=None,
                        detector_channel=None,
                        adc_id=None, adc_channel=None):
         
-
-
         """
         Get lock point [mV]
         """
@@ -724,16 +668,11 @@ class Control:
             
         return lock_point
 
-
-
-
     def get_feedback_gain(self, 
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
-
+   
         """
         Get feedback gain
 
@@ -756,7 +695,6 @@ class Control:
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
         """
         Get output offset
         """
@@ -775,13 +713,10 @@ class Control:
         return output_offset
 
 
-
-
     def get_output_total_gain(self, 
                               tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None):
-        
         """
         Get output gain
         """
@@ -810,13 +745,10 @@ class Control:
         return output_total_gain
 
 
-
-
     def get_preamp_total_gain(self, 
                               tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None):
-        
         """
         Get preamp gain (variable*fix gain)
         """
@@ -843,8 +775,6 @@ class Control:
             
             
         return preamp_total_gain
-
-
     
 
     def get_squid_loop_total_gain(self, 
@@ -854,9 +784,10 @@ class Control:
         
         
         # preamp gain
-        preamp_gain = self.get_preamp_total_gain(tes_channel=tes_channel,
-                                                 detector_channel=detector_channel,
-                                                 adc_id=adc_id, adc_channel=adc_channel)
+        preamp_gain = self.get_preamp_total_gain(
+            tes_channel=tes_channel,
+            detector_channel=detector_channel,
+            adc_id=adc_id, adc_channel=adc_channel)
         
         # feedback gain (outside preamp)
         # FIXME: Only fix gain??
@@ -865,35 +796,27 @@ class Control:
         
         gain = preamp_gain * feedback_gain
         return gain
-        
-
-        
+         
     def get_feedback_polarity(self, 
                               tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None):
-        
-
-
         """
         Get feedback polarity
         """
         feedback_polarity = nan
         try:
-            feedback_polarity = self._get_sensor_val('feedback_polarity',
-                                                     tes_channel=tes_channel,
-                                                     detector_channel=detector_channel,
-                                                     adc_id=adc_id, adc_channel=adc_channel)
-            
+            feedback_polarity = self._get_sensor_val(
+                'feedback_polarity',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting  feedback polarity')
             
         return feedback_polarity
-            
-
-
-
-
+     
     def get_feedback_mode(self, 
                           tes_channel=None,
                           detector_channel=None,
@@ -902,85 +825,75 @@ class Control:
         """
         Get feedback mode ('open' or 'close')
         """
-
         mode = nan
         try:
-            mode = self._get_sensor_val('feedback_mode',
-                                        tes_channel=tes_channel,
-                                        detector_channel=detector_channel,
-                                        adc_id=adc_id, adc_channel=adc_channel)
-            
+            mode = self._get_sensor_val(
+                'feedback_mode',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting  feedback polarity')
             
         return mode
-            
-
-
+   
 
     def get_signal_source(self, 
                           tes_channel=None,
                           detector_channel=None,
                           adc_id=None, adc_channel=None):
-        
-
-
         """
         Get readout source
         """
 
         source = nan
         try:
-            source = self._get_sensor_val('signal_source',
-                                          tes_channel=tes_channel,
-                                          detector_channel=detector_channel,
-                                          adc_id=adc_id, adc_channel=adc_channel)
-            
+            source = self._get_sensor_val(
+                'signal_source',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel)
         except:
             print('ERROR getting signal source')
             
-        return is_preamp
-            
-
+        return source
+      
 
     def is_signal_gen_connected_to_feedback(self, 
                                             tes_channel=None,
                                             detector_channel=None,
                                             adc_id=None, adc_channel=None):
-        
-        
-
         """
         Is signal generator connected to feedback
         """
         
         is_connected = nan
         try:
-            is_connected = self._get_sensor_val('signal_gen_feedback_connection',
-                                                tes_channel=tes_channel,
-                                                detector_channel=detector_channel,
-                                                adc_id=adc_id, adc_channel=adc_channel)
-          
+            is_connected = self._get_sensor_val(
+                'signal_gen_feedback_connection',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id, adc_channel=adc_channel
+            )
         except:
             print('ERROR getting signal generator connection')
             
         return is_connected
-            
-
+     
     
-    def get_signal_gen_onoff(self, signal_gen_num=1, tes_channel=None,
+    def get_signal_gen_onoff(self, signal_gen_num=1,
+                             tes_channel=None,
                              detector_channel=None,
                              adc_id=None, adc_channel=None):
 
         """
         Get signal gen state ("on"/"off")
         """
-                   
-
+      
         if self._dummy_mode:
             return "off"
-            
-        
+              
         # get readout controller ID and Channel (FIXME: Is it necessary?)
         controller_id, controller_channel = connection_utils.get_controller_info(
             self._connection_table,
@@ -989,7 +902,6 @@ class Control:
             adc_id=adc_id,
             adc_channel=adc_channel)
         
-
         val = nan
         if self._signal_generator_name == 'magnicon':
             gen1_onoff, gen2_onoff, mon_onoff = (
@@ -1005,12 +917,8 @@ class Control:
         else:
             val = self._signal_generator_inst.get_generator_onoff(
                 source=signal_gen_num)
-            
-                        
-
+   
         return val
-
-        
 
     def is_signal_gen_on(self, signal_gen_num=1, tes_channel=None,
                          detector_channel=None, adc_id=None, adc_channel=None): 
@@ -1019,12 +927,12 @@ class Control:
         Is signal generator on?
         Return: BOOL
         """
-
-        val = self.get_signal_gen_onoff(signal_gen_num=signal_gen_num,
-                                        tes_channel=tes_channel,
-                                        detector_channel=detector_channel, 
-                                        adc_id=adc_id, adc_channel=adc_channel)
-
+        val = self.get_signal_gen_onoff(
+            signal_gen_num=signal_gen_num,
+            tes_channel=tes_channel,
+            detector_channel=detector_channel, 
+            adc_id=adc_id, adc_channel=adc_channel
+        )
         val_bool = None
         if val == 'on':
             val_bool = True
@@ -1036,21 +944,16 @@ class Control:
         return val_bool
             
         
-
-
-
     def get_signal_gen_params(self, signal_gen_num=1, 
                               tes_channel=None,
                               detector_channel=None,
                               adc_id=None, adc_channel=None):
-        
         """
         Get signal generator parameters
         Return:
            dictionary
         """
                 
-        
         # initialize dictionary
         output_dict = dict()
         output_dict['source'] = nan
@@ -1059,21 +962,19 @@ class Control:
         output_dict['phase_shift'] = nan
         output_dict['freq_div'] = nan
         output_dict['half_pp_offset'] = nan
-        output_dict['voltage'] = []
-        output_dict['current'] = []
-
-
+        output_dict['voltage'] = nan
+        output_dict['current'] = nan
+        output_dict['offset'] = nan
+        
         # check if input channel
         is_channel_defined = False
         if (tes_channel is not None
             or detector_channel is not None
             or adc_channel is not None):
             is_channel_defined = True
-
         
         # magnicon
         if self._signal_generator_name == 'magnicon':
-
 
             # get readout controller ID and Channel
             controller_id, controller_channel = (
@@ -1084,11 +985,10 @@ class Control:
                     adc_id=adc_id,
                     adc_channel=adc_channel)
             )
-        
-
+     
             if self._dummy_mode:
-                print('INFO: Getting signal generator #' + str(signal_gen_num) + ', ' + 
-                      controller_id + ' channel ' + str(controller_channel))
+                print(f'INFO: Getting signal generator #{signal_gen_num}", '
+                      f'{controller_id} channel {controller_channel}')
                 return output_dict
             
             
@@ -1110,33 +1010,39 @@ class Control:
                 output_dict['source'] = source
 
             output_dict['current'] = amp/1000000.0
-            output_dict['voltage'] = []
             output_dict['frequency'] = freq
             output_dict['shape'] = shape
             output_dict['phase_shift'] = shift
             output_dict['freq_div'] = freq_div
             output_dict['half_pp_offset'] = offset
-
-
-
+            output_dict['offset'] = offset
+            
         # external signal generator
         else:
 
-            # signal generator parameter
-            if not self._dummy_mode:
-                output_dict['voltage'] = float(
-                    self._signal_generator_inst.get_amplitude(
-                        source=signal_gen_num)
-                )
-                resistance = float(self._config.get_signal_gen_tes_resistance())
-                output_dict['current']  = float(output_dict['voltage']/resistance)
-                output_dict['frequency'] = float(
-                    self._signal_generator_inst.get_frequency(
-                        source=signal_gen_num)
-                )
-                output_dict['shape'] = self._signal_generator_inst.get_shape(
-                    source=signal_gen_num)
+            resistance = self.get_signal_gen_resistance(
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+           
+            output_dict['voltage'] = float(
+                self._signal_generator_inst.get_amplitude(
+                    source=signal_gen_num,  unit='Vpp')
+            )
+            output_dict['current']  = float(output_dict['voltage']/resistance)
+            output_dict['frequency'] = float(
+                self._signal_generator_inst.get_frequency(
+                    source=signal_gen_num, unit='Hz')
+            )
+            output_dict['shape'] = self._signal_generator_inst.get_shape(
+                source=signal_gen_num)
 
+            output_dict['offset'] = float(
+                self._signal_generator_inst.get_offset(
+                    source=signal_gen_num,  unit='Vpp')
+            )
+            
             # source
             if (is_channel_defined
                 and self._squid_controller_name=='feb'):
@@ -1154,8 +1060,10 @@ class Control:
 
 
                 if self._dummy_mode:
-                    print('INFO: Getting signal generator #' + str(signal_gen_num) + ', ' + 
-                          controller_id + ' channel ' + str(controller_channel))
+                    print('INFO: Getting signal generator #'
+                          + str(signal_gen_num) + ', '
+                          + controller_id + ' channel '
+                          + str(controller_channel))
                     return output_dict
 
                 
@@ -1183,15 +1091,8 @@ class Control:
                     output_dict['source'] = 'feedback'
                 else:
                     output_dict['source'] = 'none'
-            
-            #else:
-                # FIXME: default to tes if not FEB
-            #    output_dict['source'] = 'tes'
                 
         return output_dict
-
-
-
 
 
     def is_signal_gen_connected_to_tes(self, 
@@ -1229,7 +1130,6 @@ class Control:
         
         feedback_resistance = nan
 
-
         # Magnicon: feedback resistance can be modifed and read
         if self._squid_controller_name == 'magnicon':
         
@@ -1243,7 +1143,7 @@ class Control:
                 print('ERROR getting feedback resistance')
 
             # convert from kOhms to Ohms
-            feedback_resistance = feedback_resistance *1000
+            feedback_resistance = float(feedback_resistance) *1000
                 
         else:
 
@@ -1261,9 +1161,7 @@ class Control:
             if ('feedback_resistance' in  detector_config and
                 len(detector_config['feedback_resistance'])==1):
                 feedback_resistance = float(detector_config['feedback_resistance'][0])
-                
-        
-            
+                 
         return feedback_resistance
 
 
@@ -1274,63 +1172,88 @@ class Control:
         Get shunt resistance [Ohm]
         (from setup file)
         """
-        
-        shunt_resistance = nan
 
-        # get ADC id/number
-        if (tes_channel is not None or  detector_channel is not None):
-            adc_id, adc_channel = connection_utils.get_adc_channel_info(
-                self._connection_table,
+        shunt_resistance = (
+            self._get_parameter_from_config(
+                'shunt_resistance',
                 tes_channel=tes_channel,
-                detector_channel=detector_channel
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
             )
-
-        # get detector config
-        detector_config = self._config.get_detector_config(
-            adc_id=adc_id,
-            adc_channel_list=[adc_channel])
+        if shunt_resistance != nan:
+            shunt_resistance = float(shunt_resistance)
         
-        # extract shunt resistance
-        if ('shunt_resistance' in  detector_config and
-            len(detector_config['shunt_resistance'])==1):
-            shunt_resistance = detector_config['shunt_resistance'][0]
-                
         return shunt_resistance
-
-
-
+        
+     
     def get_squid_turn_ratio(self, tes_channel=None,
                              detector_channel=None,
                              adc_id=None, adc_channel=None):
         """
         Get SQUID loop ratio (from setup file)
         """
-        
-        squid_turn_ratio = nan
 
-        # get ADC id/number
-        if (tes_channel is not None or  detector_channel is not None):
-            adc_id, adc_channel = connection_utils.get_adc_channel_info(
-                self._connection_table,
+        squid_turn_ratio = (
+            self._get_parameter_from_config(
+                'squid_turn_ratio',
                 tes_channel=tes_channel,
-                detector_channel=detector_channel
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
             )
-
-        # get detector config
-        detector_config = self._config.get_detector_config(
-            adc_id=adc_id,
-            adc_channel_list=[adc_channel])
         
-        # extract shunt resistance
-        if ('squid_turn_ratio' in  detector_config and
-            len(detector_config['squid_turn_ratio'])==1):
-            squid_turn_ratio = detector_config['squid_turn_ratio'][0]
-                
+        if squid_turn_ratio != nan:
+            squid_turn_ratio = float(squid_turn_ratio)
+        
         return squid_turn_ratio
 
+
+    def get_signal_gen_resistance(self, tes_channel=None,
+                                  detector_channel=None,
+                                  adc_id=None, adc_channel=None):
+        """
+        Get signal generator TES resistance (from setup file)
+        """
+        
+        resistance  = (
+            self._get_parameter_from_config(
+                'signal_gen_resistance',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+            )
+
+        if resistance != nan:
+            resistance = float(resistance)
+            
+        return resistance
+
     
+    def get_tes_bias_resistance(self, tes_channel=None,
+                                detector_channel=None,
+                                adc_id=None, adc_channel=None):
+        """
+        Get TES bias resistance (from setup file)
+        """
+        
+        resistance  = (
+            self._get_parameter_from_config(
+                'tes_bias_resistance',
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+            )
 
+        if resistance != nan:
+            resistance = float(resistance)
 
+        return resistance
+
+    
+       
     def get_volts_to_amps_close_loop_norm(self, tes_channel=None,
                                           detector_channel=None,
                                           adc_id=None, adc_channel=None):
@@ -1353,10 +1276,9 @@ class Control:
             adc_id=adc_id, adc_channel=adc_channel)
 
         if feedback_resistance == nan or feedback_resistance is None:
-            print('ERROR: unable to find feedback resistance. It needs to be added in setup.ini file!')
-            return None
-        
-        
+            raise ValueError('Unable to find feedback resistance. '
+                             'It needs to be added in setup.ini file!')
+                   
         # squid loop turn ratio
         squid_turn_ratio = self.get_squid_turn_ratio(
             tes_channel=tes_channel,
@@ -1364,16 +1286,13 @@ class Control:
             adc_id=adc_id, adc_channel=adc_channel)
         
         if squid_turn_ratio == nan or squid_turn_ratio is None:
-            print('ERROR: unable to find SQUID turn ratio. It needs to be added in setup.ini file!')
-            return None
-
-
+            raise ValueError('Unable to find SQUID turn ratio. It needs '
+                             'to be added in setup.ini file!')
+        
         # calculate normalization
         norm = output_total_gain*feedback_resistance*squid_turn_ratio
+        
         return norm
-
-
-
 
 
     def get_open_loop_preamp_norm(self, tes_channel=None,
@@ -1417,25 +1336,20 @@ class Control:
             tes_channel=tes_channel,
             detector_channel=detector_channel,
             adc_id=adc_id, adc_channel=adc_channel)
-        
-      
+            
         # preamp gain
         loop_total_gain = self.get_squid_loop_total_gain(
             tes_channel=tes_channel,
             detector_channel=detector_channel,
             adc_id=adc_id, adc_channel=adc_channel)
         
-
-        
         # calculate normalization
         norm = output_total_gain*loop_total_gain
         return norm
 
 
-
-    
-
-    def read_all(self, tes_channel_list=None, detector_channel_list=None,
+    def read_all(self, tes_channel_list=None,
+                 detector_channel_list=None,
                  adc_id=None, adc_channel_list=None):
         """
         Read from board all parameters
@@ -1454,11 +1368,11 @@ class Control:
         # ====================
         
         output_dict = dict()
-
         
         # intialize output
-        param_list = ['tes_bias','squid_bias','lock_point_voltage','output_offset',
-                      'output_gain','preamp_gain','feedback_polarity','feedback_mode',
+        param_list = ['tes_bias','squid_bias','lock_point_voltage',
+                      'output_offset', 'output_gain','preamp_gain',
+                      'feedback_polarity','feedback_mode',
                       'signal_source']
         
         for param in param_list:
@@ -1466,6 +1380,7 @@ class Control:
      
         output_dict['signal_gen_voltage'] = list()
         output_dict['signal_gen_current'] = list()
+        output_dict['signal_gen_offset'] = list()
         output_dict['signal_gen_frequency'] = list()
         output_dict['signal_gen_shape'] = list()
         output_dict['signal_gen_phase_shift'] = list()
@@ -1532,16 +1447,11 @@ class Control:
 
             # loop TES parameters
             for param in param_list:
-                val = nan
-                #try:
-
+             
                 val = self._get_sensor_val(param, tes_channel=tes_chan,
                                            detector_channel=detector_chan, 
                                            adc_id=adc_chan_id, adc_channel=adc_chan)
-                #except:
-                #    print('WARNING in control::read_all: unable to get value for "' +  param)
-                    
-
+             
                 if val == nan or val is None:
                     val = -999999
 
@@ -1574,6 +1484,7 @@ class Control:
             
             output_dict['signal_gen_voltage'].append(sig_gen_dict['voltage'])
             output_dict['signal_gen_current'].append(sig_gen_dict['current'])
+            output_dict['signal_gen_voltage'].append(sig_gen_dict['offset'])
             output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
             output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
             output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
@@ -1625,31 +1536,188 @@ class Control:
                     detector_channel=detector_chan, 
                     adc_id=adc_chan_id, adc_channel=adc_chan)
             )
-            
+
             output_dict['signal_gen_tes_resistance'].append(
-                self._config.get_signal_gen_tes_resistance())
+                self.get_signal_gen_resistance(
+                    tes_channel=tes_chan,
+                    detector_channel=detector_chan,
+                    adc_id=adc_chan_id,
+                    adc_channel=adc_chan)
+            )
             
+                     
         return output_dict
+
+    
+    def get_temperature_controllers_table(self, channel_type=None):
+        """
+        Get temperature controller channel table 
+        """
+        tables = list()
+        for name, inst in self._temperature_controller_insts.items():
+            instrument_table = inst.get_channel_table(channel_type=channel_type)
+            if instrument_table is not None:
+                tables.append(instrument_table)
+
+        channel_table = None
+        if tables:
+             channel_table = pd.concat(tables)
+
+
+        return channel_table
+
+     
+    def get_temperature_controller(self, channel_name=None,
+                                   global_channel_number=None,
+                                   instrument_name=None,
+                                   channel_type=None):
+        """
+        Get temperature controller
+        """
+
+        # check input
+        if (instrument_name is None
+            and channel_name is None
+            and global_channel_number is None):
+            raise ValueError('ERROR: Missing channel name, '
+                             +'global number, or instrument name')
+    
+
+        # get instrument name
+        instrument = None
+        if instrument_name is None:
+
+            # get channel table
+            channel_table = self.get_temperature_controllers_table(
+                channel_type=channel_type
+            )
+
+            # query instrument name
+            if channel_name is not None:
+                query_string = 'channel_name == @channel_name'
+            else:
+                query_string = 'global_channel_number == @global_channel_number'
+            instrument_name = channel_table.query(query_string)['instrument_name'].values
+
+            # check if found unique name
+            if len(instrument_name)>1:
+                raise ValueError('ERROR: Multiple instruments found for same channel')
+            elif len(instrument_name)==1:
+                instrument_name = instrument_name[0]
+            else:
+                raise ValueError('ERROR: No instrument find for input channel!')
+            
+        # get instrument
+        if instrument_name in self._temperature_controller_insts:
+            instrument = self._temperature_controller_insts[instrument_name]
+        else:
+            raise ValueError('ERROR: Unknown temperature controller "' +
+                             instrument_name + '"!')
+ 
+        return instrument
+
+    
+        
+    def get_temperature(self, channel_name=None,
+                        global_channel_number=None,
+                        instrument_name=None):
+        
+        """
+        Get temperature from thermometer [mK]
+        
+        """
+        
+        # find instrument
+        inst = self.get_temperature_controller(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number,
+            instrument_name=instrument_name,
+            channel_type='resistance'
+        )
+        
+        # get temperature
+        temperature = inst.get_temperature(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number
+        )
+
+       
+        return temperature
+
+    
+    def get_thermometer_resistance(self, channel_name=None,
+                                   global_channel_number=None,
+                                   instrument_name=None):
+        
+        """
+        Get resistance from thermometer [Ohms]
+        """
+
+        # find instrument
+        inst = self.get_temperature_controller(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number,
+            instrument_name=instrument_name,
+            channel_type='resistance'
+        )
         
         
+        resistance = inst.get_resistance(
+            channel_name=channel_name,
+            global_channel_number=global_channel_number
+        )
 
+       
+        return resistance
 
+    
+    def set_temperature(self, temperature,
+                        channel_name=None,
+                        global_channel_number=None,
+                        heater_channel_name=None,
+                        heater_global_channel_number=None,
+                        instrument_name=None,
+                        wait_temperature_reached=False,
+                        wait_cycle_time=30,
+                        wait_stable_time=300,
+                        max_wait_time=1200,
+                        tolerance=0.2):
+        
+        """
+        Set temperature
+        """
 
+        # find instrument
+        inst = self.get_temperature_controller(channel_name=channel_name,
+                                               global_channel_number=global_channel_number,
+                                               instrument_name=instrument_name,
+                                               channel_type='resistance')
+
+        # set temperature
+        inst.set_temperature(temperature,
+                             channel_name=channel_name,
+                             global_channel_number=global_channel_number,
+                             heater_channel_name=heater_channel_name,
+                             heater_global_channel_number=heater_global_channel_number,
+                             wait_temperature_reached=wait_temperature_reached,
+                             wait_cycle_time=wait_cycle_time,
+                             wait_stable_time=wait_stable_time,
+                             max_wait_time=max_wait_time,
+                             tolerance=tolerance)
+        
+     
     def _get_sensor_val(self, param_name, 
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None, adc_channel=None):
-        
-        
-        if not self._dummy_mode and self._squid_controller_name is None:
-            print('ERROR: No SQUID controller, check config')
-            return nan
-
+        """
+        Get state of SQUID or TES controllers
+        """
+    
         if self._dummy_mode:
+            print('WARNING: Dummy mode enabled. Doing nothing.')
             return 1.0
-            
-
-        
+             
         # get readout controller ID and Channel
         controller_id, controller_channel = (
             connection_utils.get_controller_info(
@@ -1666,7 +1734,7 @@ class Control:
         # TES paramaters
         if param_name == 'tes_bias':
 
-            if self._tes_controller_name=='feb':
+            if self._tes_controller_name == 'feb':
 
                 # get channel info
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1690,6 +1758,58 @@ class Control:
                 param_val = self._tes_controller_inst.get_tes_current_bias(
                     controller_channel)
 
+            elif self._tes_controller_name == 'keithley2400':
+
+                # get parameter
+                keithley_params = self._config.get_device_parameters('keithley2400')
+
+                # voltage source ?
+                voltage_source = True
+                if 'voltage_source' in keithley_params:
+                    voltage_source = keithley_params['voltage_source']
+
+                if voltage_source:
+                    resistance =  self.get_tes_bias_resistance(
+                        tes_channel=tes_channel,
+                        detector_channel=detector_channel,
+                        adc_id=adc_id,
+                        adc_channel=adc_channel
+                    )
+
+                    voltage = self._tes_controller_inst.get_voltage()
+                    param_val = voltage/resistance
+                else:
+                    param_val = self._tes_controller_inst.get_current()
+
+                # convert to uAmps
+                param_val *= 1e6 
+          
+            elif self._tes_controller_name == 'agilent33500B':
+
+                ## get parameter
+                #keithley_params = self._config.get_device_parameters('keithley2400')
+
+                ## voltage source ?
+                voltage_source = True
+                #if 'voltage_source' in keithley_params:
+                #    voltage_source = keithley_params['voltage_source']
+
+                if voltage_source:
+                    resistance =  self.get_tes_bias_resistance(
+                        tes_channel=tes_channel,
+                        detector_channel=detector_channel,
+                        adc_id=adc_id,
+                        adc_channel=adc_channel
+                    )
+
+                    voltage = self._tes_controller_inst.get_offset()
+                    param_val = voltage/resistance
+                else:
+                    param_val = self._tes_controller_inst.get_current()
+
+                # convert to uAmps
+                param_val *= 1e6 
+
             else:
                 print('ERROR: Unknown TES controller!')
 
@@ -1697,7 +1817,7 @@ class Control:
         
                 
         # SQUID parameters
-        if self._squid_controller_name=='feb':
+        if self._squid_controller_name == 'feb':
             
             # CDMS FEB device
             feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1769,7 +1889,6 @@ class Control:
                     subrack, slot,controller_channel
                 )
                     
-
             elif param_name == 'signal_gen_tes_connection':
                 param_val = self._squid_controller_inst.is_signal_generator_tes_connected(
                     subrack, slot,controller_channel
@@ -1778,7 +1897,7 @@ class Control:
             else:
                 pass
                 
-        elif self._squid_controller_name=='magnicon':
+        elif self._squid_controller_name == 'magnicon':
             
             if self._verbose:
                 print('INFO: Getting "' + param_name + '" for channel ' 
@@ -1805,18 +1924,22 @@ class Control:
                 param_val = 1
                         
             elif param_name == 'preamp_gain':
-                amp, bw = self._squid_controller_inst.get_amp_gain_bandwidth(controller_channel)
+                amp, bw = self._squid_controller_inst.get_amp_gain_bandwidth(
+                    controller_channel)
                 param_val = amp
 
             elif param_name == 'preamp_bandwidth':
-                amp, bw = self._squid_controller_inst.get_amp_gain_bandwidth(controller_channel)
+                amp, bw = self._squid_controller_inst.get_amp_gain_bandwidth(
+                    controller_channel)
                 param_val = bw
                         
             elif param_name == 'feedback_polarity':
-                param_val = self._squid_controller_inst.get_squid_gain_sign(controller_channel)
+                param_val = self._squid_controller_inst.get_squid_gain_sign(
+                    controller_channel)
                 
             elif param_name == 'feedback_mode':
-                val = self._squid_controller_inst.get_amp_or_fll(controller_channel)
+                val = self._squid_controller_inst.get_amp_or_fll(
+                    controller_channel)
                 if val=='AMP':
                     param_val = 'open'
                 elif val=='FLL':
@@ -1839,29 +1962,54 @@ class Control:
             else:
                 pass
 
+        elif self._squid_controller_name is None:
+
+            # get ADC id/number
+            if (tes_channel is not None or  detector_channel is not None):
+                adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                    self._connection_table,
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel
+                )
+
+            # get detector config
+            detector_config = self._config.get_detector_config(
+                adc_id=adc_id,
+                adc_channel_list=[adc_channel])
+            
+
+            if param_name == 'output_gain':
+                if ('output_gain' in  detector_config and
+                    len(detector_config['output_gain'])==1):
+                    param_val = float(detector_config['output_gain'][0])
+                else:
+                    raise ValueError(
+                        'ERROR: Unable to get output gain! Add controller'
+                        ' or "output_gain" parameter in setup.ini file')
+
+            if param_name == 'preamp_gain':
+                if ('preamp_gain' in  detector_config and
+                    len(detector_config['preamp_gain'])==1):
+                    param_val = float(detector_config['preamp_gain'][0])
+        else:
+            raise ValueError('Unrecognize SQUID controller')
+
             
         return param_val
 
 
-        
-        
+          
     def _set_sensor_val(self,param_name, value, 
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None,adc_channel=None):
-
-        
         
         """
         TBD
         """
-
-        if not self._dummy_mode and self._squid_controller_name is None:
-            print('ERROR: No SQUID controller, check config')
-            return nan
-            
+       
         if self._dummy_mode:
-            return
+            return nan
 
         # get readout controller ID and Channel
         controller_id, controller_channel = (
@@ -1883,7 +2031,7 @@ class Control:
         # TES controller
         if param_name == 'tes_bias':
 
-            if self._tes_controller_name=='feb':
+            if self._tes_controller_name == 'feb':
 
                 # get channel info
                 feb_info = self._config.get_feb_subrack_slot(controller_id)
@@ -1917,6 +2065,58 @@ class Control:
                 readback_val = self._tes_controller_inst.set_tes_current_bias(
                     controller_channel, value, mode=None
                 )
+
+            elif self._tes_controller_name == 'keithley2400':
+
+                # get parameter
+                keithley_params = self._config.get_device_parameters('keithley2400')
+
+                # voltage source ?
+                voltage_source = True
+                if 'voltage_source' in keithley_params:
+                    voltage_source = keithley_params['voltage_source']
+
+                if voltage_source:
+                    resistance =  self.get_tes_bias_resistance(
+                        tes_channel=tes_channel,
+                        detector_channel=detector_channel,
+                        adc_id=adc_id,
+                        adc_channel=adc_channel
+                    )
+                    
+                    voltage = resistance*value*1e-6
+                    self._tes_controller_inst.set_source('voltage')
+                    self._tes_controller_inst.set_current_measurement_range(1e-2)
+                    self._tes_controller_inst.set_voltage(voltage)
+                    self._tes_controller_inst.set_current_compliance(1e-2)
+                    self._tes_controller_inst.showARM_current()
+                    self._tes_controller_inst.enable_output()
+                    self._tes_controller_inst.measure_current()
+                else:
+                    self._tes_controller_inst.set_current(value*1e-6)
+
+                # readback
+                if  self._enable_readback:
+                    time.sleep(0.5)
+                    readback_val = self._get_sensor_val(
+                        param_name,
+                        tes_channel=tes_channel,
+                        detector_channel=detector_channel,
+                        adc_id=adc_id, adc_channel=adc_channel)
+                    
+            elif self._tes_controller_name == 'agilent33500B':
+                resistance =  self.get_tes_bias_resistance(
+                    tes_channel=tes_channel,
+                    detector_channel=detector_channel,
+                    adc_id=adc_id,
+                    adc_channel=adc_channel
+                )
+                
+                voltage = resistance*value*1e-6
+                self._tes_controller_inst.set_load_resistance(int(resistance))
+                self._tes_controller_inst.set_shape('dc')
+                self._tes_controller_inst.set_offset(voltage)
+                self._tes_controller_inst.set_generator_onoff('on')
                 
             else:
                 raise ValueError('ERROR: Unknown TES controller!')
@@ -2001,7 +2201,8 @@ class Control:
         elif self._squid_controller_name == 'magnicon':
             
             if self._verbose or self._debug:
-                print('INFO: Setting "' + param_name + '" to ' + str(value) + ' for channel ' 
+                print('INFO: Setting "' + param_name + '" to '
+                      + str(value) + ' for channel ' 
                       + str(controller_channel) + ' (Magnicon)!')
                           
                              
@@ -2039,9 +2240,9 @@ class Control:
                     controller_channel, mode)
 
 
-        else:
-            print('ERROR: Unknow SQUID controller "' + 
-                  self._squid_controller_name + '"!')
+        elif self._squid_controller_name is not None:
+            raise ValueError(f'Unknow SQUID controller "' 
+                             f'{self._squid_controller_name}"!')
         
     
         # ================
@@ -2071,178 +2272,7 @@ class Control:
             except:
                 print('ERROR adding value in redis!')
             
-            
-
-
-    
-    
-        
-    def get_temperature_controllers_table(self, channel_type=None):
-        """
-        Get temperature controller channel table 
-        """
-        tables = list()
-        for name, inst in self._temperature_controller_insts.items():
-            instrument_table = inst.get_channel_table(channel_type=channel_type)
-            if instrument_table is not None:
-                tables.append(instrument_table)
-
-        channel_table = None
-        if tables:
-             channel_table = pd.concat(tables)
-
-
-        return channel_table
-
-        
-
-    def get_temperature_controller(self, channel_name=None,
-                                   global_channel_number=None,
-                                   instrument_name=None,
-                                   channel_type=None):
-        """
-        Get temperature controller
-        """
-
-        # check input
-        if (instrument_name is None
-            and channel_name is None
-            and global_channel_number is None):
-            raise ValueError('ERROR: Missing channel name, '
-                             +'global number, or instrument name')
-    
-
-        # get instrument name
-        instrument = None
-        if instrument_name is None:
-
-            # get channel table
-            channel_table = self.get_temperature_controllers_table(
-                channel_type=channel_type
-            )
-
-            # query instrument name
-            if channel_name is not None:
-                query_string = 'channel_name == @channel_name'
-            else:
-                query_string = 'global_channel_number == @global_channel_number'
-            instrument_name = channel_table.query(query_string)['instrument_name'].values
-
-            # check if found unique name
-            if len(instrument_name)>1:
-                raise ValueError('ERROR: Multiple instruments found for same channel')
-            elif len(instrument_name)==1:
-                instrument_name = instrument_name[0]
-            else:
-                raise ValueError('ERROR: No instrument find for input channel!')
-            
-        # get instrument
-        if instrument_name in self._temperature_controller_insts:
-            instrument = self._temperature_controller_insts[instrument_name]
-        else:
-            raise ValueError('ERROR: Unknown temperature controller "' +
-                             instrument_name + '"!')
- 
-        return instrument
-
-    
-        
-    def get_temperature(self, channel_name=None,
-                        global_channel_number=None,
-                        instrument_name=None):
-        
-        """
-        Get temperature from thermometer [mK]
-        
-        """
-        
-        # find instrument
-        inst = self.get_temperature_controller(
-            channel_name=channel_name,
-            global_channel_number=global_channel_number,
-            instrument_name=instrument_name,
-            channel_type='resistance'
-        )
-        
-        # get temperature
-        temperature = inst.get_temperature(
-            channel_name=channel_name,
-            global_channel_number=global_channel_number
-        )
-
-       
-        return temperature
-         
-
-          
-
-    
-    def get_resistance(self, channel_name=None,
-                       global_channel_number=None,
-                       instrument_name=None):
-        
-        """
-        Get resistance from thermometer [Ohms]
-        """
-
-        # find instrument
-        inst = self.get_temperature_controller(
-            channel_name=channel_name,
-            global_channel_number=global_channel_number,
-            instrument_name=instrument_name,
-            channel_type='resistance'
-        )
-        
-        
-        resistance = inst.get_resistance(
-            channel_name=channel_name,
-            global_channel_number=global_channel_number
-        )
-
-       
-        return resistance
-         
-
-
-    
-    def set_temperature(self, temperature,
-                        channel_name=None,
-                        global_channel_number=None,
-                        heater_channel_name=None,
-                        heater_global_channel_number=None,
-                        instrument_name=None,
-                        wait_temperature_reached=False,
-                        wait_cycle_time=30,
-                        wait_stable_time=300,
-                        max_wait_time=1200,
-                        tolerance=0.2):
-        
-        """
-        Set temperature
-        """
-
-        # find instrument
-        inst = self.get_temperature_controller(channel_name=channel_name,
-                                               global_channel_number=global_channel_number,
-                                               instrument_name=instrument_name,
-                                               channel_type='resistance')
-
-        # set temperature
-        inst.set_temperature(temperature,
-                             channel_name=channel_name,
-                             global_channel_number=global_channel_number,
-                             heater_channel_name=heater_channel_name,
-                             heater_global_channel_number=heater_global_channel_number,
-                             wait_temperature_reached=wait_temperature_reached,
-                             wait_cycle_time=wait_cycle_time,
-                             wait_stable_time=wait_stable_time,
-                             max_wait_time=max_wait_time,
-                             tolerance=tolerance)
-        
-        
-        
-        
-
+     
     def _connect_instruments(self):
         """
         Connect instruments
@@ -2259,6 +2289,7 @@ class Control:
 
         # -----------------
         # CDMS FEB
+        # -> Both SQUID/TES Controller
         # -----------------
 
         if (self._squid_controller_name == 'feb'
@@ -2334,29 +2365,84 @@ class Control:
             if self._tes_controller_name == 'magnicon':
                 self._tes_controller_inst = magnicon_inst
                 
-                    
         # ----------------
-        # Keysight
+        # Keithley2400
         # ----------------
-                  
-        if self._signal_generator_name == 'keysight':
-
-            address = self._config.get_signal_generator_visa_address('keysight')
-            attenuation = self._config.get_signal_generator_attenuation('keysight')
-            self._signal_generator_inst = (
-                KeysightFuncGenerator(address,
-                                      visa_library=visa_library,
-                                      attenuation=attenuation,
-                                      verbose=self._verbose,
-                                      raise_errors=self._raise_errors)
+        if self._tes_controller_name == 'keithley2400':
+            address = self._config.get_device_visa_address('keithley2400')
+            self._tes_controller_inst = (
+                Keithley2400(
+                    address,
+                    visa_library=visa_library,
+                    verbose=self._verbose,
+                    raise_errors=self._raise_errors)
             )
-
-
-
             
         # ----------------
-        # Temperature controllers
+        # agilent33500B
         # ----------------
+        if self._tes_controller_name == 'agilent33500B':
+            address = self._config.get_device_visa_address('agilent33500B')
+            attenuation = self._config.get_device_parameters(
+                self._signal_generator_name, parameter='attenuation')
+            self._tes_controller_inst = (
+                    Agilent33500B(address,
+                                  visa_library=visa_library,
+                                  attenuation=attenuation,
+                                  verbose=self._verbose,
+                                  raise_errors=self._raise_errors)
+            )
+                    
+
+        # ----------------
+        # Signal generator
+        # ----------------
+
+        if self._signal_generator_name is not None:
+            
+            address = self._config.get_device_visa_address(
+                self._signal_generator_name)
+            attenuation = self._config.get_device_parameters(
+                self._signal_generator_name, parameter='attenuation')
+
+            if address is None:
+                raise ValueError('ERROR: Unable to get signal generator visa address!')
+
+            if attenuation is None:
+                attenuation = 1.0
+            else:
+                attenuation = float(attenuation)
+
+                
+            if (self._signal_generator_name == 'keysight'
+                or self._signal_generator_name == 'agilent33500B'):
+                
+                self._signal_generator_inst = (
+                    Agilent33500B(address,
+                                  visa_library=visa_library,
+                                  attenuation=attenuation,
+                                  verbose=self._verbose,
+                                  raise_errors=self._raise_errors)
+                )
+
+            elif self._signal_generator_name == 'keysightDSOX1200':
+                self._signal_generator_inst = (
+                    KeysightDSOX1200(address,
+                                     visa_library=visa_library,
+                                     attenuation=attenuation,
+                                     verbose=self._verbose,
+                                     raise_errors=self._raise_errors)
+                )
+
+            else:
+                raise ValueError('ERROR: Unrecognized signal generator '
+                                 + self._signal_generator_name)
+
+        
+            
+        # ----------------------
+        # Temperature controllers
+        # ----------------------
         self._temperature_controller_insts = dict()
         
         # loop controllers
@@ -2404,3 +2490,32 @@ class Control:
             self._squid_controller_inst = None
             
  
+    def _get_parameter_from_config(self, parameter_name,
+                                   tes_channel=None,
+                                   detector_channel=None,
+                                   adc_id=None, adc_channel=None):
+        """
+        Get electronics parameter from config file  
+        """
+        
+        parameter = nan
+
+        # get ADC id/number
+        if (tes_channel is not None or  detector_channel is not None):
+            adc_id, adc_channel = connection_utils.get_adc_channel_info(
+                self._connection_table,
+                tes_channel=tes_channel,
+                detector_channel=detector_channel
+            )
+
+        # get detector config
+        detector_config = self._config.get_detector_config(
+            adc_id=adc_id,
+            adc_channel_list=[adc_channel])
+        
+        # extract parameter
+        if (parameter_name in  detector_config and
+            len(detector_config[parameter_name])==1):
+            parameter = float(detector_config[parameter_name][0])
+                
+        return parameter
