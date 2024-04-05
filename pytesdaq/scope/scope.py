@@ -1274,9 +1274,8 @@ class ToolsWindow(QtWidgets.QWidget):
         else:
             self._readout.update_analysis_config(add_180phase=False)
             
-
-        r0 = float(self._r0_spinbox.value()/1000)
-        self._readout.update_analysis_config(r0=r0)
+        #r0 = float(self._r0_spinbox.value()/1000)
+        #self._readout.update_analysis_config(r0=r0)
 
         # clear field
         self._text_field.clear()
@@ -1382,7 +1381,7 @@ class ToolsWindow(QtWidgets.QWidget):
                 measurement = 'Rn'
             self._tools_tabs.setTabVisible(0,True)
             self._tools_tabs.setCurrentIndex(0)
-            self._r0_spinbox.setEnabled(False)
+            #self._r0_spinbox.setEnabled(False)
             
         elif selection == 'Transition dIdV Fit':
             self._setup_didv_fit()
@@ -1394,7 +1393,7 @@ class ToolsWindow(QtWidgets.QWidget):
             self._didv_fit_3pole.setChecked(True)
             self._tools_tabs.setTabText(0,'R0 Fit')
             self._rp_spinbox.setEnabled(True)
-            self._r0_spinbox.setEnabled(True)
+            #self._r0_spinbox.setEnabled(True)
             self._tools_tabs.setTabVisible(0,True)
             self._tools_tabs.setCurrentIndex(0)
             measurement = 'R0'
@@ -1606,7 +1605,7 @@ class ToolsWindow(QtWidgets.QWidget):
         self._rshunt_spinbox.setMaximum(100000)
         self._rshunt_spinbox.setProperty('value', 5.0)
         self._rshunt_spinbox.setObjectName('rshuntSpinBox')
-        self._rshunt_spinbox.setDecimals(1)
+        self._rshunt_spinbox.setDecimals(3)
 
         step_type = QtWidgets.QAbstractSpinBox.AdaptiveDecimalStepType
         self._rshunt_spinbox.setStepType(step_type)
@@ -1623,34 +1622,27 @@ class ToolsWindow(QtWidgets.QWidget):
         self._rp_spinbox.setMaximum(100000)
         self._rp_spinbox.setProperty('value', 2.5)
         self._rp_spinbox.setObjectName('rpSpinBox')
-        self._rp_spinbox.setDecimals(1)
+        self._rp_spinbox.setDecimals(3)
         self._rp_spinbox.setStepType(step_type)
 
-
-
         # R0
-        r0_label = QtWidgets.QLabel(self._didv_tab)
-        r0_label.setGeometry(QtCore.QRect(42, 96, 50, 15))
-        r0_label.setFont(font)
-        r0_label.setObjectName('r0Label')
-        r0_label.setText('R0:')
+        #r0_label = QtWidgets.QLabel(self._didv_tab)
+        #r0_label.setGeometry(QtCore.QRect(42, 96, 50, 15))
+        #r0_label.setFont(font)
+        #r0_label.setObjectName('r0Label')
+        #r0_label.setText('R0:')
 
-        self._r0_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
-        self._r0_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
-        self._r0_spinbox.setMaximum(100000)
-        self._r0_spinbox.setProperty('value', 200)
-        self._r0_spinbox.setObjectName('r0SpinBox')
-        self._r0_spinbox.setDecimals(1)
-        self._r0_spinbox.setStepType(step_type)
-
-
-
-
-
+        #self._r0_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
+        #self._r0_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
+        #self._r0_spinbox.setMaximum(100000)
+        #self._r0_spinbox.setProperty('value', 200)
+        #self._r0_spinbox.setObjectName('r0SpinBox')
+        #self._r0_spinbox.setDecimals(1)
+        #self._r0_spinbox.setStepType(step_type)
 
         
         unit_label = QtWidgets.QLabel(self._didv_tab)
-        unit_label.setGeometry(QtCore.QRect(150, 70, 60, 15))
+        unit_label.setGeometry(QtCore.QRect(150, 60, 60, 15))
         unit_label.setFont(font)
         unit_label.setObjectName('rshuntUniyLabel')
         unit_label.setText('[mOhms]')
@@ -1658,13 +1650,13 @@ class ToolsWindow(QtWidgets.QWidget):
 
         # dt
         dt_label = QtWidgets.QLabel(self._didv_tab)
-        dt_label.setGeometry(QtCore.QRect(39, 120, 50, 15))
+        dt_label.setGeometry(QtCore.QRect(39, 96, 50, 15))
         dt_label.setFont(font)
         dt_label.setObjectName('dtLabel')
         dt_label.setText('dt0:')
 
         self._dt_spinbox = QtWidgets.QDoubleSpinBox(self._didv_tab)
-        self._dt_spinbox.setGeometry(QtCore.QRect(70, 117, 70, 20))
+        self._dt_spinbox.setGeometry(QtCore.QRect(70, 92, 70, 20))
         self._dt_spinbox.setMaximum(100000)
         self._dt_spinbox.setProperty('value', 2)
         self._dt_spinbox.setObjectName('dtSpinBox')
@@ -1672,14 +1664,14 @@ class ToolsWindow(QtWidgets.QWidget):
         self._dt_spinbox.setStepType(step_type)
 
         dt_unit_label = QtWidgets.QLabel(self._didv_tab)
-        dt_unit_label.setGeometry(QtCore.QRect(150, 118, 60, 15))
+        dt_unit_label.setGeometry(QtCore.QRect(150, 94, 60, 15))
         dt_unit_label.setFont(font)
         dt_unit_label.setObjectName('dtUniyLabel')
         dt_unit_label.setText('[mus]')
         
         # add phase
         self._phase180_checkbox = QtWidgets.QCheckBox(self._didv_tab)
-        self._phase180_checkbox.setGeometry(QtCore.QRect(215, 117, 149, 21))
+        self._phase180_checkbox.setGeometry(QtCore.QRect(42, 117, 149, 21))
         self._phase180_checkbox.setFont(font)
         self._phase180_checkbox.setObjectName('phase180CheckBox')
         self._phase180_checkbox.setText('Add 180 Phase')
@@ -1797,14 +1789,16 @@ class ToolsWindow(QtWidgets.QWidget):
         self._baseline_checkbox.setFont(font)
         self._baseline_checkbox.setObjectName('baselineCheckBox')
         self._baseline_checkbox.setText('Baseline')
+        self._baseline_checkbox.setChecked(True)
 
+        
         # Baseline sigma
         self._baseline_spinbox = QtWidgets.QSpinBox(self._pileup_cuts_tab)
         self._baseline_spinbox.setGeometry(QtCore.QRect(150, 140, 40, 20))
         self._baseline_spinbox.setMaximum(10)
         self._baseline_spinbox.setProperty('value', 2)
         self._baseline_spinbox.setObjectName('baselineSpinBox')
-        
+       
 
         # OF chi2 cut
         self._ofchi2_checkbox = QtWidgets.QCheckBox(self._pileup_cuts_tab)

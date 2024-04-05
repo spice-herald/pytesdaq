@@ -378,10 +378,28 @@ class Agilent33500B(InstrumentComm):
 
         return offset
 
-
-          
     
-    def set_frequency(self,frequency,unit='Hz',source=1):
+    def set_phase(self, phase, source=1):
+
+        """
+        Set signal frequency
+       
+        Parameters
+        ----------
+        phase: float
+          signal generator frequency
+
+        source: integer
+           signal generator output channel
+
+        """
+
+        # set frequency
+        command = 'SOUR' + str(source) + ':PHAS ' + str(phase)
+        self.write(command)
+        
+    
+    def set_frequency(self,frequency, unit='Hz', source=1):
 
         """
         Set signal frequency

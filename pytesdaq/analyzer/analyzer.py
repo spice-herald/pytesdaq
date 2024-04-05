@@ -237,13 +237,7 @@ class Analyzer:
             
         
         return data_array_norm
-        
-
-
-    
-
-
-
+     
     
     def calc_psd(self, data_array, sample_rate):
         """
@@ -281,8 +275,6 @@ class Analyzer:
         offset = np.mean(data_array, axis=1)
         return offset
 
-
-    
             
     def fit_didv(self, data_array=None, sample_rate=None, unit='Amps',
                  mask=None, fit_config=None, add_autocuts=True):
@@ -529,7 +521,8 @@ class Analyzer:
                 result['infinite_l']['r0'] = r0_infinite
                 result['infinite_l']['i0'] = i0_infinite
                 result['infinite_l']['p0'] = p0_infinite
-            
+
+                
 
                 
             # Add result to list
@@ -813,10 +806,7 @@ class Analyzer:
         
 
         return cuts_val
-    
-
   
-
         
         
     def _initialize_config(self):
@@ -839,7 +829,7 @@ class Analyzer:
         self._analysis_config['tes_bias'] = None
         self._analysis_config['rshunt'] = 0.005
         self._analysis_config['rp'] = 0.003
-        self._analysis_config['r0'] = 0.2
+        self._analysis_config['r0'] = 0.1
         self._analysis_config['dt'] = 2e-6
         self._analysis_config['add_180phase'] = False
         self._analysis_config['fit_didv'] = False
