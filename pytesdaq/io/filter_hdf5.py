@@ -1,9 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from pprint import pprint
-from numpy.fft import fftfreq, rfftfreq
 
 __all__ = ['FilterH5IO']
 
@@ -19,8 +17,8 @@ class FilterH5IO:
     Overall format of the filter file:
     /channel_name/parameter_name: pandas.Series or pandas.DataFrame 
 
-    Parameters calculated from the sum of multiple channels are stored
-    with channel name = "channel_name_1__channel_name_2__..." 
+    Note that parameter name with + (sum) and | (NxM) 
+    are converted to natural naming with __plus__ and __and__ respectively
 
     """
 
@@ -98,227 +96,37 @@ class FilterH5IO:
         # loop keys
         for key in filter_file.keys():
             
-            msg = key + ': '
-            if '__plus__' in key:
-                msg  = key.replace('__plus__', '+') + ': '
-            elif '__' in key:
-                msg = key.replace('__','|') + ': '
+            # modify key to have  "natural naming"
+            key_name = self._convert_from_natural_naming(key)
+                    
+            msg = key_name + ':  '
             
             val = filter_file[key]
-
             if isinstance(val, pd.Series):
                 msg += 'pandas.Series '
             elif  isinstance(val, pd.DataFrame):
                 msg += 'pandas.DataFrame '
             else: 
-                msg += str(type(val)) + ' '
+                msg += str(type(val))
 
             msg += str(val.shape)
                 
             if 'metadata' in filter_file.get_storer(key).attrs:
-                msg += ', metadata: ' + str(filter_file.get_storer(key).attrs.metadata)
+                msg += ('\n     metadata: '
+                        + str(filter_file.get_storer(key).attrs.metadata)
+                        + '\n')
                 
             print(msg)
             
         filter_file.close()
         
-        
-   
-        
-    def get_psd(self, channel, tag=None, fold=False, add_metadata=False):
-        """
-        Get PSD and associated metadata (optional) for specified channel
-
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-
-        tag : str (optional)
-              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
-              if tag is None, then "psd" or "psd_fold" is used  
-
-        fold : bool (optional, default=False)
-             if True, get "psd_fold" parameter
-             if False, get "psd" parameter
-        
-        add_medatata: bool (optional, default=False)
-             if True, return metadata
-
-        
-        Return:
-        ------
-        
-        psd : 1D numpy array
-             PSD values (in Amps)
-        
-        freq : 1D numpy array
-             Frequency associated with PSD
-       
-        metadata : dict  (if add_metadata=True)
-             Metadata associated with parameter
-        """
-
-        psd_series, metadata = self.get_psd_series(channel, tag=tag, fold=fold,
-                                                   add_metadata=True)
-
-        psd = psd_series.values
-        freq = psd_series.index
-
-        if add_metadata:
-            return psd, freq, metadata
-        else:
-            return psd, freq
-
-
-        
-        
-    def get_psd_series(self, channel, tag=None, fold=False, add_metadata=False):
-        """
-        Get PSD and associated metadata (optional) for specified channel
-
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-        
-        tag : str (optional)
-              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
-              if tag is None, then "psd" or "psd_fold" is used  
-
-
-        fold : bool (optional, default=False)
-             if True, get "psd_fold" parameter
-             if False, get "psd" parameter
-        
-        add_medatata: bool (optional, default=False)
-             if True, return metadata
-
-        
-        Return:
-        ------
-        
-        psd : pandas Series
-             PSD values (in Amps), index=frequencies
-       
-        metadata : dict  (if add_metadata=True)
-             Metadata associated with parameter
-        """
-
-
-        param_name = 'psd'
-        if fold:
-            param_name = 'psd_fold'
-
-        if tag is not None:
-            param_name += '_' + tag 
-      
-
-        return self.get_param(channel, param_name,
-                              add_metadata=add_metadata)
+               
     
-
-        
-    def get_template(self, channel, tag=None,
-                     add_metadata=False):
+    def get_param(self, channel, param_name,
+                  add_metadata=False):
         """
-        Get template and associated metadata (optional) for specified channel
-
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-
-        tag : str (optional)
-              template name suffix:  "template_[tag]"
-              if tag is None, then "template" name is used
-
-        template_name : str (optional, default='template')
-             name of the template saved in the file
-        
-        add_medatata: bool (optional, default=False)
-             if True, return metadata
-
-        
-        Return:
-        ------
-        
-        template: 1D numpy array
-             template values (in Amps)
-        
-        index : 1D numpy array
-             Template ADC bins or time
-       
-        metadata : dict  (if add_metadata=True)
-             Metadata associated with template
-        """
-      
-
-        template_series, metadata = self.get_template_series(
-            channel, tag=tag,
-            add_metadata=True)
-        
-        template = template_series.values
-        time = template_series.index
-        
-        if add_metadata:
-            return template, time, metadata
-        else:
-            return template, time
-
-
-        
-    def get_template_series(self, channel, tag=None,
-                            add_metadata=False):
-        """
-        Get template and associated metadata (optional) for specified channel
-
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-
-        tag : str (optional)
-              template name suffix:  "template_[tag]"
-              if tag is None, then "template" name is used
-        
-        add_medatata: bool (optional, default=False)
-             if True, return metadata
-
-        
-        Return:
-        ------
-        
-        template: pandas Series, index=ADC bins or time
-              Template values
-        metadata : dict  (if add_metadata=True)
-             Metadata associated with template
-
-        """
-
-        template_name = 'template'
-        if tag is not None:
-            template_name += '_' + tag
-            
-
-        return self.get_param(channel, template_name,
-                              add_metadata=add_metadata)
-    
-
-
-    
-    def get_param(self, channel, param_name, add_metadata=False):
-        """
-        Get parameter values, index,
-        and associated metadata (optional) for the specified channel
+        Get parameter  and associated metadata (optional) for the specified 
+        channel. Return pandas Series or Dataframe or 2D/3D numpy array
 
         
         Parameters:
@@ -337,16 +145,39 @@ class FilterH5IO:
         Return:
         ------
         
-        value : pandas Series or DataFrame
+        value : pandas Series or DataFrame or 2D/3D numpy array
              parameter values
        
         metadata : dict  (if add_metadata=True)
              Metadata associated with parameter
         """
 
+        # key name 
         key = '/' + channel + '/' + param_name
-        val, medatata = self._get(key)
         
+        # check if available
+        val = None
+        metadata = None
+        if self._is_key(key):
+            val, medatata = self._get(key)
+            if (isinstance(val, pd.DataFrame)
+                and metadata and 'type' in metadata):
+                if metadata['type'] == '2darray':
+                    val = val.values
+
+        elif self._is_key(f'{key}_slice_0'):
+            _, medatata = self._get(f'{key}_slice_0')
+            dfs  = []
+            for i in range(medatata['nb_slices']):
+                df, _ =  self._get(f'{key}_slice_{i}')
+                dfs.append(df.values)
+            val =  np.stack(dfs, axis=0)
+
+        else:
+            raise ValueError(f'ERROR: parameter {param_name} for '
+                             f'channel {channel} not found in hdf5 '
+                             f'file {self._filter_file}')
+                
         if add_metadata:
             return val, medatata
         else:
@@ -371,11 +202,11 @@ class FilterH5IO:
         param_name : str (required)
              parameter name 
 
-        param_value : 1D numpy array or pandas Series/DataFrame (required)
-             values of teh parameter
+        param_value : numpy array or pandas Series/DataFrame (required)
+             values of the parameter (numpy arrays are converted to pandas)
 
         param_index : 1D numpy array (optional, default=None)
-             index of the parameter (if param_value is a numpy array)
+             index of the parameter (if param_value is a 1D numpy array)
 
         attributes : dict (optional, default=None)
              metadata associated with parameter
@@ -390,192 +221,55 @@ class FilterH5IO:
 
         """
 
-
-        # convert to series if needed
+        # attributes
+        if attributes is None:
+            attributes = dict()
+        
+             
+        # convert to series or dataframe(s)
+        param_value_sliced = dict()
         if isinstance(param_value, np.ndarray):
-            param_value = pd.Series(param_value, param_index)
-
-        # check
-        if (not isinstance(param_value, pd.Series) and
-            not isinstance(param_value, pd.DataFrame)):
-            raise ValueError('Parameter "' + param_name
-                             + ' should be eiter a numpy array'
-                             + ' or pandas Series/dataFrame')
             
-
-        # key name
-        key = '/' + channel + '/' + param_name
-        
-                
-        self._put(key,
-                  param_value,
-                  attributes=attributes,
-                  overwrite=overwrite)
-        
-        
-        
-    def save_psd(self, channel, psd, freq=None, sample_rate=None, tag=None,
-                 fold=False, attributes=None, overwrite=False):
-        """
-        Save PSD for the specified channel
-
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-
-        psd : 1D numpy array or pandas Series/DataFrame (required)
-             values of teh parameter
-
-        freq : 1D numpy array (optional if "fs" argument, default=None)
-             frequencies of the PSD index (if input  psd  is a numpy array)
-
-
-        fs: float (optional if "freq" argument not None, default None)
-             sample rate 
-        
-        tag : str (optional)
-              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
-              if tag is None, then "psd" or "psd_fold" is used  
-
-        fold : bool (optional, default=False)
-             if True, save "psd_fold" parameter
-             if False, save "psd" parameter
-
-        attributes : dict (optional, default=None)
-             metadata associated with parameter
-
-        overwrite : bool (optional, default=False)
-             overwrite existing parameter in filter file (other parameters are unmodified)
-
-
-        Return:
-        ------
-
-        None
-
-        
-        """
-
-        # check
-        if (not isinstance(psd, np.ndarray) and not
-            not isinstance(psd, pd.Series)):
-            raise ValueError('PSD should be eiter a numpy array'
-                             + ' or pandas series')
-
-        # calculte frequencies
-        if isinstance(psd, np.ndarray):
-
-            if (freq is None and sample_rate is None):
-                raise ValueError('PSD frequencies '
-                                 ' or sample rate need to be provided!')
-
-            if freq is None:
-
-                if fold:
-                    freq = rfftfreq(len(psd),d=1.0/sample_rate)
-                else:
-                    freq = fftfreq(len(psd),d=1.0/sample_rate)
+            if param_value.ndim == 1:
+                param_value = pd.Series(param_value, param_index)
+                attributes['type'] = 'series'
+            elif param_value.ndim == 2:
+                param_value = pd.DataFrame(param_value)
+                attributes['type'] = '2darray'
+            elif param_value.ndim == 3:
+                attributes['type'] = '3darray'
+                attributes['nb_slices'] = param_value.shape[0]
+                for i in range(param_value.shape[0]):
+                    df = pd.DataFrame(param_value[i, :, :])
+                    slice_name = f'{param_name}_slice_{i}'
+                    param_value_sliced[slice_name] = df
                     
+        elif isinstance(param_value, pd.Series):
+            attributes['type'] = 'series'
+        elif  isinstance(param_value, pd.DataFrame):
+            attributes['type'] = 'dataframe'
+        else:
+            raise ValueError(f'ERROR: Parameter "{param_name}" '
+                             f'should be eiter a numpy array'
+                             f'or pandas Series/dataFrame')
         
-        if freq is not None and not isinstance(freq, np.ndarray):
-            raise ValueError('PSD frequencies should be a numpy array')
 
-        # convert to pandas Series
-        if isinstance(psd, np.ndarray):
-            psd = pd.Series(psd, freq)
-            
-        # name
-        psd_name = 'psd'
-        if fold:
-            psd_name += '_fold'
-        
-        if tag is not None:
-            psd_name += '_' + tag
-
-        # full key name
-        key = '/' + channel + '/' + psd_name
-
-
-        # add sample rate to attribute
-        if sample_rate is not None:
-            if attributes is None:
-                attributes = dict()
-            attributes['sample_rate'] = sample_rate
-            
-        
-        # save
-        self._put(key,
-                  psd,
-                  attributes=attributes,
-                  overwrite=overwrite)
-
-        
-    def save_template(self, channel, template, template_time=None,
-                      tag=None, attributes=None, overwrite=False):
-        """
-        Save template for the specified channel
-        
-        Parameters:
-        ----------
-        
-        channel : str (required)
-             channel name
-
-        template : 1D numpy array or pandas Series/DataFrame (required)
-             values of teh parameter
-
-        template_time : 1D numpy array (optional, default=None)
-             time array for template (if input template  is a numpy array)
-
-        tag : str (optional)
-              template name suffix:  "template_[tag]"
-              if tag is None, then "template" name is used
-    
-        attributes : dict (optional, default=None)
-             metadata associated with parameter
-
-        overwrite : bool (optional, default=False)
-             overwrite existing parameter in filter file (other parameters are unmodified)
-
-
-        Return:
-        ------
-
-        None
-        """
-
-        # check
-        if (not isinstance(template, np.ndarray) and not
-            not isinstance(template, pd.Series)):
-            raise ValueError('Template should be eiter a numpy array'
-                             + ' or pandas series')
-
-        if template_time is not None and not isinstance(template_time, np.ndarray):
-            raise ValueError('time parameter should be a numpy array')
-
-        # convert to pandas Series
-        if isinstance(template, np.ndarray):
-            template = pd.Series(template, template_time)
-
-        # template name
-        template_name = 'template'
-        if tag is not None:
-            template_name += '_' + tag
+        if param_value_sliced:
+            for key_name, df in param_value_sliced.items():
+                key = '/' + channel + '/' +  key_name
+                self._put(key,
+                          df,
+                          attributes=attributes,
+                          overwrite=overwrite)
+        else:
+            # key name
+            key = '/' + channel + '/' + param_name
+            self._put(key,
+                      param_value,
+                      attributes=attributes,
+                      overwrite=overwrite)
 
             
-        # store
-        key = '/' + channel + '/' + template_name
-        
-        self._put(key,
-                  template,
-                  attributes=attributes,
-                  overwrite=overwrite)
-        
-        
-
     def save_fromdict(self, filter_dict, overwrite=False):
         """
         Save parameter from dictionary 
@@ -606,7 +300,6 @@ class FilterH5IO:
         
         # loop filter data and save data
         for chan_name, chan_dict in filter_dict.items():
-
 
             # first get list of parameters
             param_name_list = list()
@@ -669,101 +362,52 @@ class FilterH5IO:
 
         output_dict = dict()
 
-        # open file
+        # open file and key list of keys
         filter_file = pd.HDFStore(self._filter_file)
-        for key in filter_file.keys():
-            key_split = key.split('/')
-            if len(key_split)!=3:
-                continue
-            chan = key_split[1]
-            if '__plus__' in chan:
-                chan = chan.replace('__plus__', '+')
-            if '__' in chan:
-                chan = chan.replace('__','|')
-
-            chan_key = key_split[2]
-
-            # create channel dict if needed
-            if chan not in output_dict:
-                output_dict[chan] = dict()
-
-            # fill value
-            output_dict[chan][chan_key] = filter_file[key]
-
-            # fill metadata
-            attributes = filter_file.get_storer(key).attrs
-            if 'metadata' in attributes:
-                chan_key += '_metadata'
-                output_dict[chan][chan_key] = attributes.metadata
-
-
-        # close file
+        file_keys = filter_file.keys()
         filter_file.close()
-        
+                
+        # loop keys to deal with sliced data
+        list_of_keys = [] 
+        for key in file_keys:
+
+            pos = key.find('slice_')
+            if pos != -1:
+                key = key[0:pos-1]
+
+            if key not in list_of_keys:
+                list_of_keys.append(key)
+
+        # loop and get dat
+        for key in list_of_keys:
+                        
+            key = self._convert_from_natural_naming(key)
+                        
+            # split channel / parameter name             
+            key_split = key.split('/')
+            if len(key_split) != 3:
+                continue
+
+            # channel/par name 
+            channel = key_split[1]
+            param_name = key_split[2]
+
+            # get value
+            val, metadata = self.get_param(channel,
+                                           param_name,
+                                           add_metadata=True)
+
+            
+            # create channel dict if needed
+            if channel not in output_dict:
+                output_dict[channel] = dict()
+                
+            # fill value
+            output_dict[channel][param_name] = val
+            output_dict[channel][param_name + '_metadata'] =  metadata
+                
         return  output_dict
 
-
-
-
-    
-
-            
-    def plot_psd(self, channels, tag=None, fold=True, unit='pA'):
-        """
-        Plot PSD for specified channel(s)
-
-        Parameters:
-        ----------
-        
-        channels :  str or list of str (required)
-           channel name or list of channels
-
-        tag : str (optional)
-              psd name suffix:  "psd_[tag]" or "psd_fold_[tag]"
-              if tag is None, then "psd" or "psd_fold" is used  
-
-        fold : bool (optional, default=False)
-             if True, plot "psd_fold" parameter
-             if False, plot "psd" parameter
-
-        unit : str (optional, default='pA')
-            plot in Amps ('A') or pico Amps 'pA')
-
-
-        Return:
-        -------
-        None
-
-        """
-
-        if not isinstance(channels, list):
-            channels = [channels]
-
-        # define fig size
-        fig, ax = plt.subplots(figsize=(8, 5))
-        
-            
-        for chan in channels:
-            psd, psd_meta = self.get_psd_series(chan, tag=tag,
-                                                fold=fold, add_metadata=True)
-            f = psd.index
-            val = psd.values**0.5
-            if unit=='pA':
-                val *= 1e12
-            ax.loglog(f, val, label=chan)
-
-        # add axis
-        ax.legend()
-        ax.tick_params(which='both', direction='in', right=True, top=True)
-        ax.grid(which='minor', linestyle='dotted')
-        ax.grid(which='major')
-        ax.set_title('Noise PSD',fontweight='bold')
-        ax.set_xlabel('Frequency [Hz]',fontweight='bold')
-        if  unit=='pA':
-            ax.set_ylabel('PSD [pA/rtHz]',fontweight='bold')
-        else:
-            ax.set_ylabel('PSD [A/rtHz]',fontweight='bold')
-        
         
     def _put(self, key, value, attributes=None, overwrite=False):
         """
@@ -790,7 +434,6 @@ class FilterH5IO:
 
         None
       
-
         """
         
         # open file
@@ -798,34 +441,30 @@ class FilterH5IO:
 
         # verbose
         if self._verbose:
-            print('Storing ' + key + ' in ' + self._filter_file)
+            print(f'INFO: Storing {key} in {self._filter_file}')
 
-        # check if key contains + or | (not able to save in file)
-        if '+' in key:
-            key = key.replace('+','__plus__')
-            
-        if '|' in key:
-            key = key.replace('|','__')
-            
-            
+        # modify key to have  "natural naming"
+        key_natural = self._convert_to_natural_naming(key)
+                    
         # check if key exist already
         file_keys = filter_file.keys()
-        if (key in file_keys and not overwrite):
-            raise ValueError('Key ' + key + ' already stored in '
-                             + self._filter_file + '. Use "overwrite=True"'
-                             + ' to overwrite or change file name')
+        if (key_natural in file_keys and not overwrite):
+            raise ValueError(f'Key {key} already stored in '
+                             f'{self._filter_file}. Use "overwrite=True" '
+                             f'to overwrite parameter or '
+                             f'change file name')
 
         # save
-        filter_file.put(key, value, format='fixed')
+        filter_file.put(key_natural, value, format='fixed')
 
         # add attributes
         if attributes is not None:
-            filter_file.get_storer(key).attrs.metadata = attributes
+            filter_file.get_storer(key_natural).attrs.metadata = attributes
 
         # close
         filter_file.close()
 
-        
+
         
     def _get(self, key):
         """
@@ -854,41 +493,188 @@ class FilterH5IO:
         # open file
         filter_file = pd.HDFStore(self._filter_file)
 
-
-        # check if key contains + or | (not able to save in file)
-        if '__plus__' in key:
-            key = key.replace('__plus__', '+')
-            
-        if '__' in key:
-            key = key.replace('__','|')
-            
-            
+        # modify key to have  "natural naming"
+        key_natural = self._convert_to_natural_naming(key)
+        
         # check key
         file_keys = filter_file.keys()
         
+        if key_natural not in file_keys:
+            raise ValueError(f'Key {key} is not in  '
+                             f'{self._filter_file}. '
+                             f'Check file with "describe()"')
 
-        if key not in file_keys:
-            raise ValueError('Key ' + key + ' is not in  '
-                             + self._filter_file + '. '
-                             + 'Check file with "describe()"')
-
-        
         # get
-        value = filter_file.get(key)
+        value = filter_file.get(key_natural)
 
         # get attributes
         metadata = None
-        attributes = filter_file.get_storer(key).attrs
+        attributes = filter_file.get_storer(key_natural).attrs
         if 'metadata' in attributes:
-            metadata = filter_file.get_storer(key).attrs.metadata 
+            metadata = filter_file.get_storer(key_natural).attrs.metadata 
 
             
         # close
         filter_file.close()
 
         return value, metadata
+    
+
+    def _is_key(self, key):
+        """
+      
+        Check if key in hdf5 file
+        
+        Parameters:
+        ----------
+        
+        key : str (required)
+             key name in the form of '/channel_name/parameter_name'
+
+
+        Return:
+        ------
+        
+        is_key : boolean
+          True is key exist, False if key doesn't exist
+        
+
+        """
+
+        # open file
+        filter_file = pd.HDFStore(self._filter_file)
+
+
+        # modify key to have  "natural naming"
+        key_natural = self._convert_to_natural_naming(key)
+        
+        # check key
+        file_keys = filter_file.keys()
+
+        is_key = False
+        if key_natural in file_keys:
+            is_key = True
+
+
+        # close
+        filter_file.close()
+            
+        return is_key
+
+    
+    def _convert_to_natural_naming(self, key):
+        """
+        convert to natural naming
+        = string containing only 
+              ^[a-zA-Z_][a-zA-Z0-9_]*$
+        """
+
+        if '+' in key:
+            key = key.replace('+', '__plus__')
+
+        if '|' in key:
+            key = key.replace('|', '__and__')
+          
+        return key
+
+    def _convert_from_natural_naming(self, key):
+        """
+        convert from natural naming
+        = string containing only 
+              ^[a-zA-Z_][a-zA-Z0-9_]*$
+        """
+
+        if '__plus__' in key:
+            key = key.replace('__plus__', '+')
+        
+        if '__and__' in key:
+            key = key.replace('__and__', '|')
+          
+        return key
 
 
 
 
+
+    # obsolete function
+    def get_psd(self, channel, tag=None, fold=False,
+                add_metadata=False):
+            
+        """
+        OBSOLETE function
+        """
+
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "get_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O')
+    
+        
+    def get_psd_series(self, channel,
+                       tag=None,
+                       fold=False,
+                       add_metadata=False):
+        """
+        OBSOLETE
+        """
+
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "get_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O.')
+    
+        
+    def get_template(self, channel, tag=None,
+                     add_metadata=False):
+        """
+        OBSOLETE
+        """
+
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "get_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O')
+            
+    def get_template_series(self, channel, tag=None,
+                            add_metadata=False):
+        """
+        OBSOLETE
+        """
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "get_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O')
+            
+    def plot_psd(self, channels, tag=None, fold=True, unit='pA'):
+        """
+        OBSOLETE
+        """
+
+        raise ValueError('ERROR: This function is obsolete! Use detprocess "FilterData" '
+                         'class instead to plot psd')
+
+
+    def save_psd(self, channel, psd, freq=None,
+                 sample_rate=None, tag=None,
+                 fold=False, attributes=None,
+                 overwrite=False):
+        """
+        OBSOLETE
+        """
+
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "save_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O')
+    
+    def save_template(self, channel, template, template_time=None,
+                      tag=None, attributes=None, overwrite=False):
+        """
+        OBSOLETE
+        """
+
+        raise ValueError('ERROR: This function is obsolete! The more '
+                         'general "save_param()" function can be used instead. '
+                         'To ensure format compatibility with detprocess, best is to '
+                         'use detprocess "FilterData" class for filter file I/O')
     
