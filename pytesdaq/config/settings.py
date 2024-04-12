@@ -10,6 +10,7 @@ import sys
 import copy
 from datetime import datetime
 import time
+import copy
 
 from pytesdaq.utils import connection_utils
 
@@ -167,7 +168,9 @@ class Config:
             print('WARNING: Problem reading settings file for "'+
                   measurement_name + '" measurement!')
 
-        return output_setup 
+        output_setup_copy = copy.deepcopy(output_setup)
+            
+        return output_setup_copy
 
 
   
@@ -369,8 +372,8 @@ class Config:
     def get_adc_list(self):
         adc_list = list()
         try:
-            adc_list =  self._get_comma_separated_setting('setup',
-                                                          'enable_adc')
+            adc_list =  self._get_comma_separated_setting(
+                'setup', 'enable_adc')
         except:
             pass
         
@@ -420,9 +423,9 @@ class Config:
         connection_table = pd.DataFrame(adc_connections, columns = column_list)
         setup['connection_table'] = connection_table
         
-
-
-        return setup
+        setup_copy = copy.deepcopy(setup)
+         
+        return setup_copy
 
      
     def get_adc_connections(self, adc_id=None):
@@ -448,7 +451,7 @@ class Config:
             if connection_table_list:
                 connection_table = pd.concat(connection_table_list)
             
-        return connection_table 
+        return connection_table.copy() 
 
 
     
@@ -513,8 +516,8 @@ class Config:
                 # add in config
                 detector_config[param_name].append(param_val)
 
-                       
-        return detector_config 
+        detector_config_copy = copy.deepcopy(detector_config)
+        return detector_config_copy
 
     def get_visa_library(self):
         """
@@ -785,22 +788,23 @@ class Config:
         except:
             raise ValueError('ERROR: Unknown temperature_controllers format!')
                 
-        
-        return output_dict
+        output_dict_copy = copy.deepcopy(output_dict)
+        return output_dict_copy
 
 
-    def get_daq_config(self, trigger_type):
+    def get_daq_config(self, acquisition_type):
         """
         Get daq config by trigger type
         """
-        if  not self._has_section(trigger_type):
-            print('ERROR: Trigger type "' + trigger_type + '" '
-                  + 'not recognized. Available types: '
-                  + 'continuous, randoms, didv, threshold')
-            print('Check code...')
+        
+        if  not self._has_section(acquisition_type):
             return None
 
-        return self._get_section_dict(trigger_type)
+        daq_config = copy.deepcopy(
+            self._get_section_dict(acquisition_type)
+        )
+
+        return daq_config
 
       
     

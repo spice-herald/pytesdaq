@@ -7,6 +7,7 @@ if __name__ == "__main__":
     # VISA Address
     #visa_address = 'USB0::2391::9991::MY62000634::0::INSTR'
     visa_address = 'TCPIP::192.168.10.1::inst0::INSTR'
+    visa_address = 'GPIB::10::INSTR'
     
     # Instantiate instrument
     myinstrument = Agilent33500B(visa_address, attenuation=1)
@@ -16,7 +17,7 @@ if __name__ == "__main__":
     print('Device name: ' + idn)
 
     # set amplitude Vpp
-    myinstrument.set_amplitude(0.01)
+    #myinstrument.set_amplitude(0.01)
     
     # get amplitude
     amplitude = myinstrument.get_amplitude()
@@ -24,7 +25,7 @@ if __name__ == "__main__":
 
 
     # set frequency
-    myinstrument.set_frequency(500)
+    #myinstrument.set_frequency(500)
     
     # get frequency
     frequency = myinstrument.get_frequency()
@@ -34,9 +35,12 @@ if __name__ == "__main__":
     shape = myinstrument.get_shape()
     print('Shape = ' + shape )
 
-    myinstrument.set_load_resistance(2047)
-    myinstrument.set_shape('dc')
-    myinstrument.set_offset(setpoint) #V
-    myinstrument.set_generator_onoff('on')
+    resistance = myinstrument.get_load_resistance()
+    print(f'Load resistance: {resistance}')
+
+    # myinstrument.set_load_resistance(2047)
+    # myinstrument.set_shape('dc')
+    # myinstrument.set_offset(setpoint) #V
+    # myinstrument.set_generator_onoff('on')
 
 

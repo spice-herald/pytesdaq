@@ -77,12 +77,9 @@ class Control:
 
     def __del__(self):
         """
+        Disconnect instruments if exception
         """
-
-        # temperature controllers
-        if self._temperature_controller_insts  is not None:
-         for name, inst in self._temperature_controller_insts.items():
-             inst.disconnect()
+        self._disconnect_instruments()
 
         
     @property
@@ -410,7 +407,7 @@ class Control:
                               adc_id=None, adc_channel=None,
                               signal_gen_num=1, source=None,
                               voltage=None, current=None, offset=None,
-                              frequency=None, shape=None, phase_shift=None,
+                              frequency=None, shape=None, phase=None,
                               freq_div=None, half_pp_offset=None):
 
         """
@@ -426,11 +423,13 @@ class Control:
   
         # check parameters
         if voltage is not None and current is not None:
-            print('ERROR: Set signal generator amplitude either with "current" or "voltage", not both!')
-            return
-        
-        if source is not None and (source != 'tes' and source != 'feedback'):
-            print('ERROR: Source can be either "tes" or "feedback"')
+            raise ValueError('ERROR: Set signal generator amplitude either '
+                             'with "current" or "voltage", not both!')
+    
+        if source is not None and (source != 'tes'
+                                   and source != 'feedback'):
+            raise ValueError('ERROR: Signal "source" can be either '
+                             '"tes" or "feedback"')
             
               
         if self._dummy_mode:
@@ -460,8 +459,8 @@ class Control:
                 source_magnicon = 'Ib'
             if frequency is not None:
                 frequency = float(frequency)
-            if phase_shift is not None:
-                phase_shift = int(phase_shift)
+            if phase is not None:
+                phase = int(phase)
             if freq_div is not None:
                 freq_div = int(freq_div)
             if current is not None:
@@ -471,7 +470,7 @@ class Control:
                 self._signal_generator_inst.set_generator_params(
                     int(controller_channel), int(signal_gen_num), 
                     frequency, source_magnicon, shape,
-                    phase_shift, freq_div, half_pp_offset,
+                    phase, freq_div, half_pp_offset,
                     current)
             )
    
@@ -491,10 +490,11 @@ class Control:
                 raise ValueError(f'ERROR: Signal generator resistance '
                                  f'not available in config file!')
             
-            self._signal_generator_inst.set_load_resistance(resistance)
+            if self._squid_controller_name != 'feb':
+                self._signal_generator_inst.set_load_resistance(resistance)
             
             # shape
-            if shape is None:
+            if shape is not None:
                 if (shape == 'sawtoothpos'
                     or shape == 'sawtoothneg'):
                     shape = 'ramp'
@@ -523,9 +523,9 @@ class Control:
                     source=signal_gen_num)
 
             # phase
-            if phase_shift is not None:
+            if phase is not None:
                 self._signal_generator_inst.set_phase(
-                    phase_shift,
+                    phase,
                     source=signal_gen_num)
 
             # source
@@ -621,8 +621,9 @@ class Control:
             detector_channel=detector_channel,
             adc_id=adc_id, adc_channel=adc_channel
         )
-                  
-        return bias
+
+        
+        return float(bias)
         
         
     def get_squid_bias(self, 
@@ -644,7 +645,7 @@ class Control:
         except:
             print('ERROR getting SQUID bias')
             
-        return bias
+        return float(bias)
 
 
     def get_lock_point(self, 
@@ -666,7 +667,7 @@ class Control:
         except:
             print('ERROR getting lock point')
             
-        return lock_point
+        return float(lock_point)
 
     def get_feedback_gain(self, 
                           tes_channel=None,
@@ -688,7 +689,7 @@ class Control:
         except:
             print('ERROR getting feedback gain')
             
-        return feedback_gain
+        return float(feedback_gain)
 
 
     def get_output_offset(self, 
@@ -710,7 +711,7 @@ class Control:
         except:
             print('ERROR getting output offset')
             
-        return output_offset
+        return float(output_offset)
 
 
     def get_output_total_gain(self, 
@@ -742,7 +743,7 @@ class Control:
             output_total_gain = output_fix_gain * output_variable_gain
             
             
-        return output_total_gain
+        return float(output_total_gain)
 
 
     def get_preamp_total_gain(self, 
@@ -774,7 +775,7 @@ class Control:
             preamp_total_gain = preamp_fix_gain * preamp_variable_gain
             
             
-        return preamp_total_gain
+        return float(preamp_total_gain)
     
 
     def get_squid_loop_total_gain(self, 
@@ -795,7 +796,7 @@ class Control:
 
         
         gain = preamp_gain * feedback_gain
-        return gain
+        return float(gain)
          
     def get_feedback_polarity(self, 
                               tes_channel=None,
@@ -959,7 +960,7 @@ class Control:
         output_dict['source'] = nan
         output_dict['frequency'] = nan
         output_dict['shape'] = nan
-        output_dict['phase_shift'] = nan
+        output_dict['phase'] = nan
         output_dict['freq_div'] = nan
         output_dict['half_pp_offset'] = nan
         output_dict['voltage'] = nan
@@ -995,7 +996,7 @@ class Control:
             # convert some parameters
             source_magnicon = 'I'
            
-            source, shape, freq, freq_div, shift, amp, offset = (
+            source, shape, freq, freq_div, phase, amp, offset = (
                 self._signal_generator_inst.get_generator_params(
                     controller_channel,
                     signal_gen_num)
@@ -1012,7 +1013,7 @@ class Control:
             output_dict['current'] = amp/1000000.0
             output_dict['frequency'] = freq
             output_dict['shape'] = shape
-            output_dict['phase_shift'] = shift
+            output_dict['phase'] = phase
             output_dict['freq_div'] = freq_div
             output_dict['half_pp_offset'] = offset
             output_dict['offset'] = offset
@@ -1025,7 +1026,7 @@ class Control:
                 detector_channel=detector_channel,
                 adc_id=adc_id,
                 adc_channel=adc_channel)
-           
+             
             output_dict['voltage'] = float(
                 self._signal_generator_inst.get_amplitude(
                     source=signal_gen_num,  unit='Vpp')
@@ -1040,8 +1041,14 @@ class Control:
 
             output_dict['offset'] = float(
                 self._signal_generator_inst.get_offset(
-                    source=signal_gen_num,  unit='Vpp')
+                    source=signal_gen_num,  unit='V')
             )
+
+            output_dict['phase'] = float(
+                self._signal_generator_inst.get_phase(
+                    source=signal_gen_num)
+            )
+            
             
             # source
             if (is_channel_defined
@@ -1161,8 +1168,8 @@ class Control:
             if ('feedback_resistance' in  detector_config and
                 len(detector_config['feedback_resistance'])==1):
                 feedback_resistance = float(detector_config['feedback_resistance'][0])
-                 
-        return feedback_resistance
+                      
+        return float(feedback_resistance)
 
 
     def get_shunt_resistance(self, tes_channel=None,
@@ -1181,11 +1188,8 @@ class Control:
                 adc_id=adc_id,
                 adc_channel=adc_channel)
             )
-        if shunt_resistance != nan:
-            shunt_resistance = float(shunt_resistance)
-        
-        return shunt_resistance
-        
+
+        return float(shunt_resistance)        
      
     def get_squid_turn_ratio(self, tes_channel=None,
                              detector_channel=None,
@@ -1203,10 +1207,7 @@ class Control:
                 adc_channel=adc_channel)
             )
         
-        if squid_turn_ratio != nan:
-            squid_turn_ratio = float(squid_turn_ratio)
-        
-        return squid_turn_ratio
+        return float(squid_turn_ratio)
 
 
     def get_signal_gen_resistance(self, tes_channel=None,
@@ -1224,11 +1225,8 @@ class Control:
                 adc_id=adc_id,
                 adc_channel=adc_channel)
             )
-
-        if resistance != nan:
-            resistance = float(resistance)
-            
-        return resistance
+                 
+        return float(resistance)
 
     
     def get_tes_bias_resistance(self, tes_channel=None,
@@ -1247,10 +1245,8 @@ class Control:
                 adc_channel=adc_channel)
             )
 
-        if resistance != nan:
-            resistance = float(resistance)
-
-        return resistance
+     
+        return float(resistance)
 
     
        
@@ -1383,17 +1379,16 @@ class Control:
         output_dict['signal_gen_offset'] = list()
         output_dict['signal_gen_frequency'] = list()
         output_dict['signal_gen_shape'] = list()
-        output_dict['signal_gen_phase_shift'] = list()
+        output_dict['signal_gen_phase'] = list()
         output_dict['signal_gen_source'] = list()
         output_dict['signal_gen_onoff'] = list()
+        output_dict['signal_gen_resistance'] = list()
         output_dict['feedback_resistance'] =  list()
         output_dict['squid_turn_ratio'] = list()
         output_dict['shunt_resistance'] = list()
-        output_dict['signal_gen_tes_resistance'] = list()
         output_dict['close_loop_norm'] = list()
         output_dict['open_loop_preamp_norm'] = list()
         output_dict['open_loop_full_norm'] = list()
-
 
         
         # ====================
@@ -1444,7 +1439,6 @@ class Control:
                 adc_chan = adc_channel_list[ichan]
             
 
-
             # loop TES parameters
             for param in param_list:
              
@@ -1481,13 +1475,19 @@ class Control:
                 signal_gen_num=1, tes_channel=tes_chan,
                 detector_channel=detector_chan, 
                 adc_id=adc_chan_id, adc_channel=adc_chan)
-            
+
+            sig_gen_resistance =  self.get_signal_gen_resistance(
+                tes_channel=tes_chan,
+                detector_channel=detector_chan, 
+                adc_id=adc_chan_id, adc_channel=adc_chan)
+                       
+            output_dict['signal_gen_resistance'].append(sig_gen_resistance)
             output_dict['signal_gen_voltage'].append(sig_gen_dict['voltage'])
             output_dict['signal_gen_current'].append(sig_gen_dict['current'])
-            output_dict['signal_gen_voltage'].append(sig_gen_dict['offset'])
+            output_dict['signal_gen_offset'].append(sig_gen_dict['offset'])
             output_dict['signal_gen_frequency'].append(sig_gen_dict['frequency'])
             output_dict['signal_gen_shape'].append(sig_gen_dict['shape'])
-            output_dict['signal_gen_phase_shift'].append(sig_gen_dict['phase_shift'])
+            output_dict['signal_gen_phase'].append(sig_gen_dict['phase'])
             output_dict['signal_gen_source'].append(sig_gen_dict['source'])
             output_dict['signal_gen_onoff'].append(onoff)
 
@@ -1537,17 +1537,49 @@ class Control:
                     adc_id=adc_chan_id, adc_channel=adc_chan)
             )
 
-            output_dict['signal_gen_tes_resistance'].append(
-                self.get_signal_gen_resistance(
-                    tes_channel=tes_chan,
-                    detector_channel=detector_chan,
-                    adc_id=adc_chan_id,
-                    adc_channel=adc_chan)
-            )
-            
-                     
+           
+        # ====================
+        # Temperature
+        # ====================
+        if self._temperature_controller_insts  is not None:
+            temperature_dict = self.read_all_temperatures()
+            for temp_name, temp in temperature_dict.items():
+                output_dict[temp_name] = [temp]*len(
+                    output_dict['tes_bias']
+                )
+
         return output_dict
 
+    def read_all_temperatures(self):
+        """
+        read all thermometers connected
+        and store in an dictionary
+        """
+
+        output_dict = dict()
+        if self._temperature_controller_insts  is None:
+            return output_dict
+
+        # loop controllers
+        for name, inst in self._temperature_controller_insts.items():
+            df = inst.get_channel_table()
+            if 'channel_name' in list(df.columns):
+                channel_name_list = list(df['channel_name'].unique())
+                for chan in channel_name_list:
+                    if 'heater' not in chan:
+                        try:
+                            temperature = inst.get_temperature(
+                                channel_name=chan)
+                            
+                            therm_name = (
+                                'temperature_' + chan.lower()
+                            )
+                            output_dict[therm_name] = temperature
+                        except:
+                            pass
+
+        return output_dict
+            
     
     def get_temperature_controllers_table(self, channel_type=None):
         """
@@ -1994,6 +2026,13 @@ class Control:
         else:
             raise ValueError('Unrecognize SQUID controller')
 
+
+        # convert to numeric if string
+        if isinstance(param_val, str):
+            try:
+                param_val = float(param_val)
+            except ValueError:
+                pass        
             
         return param_val
 
@@ -2489,7 +2528,12 @@ class Control:
                 self._squid_controller_inst.disconnect()
             self._squid_controller_inst = None
             
- 
+        if self._temperature_controller_insts  is not None:
+            for name, inst in self._temperature_controller_insts.items():
+                inst.disconnect()
+            self._temperature_controller_insts = None
+
+            
     def _get_parameter_from_config(self, parameter_name,
                                    tes_channel=None,
                                    detector_channel=None,

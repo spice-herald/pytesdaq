@@ -45,6 +45,8 @@ if __name__ == "__main__":
                         help = 'Signal generator frequency [Hz]')
     parser.add_argument('--signal_gen_shape', nargs='?', type=str, default=None,
                         help = 'Signal generator shape [sine, square, triangle, ramp, dc]')
+    parser.add_argument('--signal_gen_phase', nargs='?', type=float, default=None,
+                        help = 'Signal generator phase')
     
  
     # verbose
@@ -280,4 +282,7 @@ if __name__ == "__main__":
         
     if args.signal_gen_shape is not None:
         myinstrument.set_signal_gen_params(shape=args.signal_gen_shape)
+        
+    if args.signal_gen_phase is not None:
+        myinstrument.set_signal_gen_params(phase_shift=float(args.signal_gen_phase))
      

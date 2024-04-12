@@ -165,8 +165,7 @@ class PolarisTask:
         """
         Set ADC config
         """
-     
-   
+      
         adc_dict = dict()
         if not self._adc_config:
             self._adc_config = dict()
@@ -233,23 +232,17 @@ class PolarisTask:
             polaris_cmd = polaris_cmd + ' --debug'
         if self._log_file:
              polaris_cmd = polaris_cmd + ' --log ' + self._log_file
-
-             
        
         print('INFO: Polaris command: ' + polaris_cmd)
         print('INFO: Starting data taking using polaris!')
         
-               
         # lock
         if self._lock_daq and self._lock_file:
             polaris_cmd = 'flock -n ' + self._lock_file + ' -c '+ '\''+ polaris_cmd +'\''
-
-      
    
         start = datetime.now()
         env = os.environ.copy() # specific environment for polaris?
-  
-     
+       
         with subprocess.Popen(polaris_cmd,shell=True,stdout=subprocess.PIPE, 
                               stderr=subprocess.STDOUT,env=env) as running_task:
      
@@ -311,11 +304,8 @@ class PolarisTask:
             print('ERROR: Run configuration not available! Unable to start run')
             return False
 
-
-
         # initialize list
         cfg_list = list()
-
         
         # date
         now = datetime.now()
@@ -336,8 +326,7 @@ class PolarisTask:
         # run config
         for key in self._run_config:
             cfg_list.append(key + ' : ' + str(self._run_config[key]) + ',\n')
-                        
-        
+           
         # adc config
         for adc_name in self._adc_config:
 
@@ -392,7 +381,6 @@ class PolarisTask:
                 if 'connection' in config and 'connection_table'!= config:
                     val = ' '.join(map(str,config_dict[config]))
                     cfg_list.append('\t' + config + ' : ' + val + ',\n')
-
 
             data_mode = 'cont'
             if int(config_dict['trigger_type'])==2:

@@ -60,12 +60,11 @@ class Agilent33500B(InstrumentComm):
                 return None
         command = 'SOURCE' + str(source) +':VOLTAGE:RANGE:AUTO ' + str(auto)
         #command = 'SOURCE1:VOLTAGE:RANGE:AUTO OFF'
-        print(command)
         self.write(command)
         
         
 
-    def set_load_resistance(self, load='infinity',source=1):
+    def set_load_resistance(self, load='infinity', source=1):
         """
         Set output load
 
@@ -98,9 +97,25 @@ class Agilent33500B(InstrumentComm):
         command = 'OUTPUT' + str(source) + ':LOAD ' + str(load)
         self.write(command)
 
+    def get_load_resistance(self, source=1):
+        """
+        Get output load
+
+        Parameters
+        ---------
+        source : int
+           channel (default=1)
+
+        """
+        
+        command = 'OUTPUT' + str(source) + ':LOAD?'
+        resistance = float(self.query(command))
+
+        return resistance
+
 
         
-    def set_shape(self, shape,source=1):
+    def set_shape(self, shape, source=1):
         """
         Set signal shape
 
@@ -209,7 +224,7 @@ class Agilent33500B(InstrumentComm):
         """
 
 
-        unit_list = ['Vpp', 'mVpp', 'Vrms', 'dbm']
+        unit_list = ['V','Vpp', 'mV', 'mVpp', 'Vrms', 'dbm']
 
         if unit not in unit_list:
             print('ERROR: Unit not recognized!')
@@ -218,7 +233,13 @@ class Agilent33500B(InstrumentComm):
                 raise
             else:
                 return
-                     
+
+        if unit == 'V':
+            unit = 'Vpp'
+        if unit == 'mV':
+            unit = 'mVpp'
+
+            
         if unit == 'mVpp':
             amplitude = float(amplitude)/1000
             unit = 'Vpp'
@@ -259,7 +280,7 @@ class Agilent33500B(InstrumentComm):
 
         """
 
-        unit_list = ['Vpp','mVpp','Vrms','dbm']
+        unit_list = ['V','Vpp','mV', 'mVpp','Vrms','dbm']
 
         if unit not in unit_list:
             print('ERROR: Unit not recognized!')
@@ -269,6 +290,10 @@ class Agilent33500B(InstrumentComm):
             else:
                 return None
 
+        if unit == 'V':
+            unit = 'Vpp'
+        if unit == 'mV':
+            unit = 'mVpp'
 
         convert_mVpp = False
         if unit == 'mVpp':
@@ -314,7 +339,7 @@ class Agilent33500B(InstrumentComm):
         """
 
 
-        unit_list = ['V', 'mV']
+        unit_list = ['V', 'mV', 'Vpp','mVpp']
 
         if unit not in unit_list:
             print('ERROR: Unit not recognized!')
@@ -323,6 +348,11 @@ class Agilent33500B(InstrumentComm):
                 raise
             else:
                 return
+
+        if unit == 'Vpp':
+            unit = 'V'
+        if unit == 'mVpp':
+            unit = 'mV'
                      
         if unit == 'mV':
             offset = float(offset)/1000
@@ -356,7 +386,7 @@ class Agilent33500B(InstrumentComm):
 
 
         """
-        unit_list = ['V', 'mV']
+        unit_list = ['V', 'mV', 'Vpp', 'mVpp']
 
         if unit not in unit_list:
             print('ERROR: Unit not recognized!')
@@ -365,7 +395,12 @@ class Agilent33500B(InstrumentComm):
                 raise
             else:
                 return
-         
+     
+        if unit == 'Vpp':
+            unit = 'V'
+        if unit == 'mVpp':
+            unit = 'mV'
+            
         # query offset
         command = 'SOUR' + str(source) + ':VOLT:OFFS?'
         offset = float(self.query(command))
@@ -382,12 +417,12 @@ class Agilent33500B(InstrumentComm):
     def set_phase(self, phase, source=1):
 
         """
-        Set signal frequency
+        Set signal phase
        
         Parameters
         ----------
         phase: float
-          signal generator frequency
+          signal generator phase [degree]
 
         source: integer
            signal generator output channel
@@ -397,7 +432,25 @@ class Agilent33500B(InstrumentComm):
         # set frequency
         command = 'SOUR' + str(source) + ':PHAS ' + str(phase)
         self.write(command)
-        
+
+
+    def get_phase(self, source=1):
+
+        """
+        Get signal phase
+       
+        Parameters
+        ----------
+           source: integer
+              signal generator output channel
+
+        """
+
+        # set frequency
+        command = 'SOUR' + str(source) + ':PHAS?'
+        phase = float(self.query(command))
+        return phase
+    
     
     def set_frequency(self,frequency, unit='Hz', source=1):
 

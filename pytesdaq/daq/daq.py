@@ -8,7 +8,6 @@ from pytesdaq.daq import nidaqtask
 
 
 class DAQ:
-
     
     def __init__(self, driver_name='polaris', verbose=True, setup_file=None):
         
@@ -17,22 +16,16 @@ class DAQ:
         self._verbose = verbose
         self._driver_name = driver_name
         self._driver = None
-           
-      
+          
         # run purpose dict 
         self._run_purpose_dict = {1:'Test', 2:'LowBg', 3:'Calibration', 4:'Noise',
                                   100:'Rp',101:'Rn',102: 'IV', 103:'dIdV'}
         
-      
         # Configuration
         self._config = settings.Config(setup_file=setup_file)
-      
 
         # instantiate driver 
         self._instantiate_driver()
-
-      
-        
           
             
     @property
@@ -129,7 +122,7 @@ class DAQ:
           
             
 
-    def set_adc_config(self,adc_name, sample_rate=[],nb_samples=[],
+    def set_adc_config(self, adc_name, sample_rate=[],nb_samples=[],
                        voltage_min=list(),voltage_max=list(),
                        channel_list=list(),
                        buffer_length= [],
@@ -162,8 +155,12 @@ class DAQ:
 
     def run(self, run_time=60, run_type=1, run_comment='No comment',
             group_name='None', group_comment='No comment',
-            group_time=None, data_prefix='raw', data_path=None,
-            write_config=True, debug=False):
+            group_time=None, data_prefix='raw',
+            data_path=None, write_config=True,
+            restricted=False, debug=False):
+        """
+        Run data taking
+        """
         
         success = False
 
@@ -180,7 +177,6 @@ class DAQ:
         # data path
         if data_path is None:
             data_path = self._config.get_data_path()
-
 
         # series start time
         time_now = int(round(time.time()))
@@ -203,9 +199,10 @@ class DAQ:
                 run_config['group_start'] = group_time 
             run_config['comment'] = '"' + run_comment + '"'
             run_config['data_purpose'] = run_purpose
-            run_config['data_type'] = run_type
+            run_config['restricted'] = int(restricted)
+            run_config['data_prefix'] = data_prefix
             run_config['run_purpose'] = run_purpose
-            run_config['run_type'] = run_type
+            run_config['run_type'] = run_purpose
             run_config['group_name'] = group_name
             run_config['group_comment'] = '"' + group_comment + '"'
             
@@ -220,10 +217,7 @@ class DAQ:
             success = self._driver.run(run_time=run_time, run_comment=run_comment,
                                        write_config=write_config, debug=debug)
 
-
         elif self._driver_name=='pydaqmx':
-            
-            # run 
             success = self._driver.run(run_time=run_time, run_comment=run_comment)
 
         return success
