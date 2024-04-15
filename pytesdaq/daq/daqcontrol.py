@@ -31,7 +31,7 @@ class DAQControl:
         # check arguments
         # ---------------------
         
-        acquisition_types = ['continuous', 'didv',
+        acquisition_types = ['continuous', 'didv', 'iv',
                              'exttrig', 'randoms',
                              'threshold']
         if  acquisition_type not in  acquisition_types:
@@ -96,28 +96,71 @@ class DAQControl:
         # IV/dIdV specific
         # configuration
         # ------------------------
-
+        
+        self._iv_didv_config = {'iv': dict(),
+                                'didv':dict()}
+        
         # beg/end of series IV / dIdV
-        self._series_iv_didv_config = self._get_series_iv_div_configuration()
+        series_config = self._get_series_iv_div_configuration()
+        self._iv_didv_config['iv']['series'] = series_config['iv']
+        self._iv_didv_config['didv']['series'] = series_config['didv']
 
-        # didv signal generator 
-        didv_detector_channels = None
+        
+        # dIdV detector channels
+        didv_channels = None
         if self._acquisition_type == 'didv':
-            didv_detector_channels = (
+            didv_channels = (
                 self._channels_dict['detector_channels'].copy()
             )
-        elif (self._series_iv_didv_config['didv']['do_beginning_series']
-              or self._series_iv_didv_config['didv']['do_end_series']):
-            didv_detector_channels = (
-                self._series_iv_didv_config['didv']['detector_channels']
+        elif (series_config['didv']['do_beginning_series']
+              or series_config['didv']['do_end_series']):
+            didv_channels = (
+                series_config['didv']['detector_channels']
+            )
+            
+        self._iv_didv_config['didv']['channels'] = didv_channels
+        
+            
+        # IV detector channels
+        iv_channels = None
+        if self._acquisition_type == 'iv':
+            iv_channels = (
+                self._channels_dict['detector_channels'].copy()
+            )
+        elif (series_config['iv']['do_beginning_series']
+              or series_config['iv']['do_end_series']):
+            iv_channels = (
+                series_config['iv']['detector_channels']
             )
 
-        self._didv_signal_gen_config = None
-        if  didv_detector_channels is not None:
-            self._didv_signal_gen_config = self._get_didv_signal_gen_configuration(
-                didv_detector_channels
-            )
+        self._iv_didv_config['iv']['channels'] = iv_channels
 
+        # dIdV signal generator config
+        if  didv_channels is not None:
+            
+            didv_signal_gen_config = (
+                self._get_didv_signal_gen_configuration(
+                    didv_channels
+                )
+            )
+            self._iv_didv_config['didv']['signal_gen'] = (
+                didv_signal_gen_config
+            )
+            
+        # IV and dIdV tes bias list
+        iv_didv_tes_bias = self._get_iv_didv_tes_bias_list(
+            iv_channels, didv_channels
+        )
+
+        if iv_didv_tes_bias['didv'] is not None:
+            self._iv_didv_config['didv']['tes_bias_list'] = (
+                iv_didv_tes_bias['didv']['tes_bias_list']
+            )
+        if iv_didv_tes_bias['iv'] is not None:
+            self._iv_didv_config['iv']['tes_bias_list'] = (
+                iv_didv_tes_bias['iv']['tes_bias_list']
+            )
+        
         #-------------------------
         # ADC setup(s)
         # ------------------------
@@ -134,18 +177,20 @@ class DAQControl:
         )
 
         # IV/dIdV ADC setup  (for beginning/end series IV/dIdV)
-        if self._daq_config['didv'] is not None:
+        if (didv_channels is not None
+            and self._daq_config['didv'] is not None):
             self._adc_config['didv'] = self._get_adc_configuration(
                 'didv',
                 adc_setup_default
             )
 
-        if self._daq_config['iv'] is not None:
+        if (iv_channels is not None
+            and self._daq_config['iv'] is not None):
             self._adc_config['iv'] = self._get_adc_configuration(
                 'iv',
                 adc_setup_default
             )
-      
+            
 
     def run(self, duration=None, comment='No Comment'):
         """
@@ -182,9 +227,7 @@ class DAQControl:
                     self._daq_config[self._acquisition_type]['series_max_time']
                 )
             )
-            nb_runs = int(
-                round(duration_sec/series_max_time_sec)
-            )
+            nb_runs = int(round(duration_sec/series_max_time_sec))
             if nb_runs < 1:
                 nb_runs = 1
             else:
@@ -258,25 +301,101 @@ class DAQControl:
             series_time_sec = series_time_sec//2
             raw_prefix_list = [f'restricted_{data_prefix}',
                                f'open_{data_prefix}']
+
+        # didv / iv config
+        didv_config = self._iv_didv_config['didv']
+        iv_config = self._iv_didv_config['iv']
+
             
-        # loop runs
+        # loop sub-runs
         for irun in range(nb_runs):
 
             if self._verbose:
                 print('\n===========================================')
                 print(f'INFO: Starting series #{irun+1} '
-                      f' (out of {nb_runs} series total)')
+                      f' (out of {nb_runs} total)')
                 print('===========================================')
                 
-         
+
+            # --------------------
+            # dIdV (Beg. of series)
+            # --------------------
+            if (self._acquisition_type == 'didv'
+                or didv_config['series']['do_beginning_series']):
+
+                # didv config
+                didv_prefix = data_prefix
+                didv_comment = comment
+                didv_runtime = series_time_sec
+                           
+                if didv_config['series']['do_beginning_series']:
+                    didv_prefix = 'didv_bor'
+                    didv_comment = 'Beginning of Series dIdV'
+                    didv_runtime = didv_config['series']['run_time']
+
+                # run daq
+                self._run_didv(mydaq,
+                               run_time=didv_runtime,
+                               run_comment=didv_comment,
+                               group_name=group_name,
+                               group_comment=comment,
+                               group_time=group_timestamp,
+                               data_prefix=didv_prefix,
+                               data_path=group_path)
+                
+                # done is didv only acquisition
+                if self._acquisition_type == 'didv':
+                    continue
+
+            # --------------------
+            # IV (Beg. of series)
+            # --------------------
+            if (self._acquisition_type == 'iv'
+                or iv_config['series']['do_beginning_series']):
+
+                # iv config
+                iv_prefix = data_prefix
+                iv_comment = comment
+                iv_runtime = series_time_sec
+                           
+                if iv_config['series']['do_beginning_series']:
+                    iv_prefix = 'iv_bor'
+                    iv_comment = 'Beginning of Series IV'
+                    iv_runtime = iv_config['series']['run_time']
+
+                # run daq
+                self._run_iv(mydaq,
+                             run_time=iv_runtime,
+                             run_comment=iv_comment,
+                             group_name=group_name,
+                             group_comment=comment,
+                             group_time=group_timestamp,
+                             data_prefix=iv_prefix,
+                             data_path=group_path)
+                
+                # done is iv only acquisition
+                if self._acquisition_type == 'iv':
+                    continue
+            
+                
             # for split series, reverse order each time
+            # so we reverse order of restricted/open
+            # series datasets
             if split_series:
                 raw_prefix_list.reverse()
-            
-            # (if series split, run restricted/open)
+
+            # --------------------
+            # Loop restricted/open
+            # if split series and
+            # take regular data
+            # --------------------
+
+            # Loop data prefix
+            #   - one series if not split,
+            #   - restricted/open series is split
             for raw_prefix in raw_prefix_list:
 
-                # restriced/open
+                # restricted/open
                 restricted = False
                 if split_series:
                     if 'restricted' in raw_prefix:
@@ -311,6 +430,45 @@ class DAQControl:
                     print('ERROR: Problem with data taking. Exiting!')
                     return
 
+                
+            # --------------------
+            # dIdV (End of series)
+            # --------------------
+            if didv_config['series']['do_end_series']):
+
+                # didv config
+                didv_prefix = 'didv_eor'
+                didv_comment = 'End of Series dIdV'
+                didv_runtime = didv_config['series']['run_time']
+
+                # run daq
+                self._run_didv(mydaq,
+                               run_time=didv_runtime,
+                               run_comment=didv_comment,
+                               group_name=group_name,
+                               group_comment=comment,
+                               group_time=group_timestamp,
+                               data_prefix=didv_prefix,
+                               data_path=group_path)
+             
+            # --------------------
+            # IV (End of series)
+            # --------------------
+            if iv_config['series']['do_end_series']):
+
+                iv_prefix = 'iv_eor'
+                iv_comment = 'End of Series IV'
+                iv_runtime = iv_config['series']['run_time']
+                
+                # run daq
+                self._run_iv(mydaq,
+                             run_time=iv_runtime,
+                             run_comment=iv_comment,
+                             group_name=group_name,
+                             group_comment=comment,
+                             group_time=group_timestamp,
+                             data_prefix=iv_prefix,
+                             data_path=group_path)
         # cleanup
         if self._verbose:
             print(f'INFO: Data taking for group {group_name} '
@@ -318,17 +476,253 @@ class DAQControl:
             print(f'INFO: Ouput Directory = {group_path}')
             
         mydaq.clear()
-
-
-        
-    def _run_didv(self):
+    
+    def _run_didv(self, daq_inst,
+                  run_time=None,
+                  run_comment=None,
+                  group_name=None,
+                  group_comment=None,
+                  group_time=None,
+                  data_prefix=None,
+                  data_path=None):
         """
-        Run beginning/end of series dIdV
+        Function to run dIdV
+        """
+        
+        if self._verbose:
+            print('\n-------------------------------------')
+            print(f'INFO: Starting dIdV '
+                  f'({run_comment})')
+            print('-------------------------------------')
+                  
+        if run_time is None:
+            daq_inst.clear()
+            raise ValueError('DAQControl: didv run time missing!')
+
+        # didv config
+        didv_config = self._iv_didv_config['didv']
+        tes_bias_list = didv_config['tes_bias_list']
+        didv_channels = didv_config['channels']
+        signal_gen_config = didv_config['signal_gen']
+        runlist_channels = signal_gen_config['runlist_channels']
+
+        # check if TES bias will be modified
+        modify_tes = False
+        if (len(tes_bias_list) > 1
+            or tes_bias_list[0] != 'current'):
+            modify_tes = True
+
+
+        # ------------------
+        # Loop tes bias
+        # ------------------
+        for tes_bias in tes_bias_list:
+
+            # modify TES bias
+            if modify_tes:
+
+                if tes_bias != 'current':
+                    tes_bias = float(tes_bias)
+                else:
+                    tes_bias = None
+
+                for chan in didv_channels:
+
+                    if tes_bias is None:
+                        tes_bias = 1e6*self._current_tes_bias[chan]
+
+                    self._instruments_inst.set_tes_bias(
+                        tes_bias,
+                        detector_channel=chan
+                    )
+            # ------------------
+            # loop didv channel
+            # sub-lists
+            # ------------------
+            for channels in runlist_channels:
+
+                # get list of channels that shouldn't have
+                # signal gen connected
+                other_channels = list()
+                for chan in self._channels_dict['detector_channels']:
+                    if chan not in channels:
+                        other_channels.append(chan)
+
+                # Set signal generator
+                for chan in channels:
+                    
+                    voltage = 1e3*signal_gen_config[chan]['voltage']
+                    frequency = signal_gen_config[chan]['frequency']
+                                                 
+                    # set signal gen
+                    self._instruments_inst.set_signal_gen_params(
+                        detector_channel=chan,
+                        voltage=voltage,
+                        frequency=frequency,
+                        shape='square')
+                
+                    # turn output on
+                    self._instruments_inst.set_signal_gen_onoff(
+                        'on',
+                        detector_channel=chan
+                    )
+
+                    # connect to TES
+                    self._instruments_inst.connect_signal_gen_to_tes(
+                        True, detector_channel=chan
+                    )
+             
+                # Disconnect "other"
+                # channels
+                for other_chan in  other_channels:
+
+                    # disconnect to TES
+                    self._instruments_inst.connect_signal_gen_to_tes(
+                        False, detector_channel=other_chan)
+
+                # Take data
+
+                # configure ADC
+                adc_config = copy.deepcopy(self._adc_config['didv'])
+                daq_inst.set_adc_config_from_dict(adc_config)
+
+                # set detector config
+                detector_config = self._read_detector_settings(adc_config)
+                daq_inst.set_detector_config(detector_config)
+                time.sleep(2)
+            
+                # run
+                success = daq_inst.run(
+                    run_time=run_time,
+                    run_type=self._data_purpose,
+                    run_comment=run_comment,
+                    group_name=group_name,
+                    group_comment=group_comment,
+                    group_time=group_time,
+                    data_prefix=data_prefix,
+                    data_path=data_path)
+
+                if not success:
+                    daq_inst.clear()
+                    print('ERROR: Problem with data taking. Exiting!')
+                    return
+
+                # -----------------------
+                # Disconnect signal
+                # generator
+                # -----------------------
+                for chan in channels:
+
+                    # disconnect to TES
+                    self._instruments_inst.connect_signal_gen_to_tes(
+                        False, detector_channel=chan)
+                    
+        # all done -> turn off signal gen
+        for chan in didv_channels:
+
+            # disconnect to TES
+            self._instruments_inst.connect_signal_gen_to_tes(
+                False, detector_channel=chan)
+
+            # turn output off
+            self._instruments_inst.set_signal_gen_onoff(
+                'off',
+                detector_channel=chan
+            )
+
+            # set TES
+            if modify_tes:
+                tes_bias = 1e6*self._current_tes_bias[chan]
+                self._instruments_inst.set_tes_bias(
+                    tes_bias,
+                    detector_channel=chan
+                )
+                
+        time.sleep(2)
+
+        
+    def _run_iv(self, daq_inst,
+                run_time=None,
+                run_comment=None,
+                group_name=None,
+                group_comment=None,
+                group_time=None,
+                data_prefix=None,
+                 data_path=None):
+        """
+        Function to run IV
         """
 
-        
+        if self._verbose:
+                print('\n-------------------------------------')
+                print(f'INFO: Starting IV '
+                      f'({run_comment})')
+                print('-------------------------------------')
+  
+        if run_time is None:
+            daq_inst.clear()
+            raise ValueError('DAQControl: didv run time missing!')
 
+        # didv config
+        iv_config = self._iv_didv_config['iv']
+        tes_bias_list = iv_config['tes_bias_list']
+        iv_channels = iv_config['channels']
         
+        # ------------------
+        # Loop tes bias
+        # ------------------
+        for tes_bias in tes_bias_list:
+
+            # set tes bias
+            for chan in  iv_channels:
+            
+                if tes_bias == 'current':
+                    tes_bias = 1e6*self._current_tes_bias[chan]
+
+                self._instruments_inst.set_tes_bias(
+                    tes_bias,
+                    detector_channel=chan
+                )
+                
+            # Take data
+            
+            # configure ADC
+            adc_config = copy.deepcopy(self._adc_config['iv'])
+            daq_inst.set_adc_config_from_dict(adc_config)
+            
+            # set detector config
+            detector_config = self._read_detector_settings(adc_config)
+            daq_inst.set_detector_config(detector_config)
+            time.sleep(2)
+            
+            # run
+            success = daq_inst.run(
+                run_time=run_time,
+                run_type=self._data_purpose,
+                run_comment=run_comment,
+                group_name=group_name,
+                group_comment=group_comment,
+                group_time=group_time,
+                data_prefix=data_prefix,
+                data_path=data_path)
+
+            if not success:
+                daq_inst.clear()
+                print('ERROR: Problem with data taking. Exiting!')
+                return
+
+
+        for chan in  iv_channels:
+            tes_bias = 1e6*self._current_tes_bias[chan]
+
+            self._instruments_inst.set_tes_bias(
+                tes_bias,
+                detector_channel=chan
+            )
+            
+        time.sleep(2)
+        
+            
 
     def _create_output_path(self):
         """
@@ -472,8 +866,9 @@ class DAQControl:
                
         # available trigger types
         trigger_types = {'continuous':1,
-                         'didv':2, 'exttrig':2,
-                         'randoms':3, 'iv':3,
+                         'didv':2, 'iv':3,
+                         'exttrig':2,
+                         'randoms':3, 
                          'threshold':4}
         
     
@@ -529,7 +924,8 @@ class DAQControl:
                         signal_gen_freq =  float(chan_dict['frequency'])
 
             if acquisition_type != 'exttrig':
-                for chan,chan_dict in self._didv_signal_gen_config.items():
+                sig_gen_config = self._iv_didv_config['didv']['signal_gen']
+                for chan, chan_dict in sig_gen_config.items():
                     if 'frequency' in  chan_dict:
                         if (signal_gen_freq  is None
                             or  chan_dict['frequency'] < signal_gen_freq):
@@ -550,7 +946,6 @@ class DAQControl:
         else:
             raise ValueError(f'ERROR: "trace_length" or "nb_samples" or '
                              f'"nb_cycles" required!')
-
 
         # channel list
         adc_channels_dict = dict()
@@ -575,14 +970,60 @@ class DAQControl:
             )
                 
         return adc_config
+
+    def _get_iv_didv_tes_bias_list(self,
+                                   iv_channels,
+                                   didv_channels):
+        """
+        Get TES bias list for config file
+        """
+        
+        # IV
+        tes_bias_dict = {'iv': None, 'didv':None}
+        
+        if   (iv_channels is not None
+              and 'iv' in self._daq_config
+              and self._daq_config['iv'] is not None):
+         
+            if 'tes_bias_list' not in self._daq_config['iv']:
+                raise ValueError('DAQControl: "tes_bias_list" parameter required '
+                                 'for iv data taking!')
+            
+            tes_bias_dict['iv'] = dict()
+            
+            bias_list  = self._daq_config['iv']['tes_bias_list']
+            if not isinstance(bias_list, list):
+                bias_list  = [bias_list]
                 
+            tes_bias_dict['iv']['tes_bias_list'] = bias_list
+            tes_bias_dict['iv']['detector_channels'] = iv_channels
+                
+
+        if  (didv_channels is not None
+             and 'didv' in self._daq_config
+             and self._daq_config['didv'] is not None):
+
+            tes_bias_dict['didv'] = dict()
+            
+            bias_list = ['current']
+            if 'tes_bias_list' in self._daq_config['didv']:
+                bias_list =  self._daq_config['didv']['tes_bias_list']
+                if not isinstance(bias_list, list):
+                    bias_list  = [bias_list]
+               
+            tes_bias_dict['didv']['tes_bias_list'] = bias_list
+            tes_bias_dict['didv']['detector_channels'] = didv_channels
+                
+                                
+        return tes_bias_dict
+
+    
 
     def _get_didv_signal_gen_configuration(self, detector_channels):
         """
         Signal generator configuration
         for dIdV data taking
         """
-
         
         # initialize
         signal_gen_config  = dict()
@@ -734,6 +1175,17 @@ class DAQControl:
                 didv_chans =  daq_config['didv_detector_channels']
                 if not isinstance(didv_chans, list):
                     didv_chans = [didv_chans]
+
+                # check channels
+                warning_on = False
+                for chan in didv_chans:
+                    if (chan not in self._channels_dict['detector_channels']):
+                        print(f'WARNING: didv channel "{chan}" is not part '
+                              f'of data taking channels. It will be ignored!')
+                        warning_on = True
+                if warning_on:
+                    time.sleep(5)
+                    
                 didv_config['detector_channels'] = list()
                 for chan in self._channels_dict['detector_channels']:
                     if chan in didv_chans:
@@ -744,7 +1196,7 @@ class DAQControl:
                                      'no detector channels selected with '
                                      'run_daq.py found in '
                                      '"didv_detector_channels" list!')
-                                 
+                
         # iv configuration
         if (iv_config['do_beginning_series']
             or iv_config['do_end_series']):
@@ -754,12 +1206,10 @@ class DAQControl:
                 raise ValueError('DAQControl: "iv_run_time" required '
                                  'for beg/end series iv!')
    
-
             iv_config['run_time'] =  (
                 arg_utils.convert_to_seconds(
                     daq_config['iv_run_time'])
             )
-
             
             # detectors
             iv_config['detector_channels'] = (
@@ -781,16 +1231,6 @@ class DAQControl:
                                      'no detector channels selected with '
                                      'run_daq.py found in '
                                      '"iv_detector_channels" list!')
-
-
-                        
-            # IV bias
-            if 'iv_bias' not in daq_config:
-                raise ValueError('DAQControl: "iv_bias" parameter required '
-                                 'for beg/end series iv!')
-
-            iv_config['iv_bias'] = daq_config['iv_bias']
-                        
 
         # save
         series_iv_didv_config = {

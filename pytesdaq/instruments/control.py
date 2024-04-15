@@ -1453,7 +1453,7 @@ class Control:
                 # change units of some parameter:
 
                 # uA -> A
-                if param=='tes_bias' or param=='squid_bias':
+                if param == 'tes_bias' or param == 'squid_bias':
                     val = val/1000000.0
 
                 # mV -> V
