@@ -2,7 +2,7 @@
 #
 # Data taking configuration
 #
-# 4 configurations: continuous, randoms, didv, exttrig
+# 3 types: continuous, randoms, didv
 #
 # Usage example, 2 hours continuous data:
 #
@@ -22,20 +22,27 @@ group_prefix = continuous
 # if run "duration" longer than series max time
 # then run is splitted in multiple series
 # number of series within group = total duration / series max time
-# Recommendation: < 30 minutes data chunks/series
+# Recommendation: < 20 minutes data chunks/series
+#                 (to process more quickly with multiple cores)
 series_max_time = 20m
 
-# split even/odd series (for blinding purpose)
+# split open/restricted series (for blinding purpose)
 split_series = False
 
 # Beginning/end of series didv
-# (didv config based on "didv" field)
-# A short list (comma separated) of specific detector channels
-# can be specified with didv_detector_channel (keep commented or all
-# for all channels selected with run_daq
-add_series_start_didv = False
+# Syntax
+# didv config based on "didv" field)
+add_series_start_didv = True
 add_series_end_didv = False
-didv_run_time = 120s
+didv_run_time = 90s
+didv_detector_channels = all
+
+# Beginning/end of series iv
+# (iv adc config based on "iv" field)
+add_series_start_iv = True
+add_series_end_iv = False
+iv_run_time = 10s
+iv_detector_channels = all
 
 
 # trace length in millisec (ms) or  seconds (s)
@@ -50,59 +57,28 @@ voltage_min = -5
 voltage_max = 5
 
 
-
-[didv]
-
-# channels that will be connected to  signal generator
-# other channels won't have test signal  connected to TES line
-# leave commented for all selected channels (argument -c)
-# 
-#  didv_detector_channel = chan1, chan2
-
+[randoms] 
 # group name prefix 
-group_prefix = didv
-
-
-# sample rate [Hz]
-sample_rate = 1250000
-
-# number of cycles test signal -> trace length
-nb_cycles = 4
-
-# voltage range (volts)
-voltage_min = -10
-voltage_max = 10
-
+group_prefix = randoms
 
 # maximum series time
-series_max_time = 90s
+#series_max_time = 90s
 
-# Signal generator voltage/frequency (optional)
-#
-# Parameters: signal_gen_voltage_mV, signal_gen_frequency_Hz
-# If commented, current settings are used 
-#
-# Syntax (for both frequency and voltage)
-#
-#   signal_gen_voltage_mV = 0.5
-#           -> single didv data with 0.5mV test signal on all channels
-#   or 
-#   signal_gen_voltage_mV = chan1:0.5, chan2:1, chan3&chan4:0.75 
-#           -> 3 dIdVs in series: (1) chan1 with 0.5 mV (2) chan2, (3) chan3 and chan4 with 0.75 mV
-#
-#   (white space allowed)
-#
-# IMPORT NOTE: frequency/voltage need to have same format!
+# trace length in millisec (ms) or  seconds (s)
+# Alternatively use "nb_samples"
+trace_length = 50ms
 
-signal_gen_voltage_mV = 5
-signal_gen_frequency_Hz =  80
+# sample rate
+sample_rate = 1250000
 
-# OR if channels have different settings: 
-signal_gen_voltage_mV = Melange025pcRight & Melange025pcLeft:0.25, Melange1pc1ch & Melange4pc1ch:0.5
-signal_gen_frequency_Hz = Melange025pcRight & Melange025pcLeft:80, Melange1pc1ch & Melange4pc1ch:80
+# voltage min/max
+voltage_min = -5
+voltage_max = 5
 
 
-[exttrig]
+
+
+[exttrig] 
 
 # group name prefix 
 group_prefix = exttrig
@@ -114,22 +90,11 @@ group_prefix = exttrig
 # Recommendation: < 30 minutes data chunks/series
 series_max_time = 90s
 
-# split even/odd series (for blinding purpose)
-split_series = False
-
-# Beginning/end of series didv
-# (didv config based on "didv" field)
-# A short list (comma separated) of specific detector channels
-# can be specified with didv_detector_channel (keep commented or all
-# for all channels selected with run_daq
-add_series_start_didv = True
-add_series_end_didv = False
-didv_run_time = 120s
-
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
 trace_length = 50ms
+# nb_samples = 12500000
 
 
 # sample rate
@@ -142,13 +107,64 @@ voltage_max = 5
 
 
 
-[randoms] 
-# group name prefix 
-group_prefix = randoms
+[didv]
+
+# tes bias list (if not current bias)
+# Example:
+#tes_bias_list = 130,110,  current
+#relock_first_step = False
+#relock_all_steps = False
+
+# sample rate [Hz]
+sample_rate = 1250000
+
+# number of cycles test signal -> trace length
+nb_cycles = 3
+
+# voltage range (volts)
+voltage_min = -5
+voltage_max = 5
+
+# Signal generator voltage/frequency (optional)
+#
+# Parameters: signal_gen_voltage_mV, signal_gen_frequency_Hz
+# If commented, current settings are used 
+#
+# Syntax (for both frequency and voltage)
+#
+#   signal_gen_frequency_Hz = 50
+#   signal_gen_voltage_mV = 20
+#
+#   or if different voltage/frequency between channels
+#
+#   signal_gen_frequency_Hz  = chan1:50, chan2:50, chan3&chan4:80
+#   signal_gen_voltage_mV = chan1:0.5, chan2:1, chan3&chan4:0.75 
+#           -> 3 dIdVs in series: (1) chan1 with 0.5 mV (2) chan2, (3) chan3 and chan4 with 0.75 mV
+#
+#   In this case, multiple runs will be taken for the different channel settings
+#
+# IMPORT NOTE: frequency/voltage need to have same format!
+
+signal_gen_voltage_mV = 12
+signal_gen_frequency_Hz =  50
+
+#signal_gen_voltage_mV = CPDv21Al2O3:12, NoDeviceB&NoDeviceD:27
+#signal_gen_frequency_Hz  =  CPDv21Al2O3:52, NoDeviceB&NoDeviceD:54
+
+
+[iv] 
+
+# tes bias
+tes_bias_list = 140,130,120
+
+# relock (either once or all steps)
+relock_first_step = True
+relock_all_steps  = False
+
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
-trace_length = 100ms
+trace_length = 5ms
 
 # sample rate
 sample_rate = 1250000
@@ -156,6 +172,3 @@ sample_rate = 1250000
 # voltage min/max
 voltage_min = -5
 voltage_max = 5
-
-
-

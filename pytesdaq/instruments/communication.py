@@ -18,8 +18,21 @@ class InstrumentComm:
         self._protocol = protocol.lower()
         self._timeout = timeout
         self._termination = termination
-        self._ip_address = ip_address
-        self._visa_address = visa_address
+
+
+        # IP or Visa Address
+        if (ip_address is not None
+            and visa_address is not None):
+            raise ValueError(
+                'InstrumentComm: Choose between '
+                '"ip_address" or "visa_address", '
+                'not both ')
+        self._address = None
+        if ip_address is not None:
+            self._address = ip_address
+        elif visa_address is not None:
+            self._address = visa_address
+            
         self._port = port
         self._recv_port  = recv_port
         if recv_port is None:
@@ -33,14 +46,31 @@ class InstrumentComm:
 
         # debug
         self._debug = False
-        
+
+    @property
+    def address(self):
+        return self._address
+    
         
     def set_address(self, ip_address=None, visa_address=None,
                     port=None, recv_port=None):
         """
         Address
         """
-        self._address = ip_address
+        
+        # IP or Visa Address
+        if (ip_address is not None
+            and visa_address is not None):
+            raise ValueError(
+                'InstrumentComm: Choose between '
+                '"ip_address" or "visa_address", '
+                'not both ')
+       
+        if ip_address is not None:
+            self._address = ip_address
+        elif visa_address is not None:
+            self._address = visa_address
+            
         self._port = port
         self._recv_port  = recv_port
         if recv_port is None:
@@ -182,16 +212,16 @@ class InstrumentComm:
                 
             try:
                 if self._verbose:
-                    print('INFO: Opening VISA resource "{}"'.format(self._visa_address))
+                    print('INFO: Opening VISA resource "{}"'.format(self._address))
 
-                self._inst = rm.open_resource(self._visa_address)
+                self._inst = rm.open_resource(self._address)
                 if self._termination is not None:
                     self._inst.read_termination = self._termination
             
             except visa.VisaIOError as e:
             
                 if self._verbose:
-                    print('ERROR opening VISA resource "{}"'.format(self._visa_address))
+                    print('ERROR opening VISA resource "{}"'.format(self._address))
                 if self._raise_errors:
                     raise
                 else:

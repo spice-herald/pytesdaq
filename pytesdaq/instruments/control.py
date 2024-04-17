@@ -58,12 +58,17 @@ class Control:
             self._config.get_temperature_controllers()
         )
         self._temperature_controller_insts = None
-        self._resistance_channel_table = None
-        self._heater_channel_table = None
-        
+           
         if not self._dummy_mode:
-            self._connect_instruments()   
- 
+            self._connect_instruments()
+
+        # check common controllers
+        
+        # intialize flag(s)
+        self._is_tes_signal_gen_inst_common = False
+        # check and update flag(s)
+        self._check_common_controllers()
+            
         # redis
         self._enable_redis = self._config.enable_redis()
         self._read_from_redis = False
@@ -73,14 +78,12 @@ class Control:
              
         # readback 
         self._enable_readback = self._config.enable_redis()
-        
-
+ 
     def __del__(self):
         """
         Disconnect instruments if exception
         """
         self._disconnect_instruments()
-
         
     @property
     def verbose(self):
@@ -117,8 +120,36 @@ class Control:
     def temperature_controller_names(self):
         return self._temperature_controller_name_list
 
+
+    def is_tes_signal_gen_inst_common(self):
+        """
+        Check if TES and Signal Gen controllers
+        are the same
+        """
+
+        return self._is_tes_signal_gen_inst_common
     
-    def set_tes_bias(self, bias, 
+
+    def get_tes_controller(self):
+        """
+        Get TES Controller
+        """
+        return self._tes_controller_inst
+
+    def get_squid_controller(self):
+        """
+        Get SQUID Controller
+        """
+        return self._squid_controller_inst
+
+    def get_signal_gen_controller(self):
+        """
+        Get Signal Gen Controller
+        """
+        return self._signal_generator_inst
+
+    
+    def set_tes_bias(self, bias,
                      tes_channel=None,
                      detector_channel=None,
                      adc_id=None, adc_channel=None):
@@ -137,7 +168,6 @@ class Control:
 
         return True
     
-
 
     def set_squid_bias(self, bias, 
                        tes_channel=None,
@@ -310,7 +340,7 @@ class Control:
         """
 
         for ilock in range(num_relock):
-
+            
             # open
             self.set_feedback_mode('open', 
                                    tes_channel=tes_channel,
@@ -1355,7 +1385,7 @@ class Control:
         """
 
         if self._verbose:
-            print('INFO: Reading detector settings from board...') 
+            print('INFO: Reading all detector settings from board!') 
 
         
             
@@ -1773,10 +1803,9 @@ class Control:
                 subrack = int(feb_info[0])
                 slot = int(feb_info[1])
                 
-                if self._verbose or self._debug:
-                    print('INFO: Getting "' + param_name + '" for channel '
-                          + controller_channel + ' from FEB')
                 if self._debug:
+                    print(f'INFO: Getting "{param_name}" for channel '
+                          f'{controller_channel} using FEB')
                     print('(subrack = ' + str(subrack)
                           + ', slot = ' + str(slot) + 
                           ', channel = ' + str(controller_channel) + ')')
@@ -1857,10 +1886,10 @@ class Control:
             subrack = int(feb_info[0])
             slot = int(feb_info[1])
             
-            if self._verbose or self._debug:
-                print('INFO: Getting "' + param_name + '" for channel '
-                      + controller_channel + ' using FEB')
             if self._debug:
+                print(f'INFO: Getting "{param_name}" for channel '
+                      f'{controller_channel} using FEB')
+             
                 print('(subrack = ' + str(subrack)
                       + ', slot = ' + str(slot) + 
                       ', channel = ' + str(controller_channel) + ')')
@@ -1931,7 +1960,7 @@ class Control:
                 
         elif self._squid_controller_name == 'magnicon':
             
-            if self._verbose:
+            if self._debug:
                 print('INFO: Getting "' + param_name + '" for channel ' 
                       + str(controller_channel) + ' using Magnicon')
                             
@@ -2078,8 +2107,9 @@ class Control:
                 slot = int(feb_info[1])
                 
                 if self._verbose or self._debug:
-                    print('INFO: Getting setting "'
-                          + param_name + '" from FEB')
+                    print(f'INFO: Setting "{param_name}" '
+                          f'to {value} uA for FEB channel '
+                          f'{controller_channel}!')
                 if self._debug:
                     print('(subrack = ' + str(subrack)
                           + ', slot = ' + str(slot) + 
@@ -2171,8 +2201,10 @@ class Control:
             slot = int(feb_info[1])
             
             if self._verbose or self._debug:
-                print('INFO: Setting ' + param_name
-                      + ' to ' + str(value) + ' using FEB!')
+                print(f'INFO: Setting "{param_name}" '
+                      f'to {value} for FEB channel '
+                      f'{controller_channel}!')
+            
             if self._debug:
                 print('DEBUG: FEB - subrack = ' + str(subrack)
                       + ', slot = ' + str(slot) + ', channel = '
@@ -2507,8 +2539,6 @@ class Control:
             # connect (lakeshore only)
             if controller_name.find('lakeshore')!=-1:
                 inst.connect()
-
-
             
     def _disconnect_instruments(self):
         """
@@ -2563,3 +2593,28 @@ class Control:
             parameter = float(detector_config[parameter_name][0])
                 
         return parameter
+
+
+    def _check_common_controllers(self):
+        """
+        Check if controllers are common
+        """
+
+        # TES bias / Signal Generator
+        if (self._tes_controller_inst is not None
+            and self._signal_generator_inst is not None
+            and self._tes_controller_inst.address is not None
+            and self._signal_generator_inst.address is not None):
+
+            tes_name = self._tes_controller_name
+            tes_address = self._tes_controller_inst.address
+
+            sig_gen_name = self._signal_generator_name
+            sig_gen_address = self._tes_controller_inst.address
+            
+            self._is_tes_signal_gen_inst_common = (
+                (tes_name == sig_gen_name
+                 and tes_address == sig_gen_address)
+            )
+            
+             

@@ -55,10 +55,10 @@ if __name__ == "__main__":
                         dest="acquire_exttrig", action="store_true",
                         help='Acquire external trigger data')
 
-    parser.add_argument('--acquire-thresh','--acquire_thresh',
-                        '--acquire-threshold',
-                        dest="acquire_thresh", action="store_true",
-                        help='Acquire threshold trigger data')
+    #parser.add_argument('--acquire-thresh','--acquire_thresh',
+    #                    '--acquire-threshold',
+    #                    dest="acquire_thresh", action="store_true",
+    #                    help='Acquire threshold trigger data')
         
     # Run purpose
     parser.add_argument('--data_purpose', '--run_purpose',  dest='data_purpose',
@@ -81,6 +81,9 @@ if __name__ == "__main__":
         
     args = parser.parse_args()
 
+    # TEMP
+    args.acquire_thresh = False
+  
 
     # -----------------------------
     # A few default parameters
@@ -147,8 +150,12 @@ if __name__ == "__main__":
                         args.acquire_thresh]
 
     inds = list(np.where(acquisition_args)[0])
-    if len(inds) != 1:
-        print('ERROR: A (single) acquisition type '
+    if len(inds) > 1:
+        print('ERROR: Only a single acquisition type '
+              + ' can be enabled!')
+        exit()
+    elif  len(inds) != 1:
+        print('ERROR: An acquisition type '
               + ' needs to be enabled!')
         exit()
         

@@ -71,9 +71,12 @@ class IV_dIdV(Sequencer):
         """ 
         Run IV / dIdV sequencer
         """
-          # Instantiate instrumment controller
-        self._instrument = instrument.Control(setup_file=self._setup_file,
-                                              dummy_mode=self._dummy_mode)
+
+        # Instantiate instrumment controller
+        self._instruments_inst = instrument.Control(
+            setup_file=self._setup_file,
+            dummy_mode=self._dummy_mode
+        )
         
         # ------------
         # Rp/Rn
@@ -123,27 +126,37 @@ class IV_dIdV(Sequencer):
             iv_config =  self._measurement_config['iv']
 
         if self._enable_didv:
+            
             didv_config = self._measurement_config['didv']
+            
             # signal gen amplitude can be either voltage or current
             if 'signal_gen_voltage' not in didv_config:
                 didv_config['signal_gen_voltage'] = None
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
             
-        if (self._instrument._config.get_tes_controller()
-            == self._instrument._config.get_signal_generator()):
+        if self._instruments_inst.is_tes_signal_gen_inst_common():
 
             # set signal gen range then fix.
-            print('INFO: Case TES and Signal generator controllers are the same: '
-                  'fix signal generator range')
+            print('INFO: Case TES and Signal generator controllers '
+                  'are the same: fix signal generator range')
+
+            # get signal gen and tes controllers
+            signal_gen_controller = (
+                self._instruments_inst.get_signal_gen_controller()
+            )
+
+            tes_controller = self._instruments_inst.get_tes_controller()
             
             for channel in self._detector_channels:
-
-                self._instrument._signal_generator_inst.set_auto_range('on')
-                self._instrument.set_tes_bias(np.max(sweep_config['tes_bias_vect']), 
-                                              detector_channel=channel)
                 
-                signal_gen_offset = self._instrument._tes_controller_inst.get_offset()*1000
+                signal_gen_controller.set_auto_range('on')
+                self._instruments_inst.set_tes_bias(
+                    np.max(sweep_config['tes_bias_vect']), 
+                    detector_channel=channel
+                )
+                
+                signal_gen_offset = tes_controller.get_offset()*1000
                 signal_gen_voltage = 2
                 signal_gen_frequency = 80
                 if 'signal_gen_voltage' in didv_config:
@@ -152,14 +165,16 @@ class IV_dIdV(Sequencer):
                     signal_gen_frequency = didv_config['signal_gen_frequency']
                     
                 print(f'Max func gen offset is {signal_gen_offset} mV')
-                self._instrument.set_signal_gen_params(
+                self._instruments_inst.set_signal_gen_params(
                     detector_channel=channel,source='tes', 
                     voltage=signal_gen_voltage,
                     frequency=signal_gen_frequency,
                     offset=signal_gen_offset,
                     shape='square'
                 )
-                self._instrument._signal_generator_inst.set_auto_range('off')
+
+                # set auto range off
+                signal_gen_controller.set_auto_range('off')
                 time.sleep(5)
               
                 
@@ -228,7 +243,7 @@ class IV_dIdV(Sequencer):
                       + str(temperature*1000) +'mK!')
 
                 
-                self._instrument.set_temperature(
+                self._instruments_inst.set_temperature(
                     temperature,
                     channel_name=thermometer_name,
                     global_channel_number=thermometer_global_num,
@@ -240,12 +255,9 @@ class IV_dIdV(Sequencer):
                     max_wait_time=max_wait_time,
                     tolerance=tolerance
                 )
-            
-                
-
+   
             # create sequencer directory
-            if (self._enable_tes_bias_sweep or
-                self._group_name is None):
+            if (self._enable_tes_bias_sweep or self._group_name is None):
                 basename = str()
                 if self._enable_iv:
                     basename += '_iv'
@@ -258,20 +270,21 @@ class IV_dIdV(Sequencer):
                 self._create_measurement_directories(basename)
         
 
-
             # ZAP TES
             if self._do_zap_tes:
                 tes_bias_max = 140
                 if sweep_config['use_negative_tes_bias']:
                     tes_bias_max = -140
                     
-                print('INFO: Zapping TES  with bias ' + str(tes_bias_max) + 'uA') 
+                print('INFO: Zapping TES  with bias '
+                      + str(tes_bias_max) + 'uA')
+                
                 for channel in self._detector_channels:
-                    self._instrument.set_tes_bias(tes_bias_max,
-                                                  detector_channel=channel)
+                    self._instruments_inst.set_tes_bias(
+                        tes_bias_max,
+                        detector_channel=channel)
+                    
                 time.sleep(5)
-
-
             
             # IV-dIdV:  TES bias loop
             sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
@@ -282,14 +295,11 @@ class IV_dIdV(Sequencer):
             nb_steps = len(tes_bias_vect)
             istep = 0
 
-                        
-
+         
             # Instantiate DAQ
             self._daq = daq.DAQ(driver_name=self._daq_driver,
                                 verbose=self._verbose,
                                 setup_file=self._setup_file)
-
-
 
             # Initialize online IV
             nb_channels = len(self._detector_channels)
@@ -308,25 +318,36 @@ class IV_dIdV(Sequencer):
 
                 # set bias all channels
                 istep+=1
+                
                 if self._enable_tes_bias_sweep:
-                    print('INFO: Sequencer step #' + str(istep) + ' out of total '
+                    
+                    print('INFO: Sequencer step #' + str(istep)
+                          + ' out of total '
                           + str(nb_steps) + ' steps!')
                     print('INFO: Setting TES bias all channels to : '
                           + str(bias) + 'uA!')
+
+                    is_tes_signal_gen_common = (
+                        self._instruments_inst.is_tes_signal_gen_inst_common()
+                    )
                     for channel in self._detector_channels:
 
-                        if (self._instrument._config.get_tes_controller()
-                            != self._instrument._config.get_signal_generator()):
-                            self._instrument.set_tes_bias(bias, detector_channel=channel)
+                        if not is_tes_signal_gen_common:
+                            self._instruments_inst.set_tes_bias(
+                                bias, detector_channel=channel)
+                            )
                         else:
                             if self._enable_iv:
-                                self._instrument.set_tes_bias(bias, detector_channel=channel)
+                                self._instruments_inst.set_tes_bias(
+                                    bias, detector_channel=channel)
                             else:
-                                resistance =  self._instrument.get_tes_bias_resistance(
-                                    detector_channel=channel,
+                                
+                                resistance =  (
+                                    self._instruments_inst.get_tes_bias_resistance(
+                                        detector_channel=channel)
                                 )
                                 signal_gen_offset = resistance*bias*1e-3
-                                self._instrument.set_signal_gen_params(
+                                self._instruments_inst.set_signal_gen_params(
                                     detector_channel=channel,source='tes', 
                                     voltage=didv_config['signal_gen_voltage'],
                                     current=didv_config['signal_gen_current'],
@@ -340,14 +361,13 @@ class IV_dIdV(Sequencer):
                     print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
                     time.sleep(sleeptime_s)
 
-
                 # Relock
                 if self._do_relock:
                 
                     # relock each channel
                     for channel in self._detector_channels:
                         print('INFO: Relocking channel ' + channel) 
-                        self._instrument.relock(detector_channel=channel)
+                        self._instruments_inst.relock(detector_channel=channel)
                 
                 # if step 1: tes zap, relock, zero
                 if istep==1:
@@ -383,8 +403,9 @@ class IV_dIdV(Sequencer):
                         daq_online.set_adc_config_from_dict(setup_dict)
 
                         # get data
-                        data_array = daq_online.read_many_events(100,
-                                                                 adctovolt=True)
+                        data_array = daq_online.read_many_events(
+                            100,
+                            adctovolt=True)
 
                         # clear
                         daq_online.clear()
@@ -393,29 +414,28 @@ class IV_dIdV(Sequencer):
                         # loop channels and zero once for each
                         for  ichan in range(len(self._detector_channels)):
 
-
                             traces = data_array[:,ichan,:]
-                            cut = qp.autocuts(traces,
-                                              fs=sample_rate)
-                            
-
+                            cut = qp.autocuts(traces, fs=sample_rate)
                             trace_mean = np.mean(traces, axis=0)
                             offset = np.median(trace_mean)
 
-                         
                             # detector channel
                             channel = self._detector_channels[ichan]
-                          
-                            
+
                             # zero
-                            driver_gain = self._instrument.get_output_total_gain(
-                                detector_channel=channel
+                            driver_gain = (
+                                self._instruments_inst.get_output_total_gain(
+                                    detector_channel=channel
+                                )
                             )
-                            current_offset = self._instrument.get_output_offset(
-                                detector_channel=channel
+                            current_offset = (
+                                self._instruments_inst.get_output_offset(
+                                    detector_channel=channel
+                                )
                             )
+                            
                             new_offset = current_offset-offset/driver_gain
-                            self._instrument.set_output_offset(
+                            self._instruments_inst.set_output_offset(
                                 new_offset, detector_channel=channel
                             )
                         
@@ -424,7 +444,7 @@ class IV_dIdV(Sequencer):
                 # get temperature
                 if self._enable_temperature_sweep:
                     
-                    temperature = self._instrument.get_temperature(
+                    temperature = self._instruments_inst.get_temperature(
                         channel_name=thermometer_name,
                         global_channel_number=thermometer_global_num
                     )
@@ -440,7 +460,7 @@ class IV_dIdV(Sequencer):
                         monitoring_temperature_list = list()
                         for thermometer in monitoring_thermometer_names:
                             monitoring_temperature_list.append(
-                                self._instrument.get_temperature(
+                                self._instruments_inst.get_temperature(
                                     channel_name=thermometer)
                             )
                             time.sleep(2)
@@ -457,19 +477,16 @@ class IV_dIdV(Sequencer):
                     offsets = list()
                     offsets_err = list()
                     stds = list()
-                                        
-                    
+                                   
                      # instantiate nidaq
                     daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
-                    
-                    
+                                   
                     # get corresponding ADC channels
                     adc_dict = connection_utils.get_adc_channel_list(
                         self._detector_connection_table,
                         detector_channel_list=self._detector_channels
                     )
-                    
-                    
+                                  
                     # set ADC
                     sample_rate = None
                     setup_dict = dict()
@@ -491,10 +508,8 @@ class IV_dIdV(Sequencer):
                     # clear
                     daq_online.clear()
 
-
                     # loop channels and zero once for each
                     for  ichan in range(len(self._detector_channels)):
-
 
                         traces = data_array[:,ichan,:]
                         cut = qp.autocuts(traces,
@@ -503,8 +518,10 @@ class IV_dIdV(Sequencer):
                         traces = traces[cut]
                         
                         # convert to amps
-                        norm = self._instrument.get_volts_to_amps_close_loop_norm(
-                            detector_channel=channel
+                        norm = (
+                            self._instruments_inst.get_volts_to_amps_close_loop_norm(
+                                detector_channel=channel
+                            )
                         )
 
                         traces /= norm
@@ -524,10 +541,7 @@ class IV_dIdV(Sequencer):
                         traces_std = np.std(traces, axis=1)
                         std_median = np.median(traces_std, axis=0)
                         stds.append([std_median])
-                    
-
-
-
+          
                     # save
                     bias_array = [[-bias*1e-6]]*nb_channels
                     bias_err_array = [[0]]*nb_channels
@@ -567,12 +581,11 @@ class IV_dIdV(Sequencer):
                             online_iv_tes_bias_err,  bias_err_array, axis=1
                         )  
 
-
                     # analyze
                     if istep>=3:
 
                         # analyze
-                        rshunt = self._instrument.get_shunt_resistance(
+                        rshunt = self._instruments_inst.get_shunt_resistance(
                             detector_channel=self._detector_channels[0])
                         
                         ivobj = qp.IBIS(
@@ -600,23 +613,29 @@ class IV_dIdV(Sequencer):
                 if self._enable_iv:
 
                     # set detector
+                    is_tes_signal_gen_common = (
+                        self._instruments_inst.is_tes_signal_gen_inst_common()
+                    )
+                    
                     for channel in self._detector_channels:
 
-                        if (self._instrument._config.get_tes_controller()
-                            != self._instrument._config.get_signal_generator()):
-                        
+                        if not is_tes_signal_gen_common:
+
                             # disconnect signal generator
-                            self._instrument.set_signal_gen_onoff('off',
-                                                                  detector_channel=channel)
+                            self._instruments_inst.set_signal_gen_onoff(
+                                'off',
+                                detector_channel=channel)
 
                             # disconnect from TES
-                            self._instrument.connect_signal_gen_to_tes(False,
-                                                                       detector_channel=channel)
+                            self._instruments_inst.connect_signal_gen_to_tes(
+                                False,
+                                detector_channel=channel)
                         
                         # other parameters
                         if 'output_gain' in iv_config:
-                            self._instrument.set_output_gain(float(iv_config['output_gain']),
-                                                             detector_channel=channel)
+                            self._instruments_inst.set_output_gain(
+                                float(iv_config['output_gain']),
+                                detector_channel=channel)
                             
                     # wait 5 seconds
                     time.sleep(5)
@@ -630,40 +649,29 @@ class IV_dIdV(Sequencer):
                         self._detector_connection_table,
                         detector_channel_list=self._saved_detector_channels
                     )
-
                                      
                     for adc_name in adc_channel_dict:
-                        det_config[adc_name] = self._instrument.read_all(
+                        det_config[adc_name] = self._instruments_inst.read_all(
                             adc_id=adc_name,
                             adc_channel_list=adc_channel_dict[adc_name]
                         )
 
-                        if temperature is not None:
-                            key_temp = 'temperature'
-                            if thermometer_name  is not None:
-                                key_temp += '_' + thermometer_name.lower()
-                            elif thermometer_global_num is not None:
-                                key_temp += '_' + str(hermometer_global_num)
-                            det_config[adc_name][key_temp] = temperature
-
-                        if monitoring_temperature_list is not None:
-                            for itherm in range(len(monitoring_temperature_list)):
-                                det_config[adc_name][
-                                    'temperature_' + monitoring_thermometer_names[itherm].lower()
-                                ] = monitoring_temperature_list[itherm]
-                            
                     self._daq.set_detector_config(det_config)
                     
                     # take data
                     if self._enable_tes_bias_sweep:
-                        run_comment = 'IV: ' + ' TES bias = ' + str(bias) + 'uA'
-                        print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                        run_comment = ('IV: ' + ' TES bias = '
+                                       + str(bias) + 'uA')
+                        
+                        print('INFO: Starting IV data taking with TES bias = '
+                              + str(bias) + 'uA!')
                     else:
                         run_comment = 'IV (bias sweep disabled)'
                         print('INFO: Starting IV data taking (bias sweep disabled)!')
 
                     if self._enable_temperature_sweep:
-                        run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
+                        run_comment = (run_comment + ', T = '
+                                       + str(temperature) + 'mK')
                         
                     success = self._daq.run(run_time=int(iv_config['run_time']),
                                             run_type=102,
@@ -677,8 +685,6 @@ class IV_dIdV(Sequencer):
                         print('ERROR taking data! Stopping sequencer')
                         return False
 
-
-                                
                 # -----------
                 # dIdV
                 # ----------
@@ -689,37 +695,44 @@ class IV_dIdV(Sequencer):
                     # ADC setup
                     self._daq.set_adc_config_from_dict(didv_config['adc_setup'])
                     
-
+                    # TES controller
+                    tes_controller = self._instruments_inst.get_tes_controller()
+                    is_tes_signa_gen_common = (
+                        self._instruments_inst.is_tes_signal_gen_inst_common()
+                    )
+                                                           
                     # set detector
                     for channel in self._detector_channels:
                     
                         # signal generator
-                        signal_gen_offset = self._instrument._tes_controller_inst.get_offset()*1000
+                        signal_gen_offset = tes_controller.get_offset()*1000
                         
-                        self._instrument.set_signal_gen_params(
-                            detector_channel=channel,source='tes', 
+                        self._instruments_inst.set_signal_gen_params(
+                            detector_channel=channel, source='tes', 
                             voltage=didv_config['signal_gen_voltage'],
                             current=didv_config['signal_gen_current'],
                             frequency=didv_config['signal_gen_frequency'],
                             shape='square'
                         )
                         
-                        if (self._instrument._config.get_tes_controller()
-                            == self._instrument._config.get_signal_generator()):
-                        
-                            self._instrument.set_signal_gen_params(detector_channel=channel,
-                                                                   offset=signal_gen_offset)
+                        if is_tes_signa_gen_common:
+                            self._instruments_inst.set_signal_gen_params(
+                                detector_channel=channel,
+                                offset=signal_gen_offset)
                 
                         # turn on
-                        self._instrument.set_signal_gen_onoff('on', detector_channel=channel)
+                        self._instruments_inst.set_signal_gen_onoff(
+                            'on', detector_channel=channel)
 
                         # connect to TES
-                        self._instrument.connect_signal_gen_to_tes(True, detector_channel=channel)
+                        self._instruments_inst.connect_signal_gen_to_tes(
+                            True, detector_channel=channel)
 
                         # other parameters
                         if 'output_gain' in didv_config:
-                            self._instrument.set_output_gain(float(didv_config['output_gain']),
-                                                             detector_channel=channel)
+                            self._instruments_inst.set_output_gain(
+                                float(didv_config['output_gain']),
+                                detector_channel=channel)
                             
                         # wait 5 seconds
                         time.sleep(5)
@@ -729,37 +742,27 @@ class IV_dIdV(Sequencer):
                                                 
                             # get/set detector config metadata
                             det_config = dict()
-                            adc_channel_dict = connection_utils.get_adc_channel_list(
-                                self._detector_connection_table,
-                                detector_channel_list=self._saved_detector_channels
+                            adc_channel_dict = (
+                                connection_utils.get_adc_channel_list(
+                                    self._detector_connection_table,
+                                    detector_channel_list=self._saved_detector_channels
+                                )
                             )
                             
                             for adc_name in adc_channel_dict:
-                                det_config[adc_name] = self._instrument.read_all(
-                                    adc_id=adc_name,
-                                    adc_channel_list=adc_channel_dict[adc_name]
-                                )
                                 
-
-                                if temperature is not None:
-                                    key_temp = 'temperature'
-                                    if thermometer_name  is not None:
-                                        key_temp += '_' + thermometer_name.lower()
-                                    elif thermometer_global_num is not None:
-                                        key_temp += '_' + str(hermometer_global_num)
-                                    det_config[adc_name][key_temp] = temperature
-
-                                if monitoring_temperature_list is not None:
-                                    for itherm in range(len(monitoring_temperature_list)):
-                                        det_config[adc_name][
-                                            'temperature_' + monitoring_thermometer_names[itherm].lower()
-                                        ] = monitoring_temperature_list[itherm]
+                                det_config[adc_name] = (
+                                    self._instruments_inst.read_all(
+                                        adc_id=adc_name,
+                                        adc_channel_list=adc_channel_dict[adc_name]
+                                    )
+                                )
                             
                             self._daq.set_detector_config(det_config)
-
                     
                             # take data
-                            run_comment = ('dIdV chan ' + str(channel) + ': TES bias = '
+                            run_comment = ('dIdV chan ' + str(channel)
+                                           + ': TES bias = '
                                            + str(bias) + 'uA')
                          
                             if self._enable_tes_bias_sweep:
@@ -776,23 +779,26 @@ class IV_dIdV(Sequencer):
                                       + ' (bias sweep disabled)')
 
                             if self._enable_temperature_sweep:
-                                run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
+                                run_comment = (run_comment + ', T = '
+                                               + str(temperature) + 'mK')
 
                               
-                            success = self._daq.run(run_time=int(didv_config['run_time']),
-                                                    run_type=103,
-                                                    run_comment=run_comment,
-                                                    group_name=self._group_name,
-                                                    group_comment=self._comment,
-                                                    data_path=self._raw_data_path,
-                                                    data_prefix='didv')
+                            success = self._daq.run(
+                                run_time=int(didv_config['run_time']),
+                                run_type=103,
+                                run_comment=run_comment,
+                                group_name=self._group_name,
+                                group_comment=self._comment,
+                                data_path=self._raw_data_path,
+                                data_prefix='didv')
                            
                             if not success:
                                 print('ERROR taking data! Stopping sequencer')
                                 return False
                      
                             # turn off signal genrator
-                            self._instrument.connect_signal_gen_to_tes(False, detector_channel=channel)
+                            self._instruments_inst.connect_signal_gen_to_tes(
+                                False, detector_channel=channel)
                             
                          
 
@@ -807,46 +813,36 @@ class IV_dIdV(Sequencer):
                         )
 
                         for adc_name in adc_channel_dict:
-                            det_config[adc_name] = self._instrument.read_all(
+                            det_config[adc_name] = self._instruments_inst.read_all(
                                 adc_id=adc_name,
                                 adc_channel_list=adc_channel_dict[adc_name]
                             )
-
-                            if temperature is not None:
-                                key_temp = 'temperature'
-                                if thermometer_name  is not None:
-                                    key_temp += '_' + thermometer_name.lower()
-                                elif thermometer_global_num is not None:
-                                    key_temp += '_' + str(hermometer_global_num)
-                                det_config[adc_name][key_temp] = temperature
-
-                            if monitoring_temperature_list is not None:
-                                for itherm in range(len(monitoring_temperature_list)):
-                                    det_config[adc_name][
-                                        'temperature_' + monitoring_thermometer_names[itherm].lower()
-                                    ] = monitoring_temperature_list[itherm]
                                                               
                         self._daq.set_detector_config(det_config)
 
 
                         # start run
                         if self._enable_tes_bias_sweep:
-                            run_comment = 'dIdV: ' + ' TES bias = ' + str(bias) + 'uA'
-                            print('INFO: Starting IV data taking with TES bias = ' + str(bias) + 'uA!')
+                            run_comment = ('dIdV: ' + ' TES bias = '
+                                           + str(bias) + 'uA')
+                            print('INFO: Starting IV data taking with TES bias = '
+                                  + str(bias) + 'uA!')
                         else:
                             run_comment = 'dIdV (bias sweep disabled)'
                             print('INFO: Starting dIdV data taking (bias sweep disabled)!')
 
                         if self._enable_temperature_sweep:
-                            run_comment = run_comment + ', T = ' + str(temperature) + 'mK'
+                            run_comment = (run_comment + ', T = '
+                                           + str(temperature) + 'mK')
                       
-                        success = self._daq.run(run_time=int(didv_config['run_time']),
-                                                run_type=103,
-                                                run_comment=run_comment,
-                                                group_name=self._group_name,
-                                                group_comment=self._comment,
-                                                data_path=self._raw_data_path,
-                                                data_prefix='didv')
+                        success = self._daq.run(
+                            run_time=int(didv_config['run_time']),
+                            run_type=103,
+                            run_comment=run_comment,
+                            group_name=self._group_name,
+                            group_comment=self._comment,
+                            data_path=self._raw_data_path,
+                            data_prefix='didv')
 
                         if not success:
                             print('ERROR taking data! Stopping sequencer')
@@ -865,8 +861,13 @@ class IV_dIdV(Sequencer):
             arg_utils.make_directories(diagnostic_path)
                     
             now = datetime.now()
-            series_date = now.strftime('%Y') +  now.strftime('%m') + now.strftime('%d') 
-            series_time = now.strftime('%H') + now.strftime('%M') +  now.strftime('%S')
+            series_date = (now.strftime('%Y')
+                           +  now.strftime('%m')
+                           + now.strftime('%d'))
+            series_time = (now.strftime('%H')
+                           + now.strftime('%M')
+                           +  now.strftime('%S'))
+            
             savename = series_date + '_' + series_time
                       
             ivobj.plot_all_curves(showfit=True, lgcsave=True,
@@ -877,7 +878,7 @@ class IV_dIdV(Sequencer):
         # set heater back to 0%?
         if self._enable_temperature_sweep:
             print('INFO: setting heater back to 0!')
-            self._instrument.set_temperature(
+            self._instruments_inst.set_temperature(
                 0,
                 channel_name=thermometer_name,
                 global_channel_number=thermometer_global_num,
@@ -896,10 +897,10 @@ class IV_dIdV(Sequencer):
         Measure Rp/Rn
         """
 
-        if self._daq is None or self._instrument is None:
+        if self._daq is None or self._instruments_inst is None:
             print('WARNING: daq or instrument has not been instanciated!')
             self._daq = None
-            self._instrument = None
+            self._instruments_inst = None
             return
 
 
@@ -910,6 +911,12 @@ class IV_dIdV(Sequencer):
         if self._enable_rn:
             measurement_list.append('Rn')
 
+
+        is_tes_signa_gen_common = (
+            self._instruments_inst.is_tes_signal_gen_inst_common()
+        )
+
+            
         for measurement in  measurement_list:
            
             if self._verbose:
@@ -930,19 +937,21 @@ class IV_dIdV(Sequencer):
             for channel in self._detector_channels:
                 
                 # QET bias
-                self._instrument.set_tes_bias(config_dict['tes_bias'],
-                                              detector_channel=channel)
+                self._instruments_inst.set_tes_bias(
+                    config_dict['tes_bias'],
+                    detector_channel=channel)
                 
                 # Other detector settings
                 if 'output_gain' in config_dict:
-                    self._instrument.set_output_gain(float(config_dict['output_gain']),
-                                                     detector_channel=channel)
+                    self._instruments_inst.set_output_gain(
+                        float(config_dict['output_gain']),
+                        detector_channel=channel)
                          
 
                 #  turn off signal generator (avoid cross talk)
-                if (self._instrument._config.get_tes_controller() !=
-                    self._instrument._config.get_signal_generator()):
-                    self._instrument.set_signal_gen_onoff('off', detector_channel=channel)
+                if not is_tes_signa_gen_common:
+                    self._instruments_inst.set_signal_gen_onoff(
+                        'off', detector_channel=channel)
                                            
                 # Eventually close loop, relock, zero once, etc. 
                 
@@ -959,26 +968,30 @@ class IV_dIdV(Sequencer):
             run_type = 100
             if measurement=='Rn':
                 run_type = 101
-                
+
             for channel in self._detector_channels:
                 
-                signal_gen_offset = self._instrument._tes_controller_inst.get_offset()*1000
+                signal_gen_offset = (
+                    self._instruments_inst._tes_controller_inst.get_offset()*1000
+                )
                      
                 # signal generator
-                self._instrument.set_signal_gen_params(detector_channel=channel,
-                                                       source='tes', 
-                                                       voltage=didv_config['signal_gen_voltage'],
-                                                       current=didv_config['signal_gen_current'],
-                                                       frequency=didv_config['signal_gen_frequency'],
-                                                       shape='square')
+                self._instruments_inst.set_signal_gen_params(
+                    detector_channel=channel,
+                    source='tes', 
+                    voltage=didv_config['signal_gen_voltage'],
+                    current=didv_config['signal_gen_current'],
+                    frequency=didv_config['signal_gen_frequency'],
+                    shape='square')
                 
-                if (self._instrument._config.get_tes_controller()
-                    == self._instrument._config.get_signal_generator()):
-                    self._instrument.set_signal_gen_params(detector_channel=channel,
-                                                           offset=signal_gen_offset)
+                if is_tes_signa_gen_common:
+                    self._instruments_inst.set_signal_gen_params(
+                        detector_channel=channel,
+                        offset=signal_gen_offset)
 
             
-                self._instrument.set_signal_gen_onoff('on', detector_channel=channel)
+                self._instruments_inst.set_signal_gen_onoff(
+                    'on', detector_channel=channel)
                 time.sleep(2)
 
                
@@ -993,7 +1006,7 @@ class IV_dIdV(Sequencer):
                     )
                     
                     for adc_name in adc_channel_dict:
-                        det_config[adc_name] = self._instrument.read_all(
+                        det_config[adc_name] = self._instruments_inst.read_all(
                             adc_id=adc_name,
                             adc_channel_list=adc_channel_dict[adc_name]
                         )
@@ -1002,22 +1015,24 @@ class IV_dIdV(Sequencer):
                  
 
                     # take data
-                    success = self._daq.run(run_time=int(config_dict['run_time']),
-                                            run_type=run_type,
-                                            run_comment=run_comment,
-                                            group_name=self._group_name,
-                                            group_comment=self._comment,
-                                            data_path=self._raw_data_path,
-                                            data_prefix=measurement.lower())
+                    success = self._daq.run(
+                        run_time=int(config_dict['run_time']),
+                        run_type=run_type,
+                        run_comment=run_comment,
+                        group_name=self._group_name,
+                        group_comment=self._comment,
+                        data_path=self._raw_data_path,
+                        data_prefix=measurement.lower())
+                    
                     if not success:
                         print('ERROR taking data! Stopping sequencer')
                         return False
                       
                     # disconnect
-                    if (self._instrument.get_tes_controller()
-                        != self._instrument.get_signal_generator()):
-                        self._instrument.set_signal_gen_onoff('off',
-                                                              detector_channel=channel)
+                    if not is_tes_signa_gen_common:
+                        self._instruments_inst.set_signal_gen_onoff(
+                            'off',
+                            detector_channel=channel)
                  
             # take data (case all channels together)
             if not config_dict['loop_channels']:
@@ -1030,7 +1045,7 @@ class IV_dIdV(Sequencer):
                 )
 
                 for adc_name in adc_channel_dict:
-                    det_config[adc_name] = self._instrument.read_all(
+                    det_config[adc_name] = self._instruments_inst.read_all(
                         adc_id=adc_name,
                         adc_channel_list=adc_channel_dict[adc_name]
                     )

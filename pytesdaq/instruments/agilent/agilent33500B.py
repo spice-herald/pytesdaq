@@ -26,7 +26,6 @@ class Agilent33500B(InstrumentComm):
         # get idn
         self._device_idn = self.get_idn()
 
-
         # model 3312
         self._is_model_3312 = False
         if '3312' in self._device_idn:
@@ -34,8 +33,7 @@ class Agilent33500B(InstrumentComm):
         
         # is generator on 
         self._generator_onoff = 'off'
-        
-
+     
         # signal generator attenuation
         self._attenuation = attenuation
 
