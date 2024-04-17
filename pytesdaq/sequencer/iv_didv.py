@@ -1,6 +1,6 @@
 import numpy as np
 import time
-import pprint as pprint
+from pprint import pprint
 import copy
 from pytesdaq.daq import daq
 import pytesdaq.config.settings as settings
@@ -330,12 +330,14 @@ class IV_dIdV(Sequencer):
                     is_tes_signal_gen_common = (
                         self._instruments_inst.is_tes_signal_gen_inst_common()
                     )
+                    
                     for channel in self._detector_channels:
 
                         if not is_tes_signal_gen_common:
                             self._instruments_inst.set_tes_bias(
-                                bias, detector_channel=channel)
+                                bias, detector_channel=channel
                             )
+                            
                         else:
                             if self._enable_iv:
                                 self._instruments_inst.set_tes_bias(
@@ -497,6 +499,7 @@ class IV_dIdV(Sequencer):
                         setup_dict[adc_id]['nb_samples'] = 5000
                         setup_dict[adc_id]['channel_list'] = adc_list
                         setup_dict[adc_id]['trigger_type'] = 3
+                        pprint(setup_dict)
                         sample_rate = setup_dict[adc_id]['sample_rate']
                         
                     daq_online.set_adc_config_from_dict(setup_dict)
