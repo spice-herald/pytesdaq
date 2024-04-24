@@ -463,19 +463,15 @@ class DAQControl:
 
             # modify TES bias
             if modify_tes:
-
-                if tes_bias != 'current':
-                    tes_bias = float(tes_bias)
-                else:
-                    tes_bias = None
-
+                
                 for chan in didv_channels:
 
-                    if tes_bias is None:
-                        tes_bias = self._current_tes_bias[chan]
+                    tes_bias_input = tes_bias
+                    if tes_bias == 'current':
+                        tes_bias_input = self._current_tes_bias[chan]
 
                     self._instruments_inst.set_tes_bias(
-                        tes_bias,
+                        tes_bias_input,
                         detector_channel=chan
                     )
 
@@ -589,9 +585,9 @@ class DAQControl:
 
             # set TES
             if modify_tes:
-                tes_bias = self._current_tes_bias[chan]
+                tes_bias_input = self._current_tes_bias[chan]
                 self._instruments_inst.set_tes_bias(
-                    tes_bias,
+                    tes_bias_input,
                     detector_channel=chan
                 )
 
@@ -639,12 +635,13 @@ class DAQControl:
 
             # set tes bias
             for chan in  iv_channels:
-            
+
+                tes_bias_input = tes_bias
                 if tes_bias == 'current':
-                    tes_bias = self._current_tes_bias[chan]
+                    tes_bias_input = self._current_tes_bias[chan]
 
                 self._instruments_inst.set_tes_bias(
-                    tes_bias,
+                    tes_bias_input,
                     detector_channel=chan
                 )
 
@@ -689,10 +686,11 @@ class DAQControl:
 
 
         for chan in  iv_channels:
-            tes_bias = self._current_tes_bias[chan]
+            
+            tes_bias_input = self._current_tes_bias[chan]
 
             self._instruments_inst.set_tes_bias(
-                tes_bias,
+                tes_bias_input,
                 detector_channel=chan
             )
 
@@ -701,9 +699,7 @@ class DAQControl:
                 self._instruments_inst.relock(
                     detector_channel=chan
                 )
-                
-            
-            
+             
         time.sleep(2)
         
             
