@@ -64,7 +64,7 @@ class Agilent33500B(InstrumentComm):
 
     def set_load_resistance(self, load='infinity', source=1):
         """
-        Set output load
+        Set output load [Ohms]
 
         Parameters
         ---------
@@ -97,7 +97,7 @@ class Agilent33500B(InstrumentComm):
 
     def get_load_resistance(self, source=1):
         """
-        Get output load
+        Get output load [Ohms]
 
         Parameters
         ---------
@@ -450,7 +450,7 @@ class Agilent33500B(InstrumentComm):
         return phase
     
     
-    def set_frequency(self,frequency, unit='Hz', source=1):
+    def set_frequency(self, frequency, unit='Hz', source=1):
 
         """
         Set signal frequency

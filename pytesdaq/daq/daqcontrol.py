@@ -471,7 +471,7 @@ class DAQControl:
                         tes_bias_input = self._current_tes_bias[chan]
 
                     self._instruments_inst.set_tes_bias(
-                        tes_bias_input,
+                        tes_bias_input, unit='uA',
                         detector_channel=chan
                     )
 
@@ -509,7 +509,7 @@ class DAQControl:
                     # set signal gen
                     self._instruments_inst.set_signal_gen_params(
                         detector_channel=chan,
-                        voltage=voltage,
+                        voltage=voltage, voltage_unit='mV',
                         frequency=frequency,
                         shape='square')
                 
@@ -587,7 +587,7 @@ class DAQControl:
             if modify_tes:
                 tes_bias_input = self._current_tes_bias[chan]
                 self._instruments_inst.set_tes_bias(
-                    tes_bias_input,
+                    tes_bias_input, unit='uA',
                     detector_channel=chan
                 )
 
@@ -641,7 +641,7 @@ class DAQControl:
                     tes_bias_input = self._current_tes_bias[chan]
 
                 self._instruments_inst.set_tes_bias(
-                    tes_bias_input,
+                    tes_bias_input, unit='uA',
                     detector_channel=chan
                 )
 
@@ -690,7 +690,7 @@ class DAQControl:
             tes_bias_input = self._current_tes_bias[chan]
 
             self._instruments_inst.set_tes_bias(
-                tes_bias_input,
+                tes_bias_input, unit='uA',
                 detector_channel=chan
             )
 
@@ -1346,7 +1346,8 @@ class DAQControl:
         for chan in self._channels_dict['detector_channels']:
             tes_bias_setting[chan] = (
                 self._instruments_inst.get_tes_bias(
-                    detector_channel=chan
+                    detector_channel=chan,
+                    unit='uA'
                 )
             )
             

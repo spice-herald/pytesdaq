@@ -160,10 +160,10 @@ class InstrumentComm:
         """
         Close connection to instrument
         """
-        
-        self._inst.close()
-        if self._debug:
-            print('DEBUG: Session closed!')
+        if self._inst  is not None:
+            self._inst.close()
+            if self._debug:
+                print('DEBUG: Session closed!')
 
         self._inst = None
 
