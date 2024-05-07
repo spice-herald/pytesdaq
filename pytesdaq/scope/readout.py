@@ -845,13 +845,15 @@ class Readout:
         tes_bias_list = list()
         if read_bias or read_sg:
             for chan in self._adc_config['selected_channel_list']:
-                bias = float(self._instrument.get_tes_bias(adc_id=self._adc_name,
-                                                           adc_channel=chan))
+                bias = float(
+                    self._instrument.get_tes_bias(adc_id=self._adc_name,
+                                                  adc_channel=chan,
+                                                  unit='uA')
+                )
                 tes_bias_list.append(bias*1e-6)
+                
             self._analyzer.set_config('tes_bias', tes_bias_list)
-            
-            
-
+    
     def _plot_data(self, data_array, fit_array=None, fit_dt=None, freq_array=[]):
 
 
