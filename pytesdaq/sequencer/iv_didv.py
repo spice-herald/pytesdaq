@@ -134,10 +134,12 @@ class IV_dIdV(Sequencer):
                 didv_config['signal_gen_voltage'] = None
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
-            
+
+
+        # for case TES / SG controllers
+        # Tune auto-range and turn off
         if self._instruments_inst.is_tes_signal_gen_inst_common():
 
-            # set signal gen range then fix.
             print('INFO: Case TES and Signal generator controllers '
                   'are the same: fix signal generator range')
 
@@ -145,40 +147,53 @@ class IV_dIdV(Sequencer):
             signal_gen_controller = (
                 self._instruments_inst.get_signal_gen_controller()
             )
-
             tes_controller = self._instruments_inst.get_tes_controller()
-            
+
             for channel in self._detector_channels:
-                
+
+                # set autorange on 
                 signal_gen_controller.set_auto_range('on')
+                
                 self._instruments_inst.set_tes_bias(
                     np.max(sweep_config['tes_bias_vect']),
                     unit='uA',
                     detector_channel=channel
                 )
                 
-                signal_gen_offset = tes_controller.get_offset()*1000
                 signal_gen_voltage = 2
                 signal_gen_frequency = 80
+                
                 if 'signal_gen_voltage' in didv_config:
                     signal_gen_voltage = didv_config['signal_gen_voltage']
                 if 'signal_gen_frequency' in didv_config:
                     signal_gen_frequency = didv_config['signal_gen_frequency']
                     
                 print(f'Max func gen offset is {signal_gen_offset} mV')
+                self._instruments_inst.set_signal_gen_onoff(
+                    'on',
+                    detector_channel=channel)
+                
                 self._instruments_inst.set_signal_gen_params(
-                    detector_channel=channel, source='tes', 
-                    voltage=signal_gen_voltage, voltage_unit='mV',
+                    detector_channel=channel,
+                    source='tes', 
+                    voltage=signal_gen_voltage,
+                    voltage_unit='mV',
                     frequency=signal_gen_frequency,
                     frequency_unit='Hz',
-                    offset=signal_gen_offset, offset_unit='mV',
                     shape='square'
                 )
 
                 # set auto range off
                 signal_gen_controller.set_auto_range('off')
+                
                 time.sleep(5)
-              
+
+        # turn SG ouput off (this set to 'dc' if SG/TES controllers are same)
+        for channel in self._detector_channels:
+            self._instruments_inst.set_signal_gen_onoff(
+                'off',
+                detector_channel=channel)
+            
                 
         # Temperature loop
         temperature_vect = []
@@ -289,7 +304,10 @@ class IV_dIdV(Sequencer):
                 time.sleep(5)
             
             # IV-dIdV:  TES bias loop
-            sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
+            sleeptime_s = 5
+            if 'tes_bias_change_sleep_time' in sweep_config:
+                sleeptime_s = float(sweep_config['tes_bias_change_sleep_time'])
+                
             tes_bias_vect = sweep_config['tes_bias_vect']
             if not self._enable_tes_bias_sweep:
                 tes_bias_vect = [None]
@@ -318,55 +336,25 @@ class IV_dIdV(Sequencer):
             # ==========================
             for bias in tes_bias_vect:
 
-                # set bias all channels
                 istep+=1
-                
+
+                # set TES bias all channels
                 if self._enable_tes_bias_sweep:
                     
-                    print('INFO: Sequencer step #' + str(istep)
-                          + ' out of total '
-                          + str(nb_steps) + ' steps!')
-                    print('INFO: Setting TES bias all channels to : '
-                          + str(bias) + 'uA!')
-
-                    is_tes_signal_gen_common = (
-                        self._instruments_inst.is_tes_signal_gen_inst_common()
-                    )
+                    print(f'INFO: Sequencer step #{istep} '
+                          f'out of total {nb_steps} steps!')
                     
+                    print(f'INFO: Setting TES bias all channels to : '
+                          f'{bias} uA!')
+                    # set TES bias all channels
                     for channel in self._detector_channels:
 
-                        if not is_tes_signal_gen_common:
-                            self._instruments_inst.set_tes_bias(
-                                bias, unit='uA',
-                                detector_channel=channel
-                            )
-                            
-                        else:
-                            if self._enable_iv:
-                                self._instruments_inst.set_tes_bias(
-                                    bias, unit='uA',
-                                    detector_channel=channel)
-                            else:
-                                
-                                resistance =  (
-                                    self._instruments_inst.get_tes_bias_resistance(
-                                        detector_channel=channel)
-                                )
-                                signal_gen_offset = resistance*bias*1e-3
-                                self._instruments_inst.set_signal_gen_params(
-                                    detector_channel=channel,source='tes', 
-                                    voltage=didv_config['signal_gen_voltage'],
-                                    voltage_unit='mV',
-                                    current=didv_config['signal_gen_current'],
-                                    current_unit='uA',
-                                    frequency=didv_config['signal_gen_frequency'],
-                                    offset=signal_gen_offset, offset_unit='mV',
-                                    shape='square'
-                                )
+                        self._instruments_inst.set_tes_bias(
+                            bias, unit='uA',
+                            detector_channel=channel
+                        )
                                 
                     # sleep
-                    #if tes_bias_change_sleep_time in sweep_config:
-                    print('INFO: Sleeping for ' + str(sleeptime_s) + ' seconds!')
                     time.sleep(sleeptime_s)
 
                 # Relock
@@ -620,24 +608,23 @@ class IV_dIdV(Sequencer):
                 
                 if self._enable_iv:
 
-                    # set detector
-                    is_tes_signal_gen_common = (
-                        self._instruments_inst.is_tes_signal_gen_inst_common()
-                    )
+
+                    # turn SG output "off" 
+                    # If SG/TES controllers are same:
+                    #   SG will be set to DC, output on
+                  
                     
                     for channel in self._detector_channels:
 
-                        if not is_tes_signal_gen_common:
+                        # disconnect signal generator
+                        self._instruments_inst.set_signal_gen_onoff(
+                            'off',
+                            detector_channel=channel)
 
-                            # disconnect signal generator
-                            self._instruments_inst.set_signal_gen_onoff(
-                                'off',
-                                detector_channel=channel)
-
-                            # disconnect from TES
-                            self._instruments_inst.connect_signal_gen_to_tes(
-                                False,
-                                detector_channel=channel)
+                        # disconnect from TES
+                        self._instruments_inst.connect_signal_gen_to_tes(
+                            False,
+                            detector_channel=channel)
                         
                         # other parameters
                         if 'output_gain' in iv_config:
@@ -702,15 +689,15 @@ class IV_dIdV(Sequencer):
 
                     # ADC setup
                     self._daq.set_adc_config_from_dict(didv_config['adc_setup'])
-                    
-                    # TES controller
-                    tes_controller = self._instruments_inst.get_tes_controller()
-                    is_tes_signa_gen_common = (
-                        self._instruments_inst.is_tes_signal_gen_inst_common()
-                    )
-                                                           
+                                                                              
                     # set detector
                     for channel in self._detector_channels:
+
+                        # turn on signal gen output
+                        # if SG same as TES controller, set shape "square"
+                        self._instruments_inst.set_signal_gen_onoff(
+                            'on', detector_channel=channel
+                        )
                         
                         self._instruments_inst.set_signal_gen_params(
                             detector_channel=channel,
@@ -723,19 +710,7 @@ class IV_dIdV(Sequencer):
                             frequency_unit='Hz',
                             shape='square'
                         )
-                        
-                        if is_tes_signa_gen_common:
-                            
-                            signal_gen_offset = tes_controller.get_offset()*1000
-                            
-                            self._instruments_inst.set_signal_gen_params(
-                                detector_channel=channel,
-                                offset=signal_gen_offset)
-                
-                        # turn on
-                        self._instruments_inst.set_signal_gen_onoff(
-                            'on', detector_channel=channel)
-
+                   
                         # connect to TES
                         self._instruments_inst.connect_signal_gen_to_tes(
                             True, detector_channel=channel)
@@ -873,12 +848,10 @@ class IV_dIdV(Sequencer):
             arg_utils.make_directories(diagnostic_path)
                     
             now = datetime.now()
-            series_date = (now.strftime('%Y')
-                           +  now.strftime('%m')
+            series_date = (now.strftime('%Y') +  now.strftime('%m')
                            + now.strftime('%d'))
-            series_time = (now.strftime('%H')
-                           + now.strftime('%M')
-                           +  now.strftime('%S'))
+            series_time = (now.strftime('%H') + now.strftime('%M')
+                           + now.strftime('%S'))
             
             savename = series_date + '_' + series_time
                       
@@ -923,12 +896,6 @@ class IV_dIdV(Sequencer):
         if self._enable_rn:
             measurement_list.append('Rn')
 
-
-        is_tes_signa_gen_common = (
-            self._instruments_inst.is_tes_signal_gen_inst_common()
-        )
-
-            
         for measurement in  measurement_list:
            
             if self._verbose:
@@ -961,9 +928,8 @@ class IV_dIdV(Sequencer):
                          
 
                 #  turn off signal generator (avoid cross talk)
-                if not is_tes_signa_gen_common:
-                    self._instruments_inst.set_signal_gen_onoff(
-                        'off', detector_channel=channel)
+                self._instruments_inst.set_signal_gen_onoff(
+                    'off', detector_channel=channel)
                                            
                 # Eventually close loop, relock, zero once, etc. 
                 
@@ -984,6 +950,9 @@ class IV_dIdV(Sequencer):
             for channel in self._detector_channels:
                                      
                 # signal generator
+                self._instruments_inst.set_signal_gen_onoff(
+                    'on', detector_channel=channel)
+                
                 self._instruments_inst.set_signal_gen_params(
                     detector_channel=channel,
                     source='tes', 
@@ -994,21 +963,7 @@ class IV_dIdV(Sequencer):
                     frequency=didv_config['signal_gen_frequency'],
                     frequency_unit='Hz',
                     shape='square')
-                
-                if is_tes_signa_gen_common:
-
-                    signal_gen_offset = (
-                        self._instruments_inst._tes_controller_inst.get_offset()*1000
-                    )
-
-                    self._instruments_inst.set_signal_gen_params(
-                        detector_channel=channel,
-                        offset=signal_gen_offset, offset_unit='mV')
-
-            
-                self._instruments_inst.set_signal_gen_onoff(
-                    'on', detector_channel=channel)
-                
+                           
                 time.sleep(2)
 
                

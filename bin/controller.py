@@ -20,45 +20,50 @@ if __name__ == "__main__":
                               'OR "readout" TES wiring channels. '))
     # Detector settings
     parser.add_argument('--tes_bias_uA', nargs='?', type=float, const=nan, default=None,
-                        help = 'Read/write TES bias in units of "uA"')
-    parser.add_argument('--squid_bias_uA', nargs='?', type = float, const=nan, default=None,
-                        help = 'Read/write SQUID bias in units of "uA"')
-    parser.add_argument('--lock_point_mV', nargs='?', type = float, const=nan, default=None,
-                        help = 'Read/write Lock point voltage [mV]')
-    parser.add_argument('--preamp_gain', nargs='?', type = float, const=nan, default=None,
-                        help = 'Read/write Variable preamp gain')
-    parser.add_argument('--output_gain', nargs='?', type = float, const=nan, default=None,
-                        help = 'Read/write Variable output gain')
+                       help='Read/write TES bias in units of "uA"')
+    parser.add_argument('--squid_bias_uA', nargs='?', type=float, const=nan, default=None,
+                       help='Read/write SQUID bias in units of "uA"')
+    parser.add_argument('--lock_point_mV', nargs='?', type=float, const=nan, default=None,
+                       help='Read/write Lock point voltage [mV]')
+    parser.add_argument('--preamp_gain', nargs='?', type=float, const=nan, default=None,
+                       help='Read/write Variable preamp gain')
+    parser.add_argument('--output_gain', nargs='?', type=float, const=nan, default=None,
+                       help='Read/write Variable output gain')
     
-    parser.add_argument('--read_all', action="store_true", help = 'Read all settings')
+    parser.add_argument('--read_all', action="store_true",help='Read all settings')
 
 
     # signal generator
-    parser.add_argument('--signal_gen_on', action="store_true", help = 'Turn on signal gen')
-    parser.add_argument('--signal_gen_off', action="store_true", help = 'Turn off signal gen')
+    parser.add_argument('--signal_gen_on', action="store_true", 
+                        help='Turn on signal gen')
+    parser.add_argument('--signal_gen_off', action="store_true", help='Turn off signal gen')
+    parser.add_argument('--signal_gen_autorange_on', action="store_true",
+                        help='Turn on signal gen auto range')
+    parser.add_argument('--signal_gen_autorange_off', action="store_true",
+                        help='Turn off signal gen auto range')
     
     parser.add_argument('--signal_gen_amplitude_mV', '--signal_gen_voltage_mV',
                         dest='signal_gen_voltage_mV',
                         nargs='?', type=float, const=nan, default=None,
-                        help = 'Signal generator voltage amplitude [mV]')
+                       help='Signal generator voltage amplitude [mV]')
     parser.add_argument('--signal_gen_offset_mV', nargs='?', type=float,
                         const=nan, default=None,
-                        help = 'Signal generator DC offset [mV]')
+                       help='Signal generator DC offset [mV]')
     parser.add_argument('--signal_gen_frequency_Hz', nargs='?', type=float,
                         const=nan, default=None,
-                        help = 'Signal generator frequency [Hz]')
+                       help='Signal generator frequency [Hz]')
     
     parser.add_argument('--signal_gen_shape', nargs='?', type=str, default=None, const=nan,
-                        help = 'Signal generator shape [sine, square, triangle, ramp, dc]')
+                       help='Signal generator shape [sine, square, triangle, ramp, dc]')
     parser.add_argument('--signal_gen_phase', nargs='?', type=float, default=None, const=nan,
-                        help = 'Signal generator phase')
+                       help='Signal generator phase')
     
     # verbose
     parser.add_argument('--verbose', action="store_true", help='Screen output')
     
     # setup file
-    parser.add_argument('--setup_file', type = str,
-                        help = 'Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
+    parser.add_argument('--setup_file', type=str,
+                       help='Configuration setup file name (full path) [default: pytesdaq/config/setup.ini]')
     
     args = parser.parse_args()
 
@@ -92,9 +97,11 @@ if __name__ == "__main__":
     # ========================
     # Channels
     # ========================
-
+    
     is_signal_gen = False
     if (args.signal_gen_on or args.signal_gen_off
+        or args.signal_gen_autorange_on
+        or args.signal_gen_autorange_off
         or args.signal_gen_offset_mV is not None
         or args.signal_gen_voltage_mV is not None
         or args.signal_gen_frequency_Hz is not None
@@ -148,9 +155,12 @@ if __name__ == "__main__":
     # Instantiate Instrument
     # ========================
 
-    myinstrument = instrument.Control(setup_file=setup_file,
-                                      dummy_mode=False, verbose=verbose)
+    myinstruments = instrument.Control(setup_file=setup_file,
+                                       dummy_mode=False, verbose=verbose)
 
+
+
+    
     # ========================
     # SQUID/TES controller
     # ========================
@@ -169,11 +179,11 @@ if __name__ == "__main__":
             #  write to board
             if args.tes_bias_uA is not nan:
                 
-                myinstrument.set_tes_bias(float(args.tes_bias_uA), unit='uA',
+                myinstruments.set_tes_bias(float(args.tes_bias_uA), unit='uA',
                                           detector_channel=chan)
 
             # read from board
-            readback = myinstrument.get_tes_bias(detector_channel=chan,
+            readback = myinstruments.get_tes_bias(detector_channel=chan,
                                                  unit='uA')
                 
             print(f'TES bias for channel {chan_display}  = {readback} uA')
@@ -186,12 +196,12 @@ if __name__ == "__main__":
 
             #  write to board
             if args.squid_bias_uA is not nan:
-                myinstrument.set_squid_bias(float(args.squid_bias_uA),
+                myinstruments.set_squid_bias(float(args.squid_bias_uA),
                                             unit='uA',
                                             detector_channel=chan)
 
             # read from board
-            readback = myinstrument.get_squid_bias(detector_channel=chan,
+            readback = myinstruments.get_squid_bias(detector_channel=chan,
                                                    unit='uA')
 
             print(f'SQUID bias for channel {chan_display} = {readback} uA')
@@ -204,12 +214,12 @@ if __name__ == "__main__":
 
             #  write to board
             if args.lock_point_mV is not nan:
-                myinstrument.set_lock_point(float(args.lock_point_mV),
+                myinstruments.set_lock_point(float(args.lock_point_mV),
                                             unit='mV',
                                             detector_channel=chan)
                 
             # read from board
-            readback = myinstrument.get_lock_point(detector_channel=chan,
+            readback = myinstruments.get_lock_point(detector_channel=chan,
                                                    unit='mV')
 
             print(f'Lock point  for channel {chan_display} = {readback} mV') 
@@ -222,11 +232,11 @@ if __name__ == "__main__":
 
             #  write to board
             if args.preamp_gain is not nan:
-                myinstrument.set_preamp_gain_bandwidth(args.preamp_gain,
+                myinstruments.set_preamp_gain_bandwidth(args.preamp_gain,
                                                        detector_channel=chan)
                 
             # read from board
-            readback = myinstrument.get_preamp_total_gain(detector_channel=chan)
+            readback = myinstruments.get_preamp_total_gain(detector_channel=chan)
 
             # display
             print(f'Total preamp gain (fix*variable gains) '
@@ -241,11 +251,11 @@ if __name__ == "__main__":
 
             #  write to board
             if args.output_gain is not nan:
-                myinstrument.set_output_gain(args.output_gain,
+                myinstruments.set_output_gain(args.output_gain,
                                              detector_channel=chan)
                                 
             # read from board
-            readback = myinstrument.get_output_total_gain(detector_channel=chan)
+            readback = myinstruments.get_output_total_gain(detector_channel=chan)
             
             print(f'Total output gain (fix*variable gains) '
                   f'for channel {chan_display} = {readback}') 
@@ -258,7 +268,7 @@ if __name__ == "__main__":
     if args.read_all:
 
         if nb_channels>0:
-            settings = myinstrument.read_all(detector_channel_list=detector_channels)
+            settings = myinstruments.read_all(detector_channel_list=detector_channels)
             pprint(settings)
         else:
             print('ERROR: channel required to read all settings!')
@@ -274,23 +284,33 @@ if __name__ == "__main__":
         print('ERROR: Turn signal generator on or off, not both!')
     
     if args.signal_gen_on:
-        myinstrument.set_signal_gen_onoff('on')
+        myinstruments.set_signal_gen_onoff('on')
         
     if args.signal_gen_off:
-        myinstrument.set_signal_gen_onoff('off')
+        myinstruments.set_signal_gen_onoff('off')
+
+    if args.signal_gen_autorange_on:
+        myinstruments.get_signal_gen_controller().set_auto_range('on')
+
+    if args.signal_gen_autorange_off:
+        myinstruments.get_signal_gen_controller().set_auto_range('off')
+
 
     if args.signal_gen_voltage_mV is not None:
 
         #  write to sg
         if args.signal_gen_voltage_mV is not nan:
-            myinstrument.set_signal_gen_params(
+            
+            print(f'INFO: Setting amplitude to {args.signal_gen_voltage_mV} mV')
+            
+            myinstruments.set_signal_gen_params(
                 voltage=float(args.signal_gen_voltage_mV),
                 voltage_unit='mV'
                 )
                             
         # read from board
-        readback = myinstrument.get_signal_gen_params()
-
+        readback = myinstruments.get_signal_gen_params()
+       
         # display
         print(f'Signal generator amplitude = {readback["voltage"]*1e3} mV')
         
@@ -298,10 +318,10 @@ if __name__ == "__main__":
 
         #  write to sg
         if args.signal_gen_frequency_Hz is not nan:
-            myinstrument.set_signal_gen_params(frequency=args.signal_gen_frequency_Hz)
+            myinstruments.set_signal_gen_params(frequency=args.signal_gen_frequency_Hz)
                             
         # read from board
-        readback = myinstrument.get_signal_gen_params()
+        readback = myinstruments.get_signal_gen_params()
 
         # display
         print(f'Signal generator frequency = {readback["frequency"]} Hz')
@@ -310,13 +330,15 @@ if __name__ == "__main__":
         
         #  write to board
         if args.signal_gen_offset_mV is not nan:
-            myinstrument.set_signal_gen_params(
+            print(f'INFO: Setting offset to {args.signal_gen_offset_mV} mV')
+            
+            myinstruments.set_signal_gen_params(
                 offset=args.signal_gen_offset_mV,
                 offset_unit='mV'
             )
                             
         # read from board
-        readback = myinstrument.get_signal_gen_params()
+        readback = myinstruments.get_signal_gen_params()
 
         # display
         print(f'Signal generator offset = {readback["offset"]*1e3} mV')
@@ -326,10 +348,13 @@ if __name__ == "__main__":
 
         #  write to board
         if args.signal_gen_shape is not nan:
-            myinstrument.set_signal_gen_params(shape=args.signal_gen_shape)
+            
+            print(f'INFO: Setting shape to "{args.signal_gen_shape}"')
+            
+            myinstruments.set_signal_gen_params(shape=args.signal_gen_shape)
                                         
         # read from board
-        readback = myinstrument.get_signal_gen_params()
+        readback = myinstruments.get_signal_gen_params()
 
         # display
         shape = readback['shape']
@@ -339,12 +364,15 @@ if __name__ == "__main__":
         
         #  write to board
         if args.signal_gen_phase is not nan:
-            myinstrument.set_signal_gen_params(
+            
+            print(f'INFO: Setting phase to {args.signal_gen_phase} Deg')
+            
+            myinstruments.set_signal_gen_params(
                 phase=args.signal_gen_phase
             )
                             
         # read from board
-        readback = myinstrument.get_signal_gen_params()
+        readback = myinstruments.get_signal_gen_params()
 
         # display
         print(f'Signal generator phase = {readback["phase"]} degrees')

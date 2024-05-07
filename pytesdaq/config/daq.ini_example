@@ -8,42 +8,21 @@
 #
 #    python bin/run_daq.py -c A,B,D --acquire-cont
 #           --duration 2h --comment "this is a comment"
-#           --run_purpose 1
+#           --run_purpose test
 #
 ########################################################
 
 
 [continuous] 
 
-# group name prefix 
-group_prefix = continuous
-
 # single series max time in seconds(s) or minutes (m)
 # if run "duration" longer than series max time
 # then run is splitted in multiple series
 # number of series within group = total duration / series max time
-# Recommendation: < 20 minutes data chunks/series
-#                 (to process more quickly with multiple cores)
-series_max_time = 20m
+series_max_time = 15m
 
 # split open/restricted series (for blinding purpose)
 split_series = False
-
-# Beginning/end of series didv
-# Syntax
-# didv config based on "didv" field)
-add_series_start_didv = True
-add_series_end_didv = False
-didv_run_time = 90s
-didv_detector_channels = all
-
-# Beginning/end of series iv
-# (iv adc config based on "iv" field)
-add_series_start_iv = True
-add_series_end_iv = False
-iv_run_time = 10s
-iv_detector_channels = all
-
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
@@ -57,9 +36,20 @@ voltage_min = -5
 voltage_max = 5
 
 
+# Beginning/end of series didv (configuration in "didv" field)
+add_series_start_didv = True
+add_series_end_didv = False
+didv_run_time = 60s
+didv_detector_channels = TES50x200Ar,TES200x800Ar,TES200x800Xe
+
+# Beginning/end of series iv (configuration in "iv" field)
+add_series_start_iv = True
+add_series_end_iv = False
+iv_run_time = 10s
+iv_detector_channels = TES50x200Ar,TES200x800Ar,TES200x800Xe
+
+
 [randoms] 
-# group name prefix 
-group_prefix = randoms
 
 # maximum series time
 #series_max_time = 90s
@@ -80,22 +70,13 @@ voltage_max = 5
 
 [exttrig] 
 
-# group name prefix 
-group_prefix = exttrig
-
 # single series max time in seconds(s) or minutes (m)
-# if run "duration" longer than series max time
-# then run is splitted in multiple series
-# number of series within group = total duration / series max time
-# Recommendation: < 30 minutes data chunks/series
-series_max_time = 90s
+series_max_time = 10m
 
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
 trace_length = 50ms
-# nb_samples = 12500000
-
 
 # sample rate
 sample_rate = 1250000
@@ -111,7 +92,7 @@ voltage_max = 5
 
 # tes bias list (if not current bias)
 # Example:
-#tes_bias_list = 130,110,  current
+#tes_bias_list = 125, current
 #relock_first_step = False
 #relock_all_steps = False
 
@@ -135,31 +116,28 @@ voltage_max = 5
 #   signal_gen_frequency_Hz = 50
 #   signal_gen_voltage_mV = 20
 #
-#   or if different voltage/frequency between channels
+#   or if different voltage/frequency between channels (-> different runs)
 #
 #   signal_gen_frequency_Hz  = chan1:50, chan2:50, chan3&chan4:80
 #   signal_gen_voltage_mV = chan1:0.5, chan2:1, chan3&chan4:0.75 
-#           -> 3 dIdVs in series: (1) chan1 with 0.5 mV (2) chan2, (3) chan3 and chan4 with 0.75 mV
-#
-#   In this case, multiple runs will be taken for the different channel settings
 #
 # IMPORT NOTE: frequency/voltage need to have same format!
 
-signal_gen_voltage_mV = 12
-signal_gen_frequency_Hz =  50
+signal_gen_voltage_mV = 10
+signal_gen_frequency_Hz =  40
 
-#signal_gen_voltage_mV = CPDv21Al2O3:12, NoDeviceB&NoDeviceD:27
-#signal_gen_frequency_Hz  =  CPDv21Al2O3:52, NoDeviceB&NoDeviceD:54
+
 
 
 [iv] 
 
 # tes bias
-tes_bias_list = 140,130,120
+tes_bias_list = 140,120,100,current
+
 
 # relock (either once or all steps)
-relock_first_step = True
-relock_all_steps  = False
+relock_first_step = False
+relock_all_steps  = True
 
 
 # trace length in millisec (ms) or  seconds (s)
