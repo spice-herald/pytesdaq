@@ -1339,18 +1339,21 @@ class DAQControl:
 
     def _read_tes_bias(self):
         """
-        Read signal generator frequency
+        Read TES bias 
         """
         
         tes_bias_setting = dict()
         for chan in self._channels_dict['detector_channels']:
-            tes_bias_setting[chan] = (
+
+            tes_bias = (
                 self._instruments_inst.get_tes_bias(
                     detector_channel=chan,
-                    unit='uA'
-                )
+                    unit='uA')
             )
-            
+
+            if tes_bias != np.nan:
+                tes_bias_setting[chan] = tes_bias 
+                    
         return tes_bias_setting
 
     

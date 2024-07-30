@@ -2235,7 +2235,10 @@ class Control:
 
         param_val = nan
 
-
+        # ttl -> return nan
+        if controller_channel == 'ttl':
+            return 1
+        
         # TES paramaters
         if param_name == 'tes_bias':
 
@@ -2538,7 +2541,14 @@ class Control:
                 adc_channel=adc_channel
             )
         )
-              
+
+
+        # case ttl
+        # ttl -> do nothing and return nan
+        if controller_channel == 'ttl':
+            return nan
+
+        
         # ================
         # Set value
         # ================
