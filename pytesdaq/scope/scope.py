@@ -54,11 +54,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         # channel color map
-        self._channels_color_map = {0:(255, 207, 32),
+        self._channels_color_map = {0:(255, 0,0),
                                     1:(0, 85, 255),
                                     2:(170, 0, 255),
                                     3:(0, 170, 127),
-                                    4:(255, 0, 0),
+                                    4:(255, 207, 32),
                                     5:(170, 116, 28),
                                     6:(15, 235, 255),
                                     7:(121, 121, 121)}
