@@ -492,7 +492,7 @@ class RigolDG800(InstrumentComm):
 
         
         
-    def get_ouptut_state(self, source=1):
+    def get_generator_onoff(self, source=1):
         """
         Is generator output on/off?
         
@@ -511,13 +511,12 @@ class RigolDG800(InstrumentComm):
         # query status
         command = f'OUTP{source}?'
         result = self.query(command)
+       
+        if result == 0:
+            result = 'off'
+        elif result == 1:
+            result = 'on'
+            
+        result = result.lower()
         return result
-
     
-        #on_off = None
-        #if result == 0:
-        #    on_off = 'off'
-        #elif result == 1:
-        #    on_off = 'on'
-                    
-        #return on_off

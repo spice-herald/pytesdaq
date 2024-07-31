@@ -20,14 +20,14 @@ if __name__ == "__main__":
     frequency = myinstrument.get_frequency(source=source, unit='Hz')
     phase = myinstrument.get_frequency(source=source)
     offset = myinstrument.get_offset(source=source, unit='V')
-
+    output_state = myinstrument.get_generator_onoff(source=source)
 
     print(f'Shape = {shape}')
     print(f'Amplitude = {voltage} Vpp')
     print(f'Frequency = {frequency} Hz')
     print(f'Phase = {phase} degrees')
     print(f'Offset = {offset} V')
-
+    print(f'Output State = {output_state }')
 
     # test write
     myinstrument.set_amplitude(0.2, source=source, unit='Vpp')
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     phase = myinstrument.get_frequency(source=source)
     offset = myinstrument.get_offset(source=source, unit='V')
 
-
+    print(f'\nRead back:')
     print(f'Shape = {shape}')
     print(f'Amplitude = {voltage} Vpp')
     print(f'Frequency = {frequency} Hz')
@@ -54,3 +54,12 @@ if __name__ == "__main__":
     print(f'Offset = {offset} V')
 
     
+    # set signal gen output on
+    myinstrument.set_generator_onoff('on', source=source)
+    output_state = myinstrument.get_generator_onoff(source=source)
+    print(f'Output State = {output_state }')
+
+    # turn off
+    myinstrument.set_generator_onoff('off', source=source)
+    output_state = myinstrument.get_generator_onoff(source=source)
+    print(f'Output State = {output_state }')
