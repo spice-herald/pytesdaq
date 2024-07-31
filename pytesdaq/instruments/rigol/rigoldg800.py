@@ -121,7 +121,7 @@ class RigolDG800(InstrumentComm):
 
 
 
-    def set_amplitude(self, amplitude, source=1, unit='Vpp'):
+    def set_amplitude(self, amplitude, source=1, level='amp', unit='Vpp'):
 
         """
         Set signal amplitude
@@ -141,7 +141,7 @@ class RigolDG800(InstrumentComm):
         NOTE: SCPI Names  = {VPP|VRMS|DBM}
         """
 
-
+        # units
         unit_list = ['V', 'Vpp', 'mV', 'mVpp', 'Vrms', 'dbm']
 
         if unit not in unit_list:
@@ -162,6 +162,17 @@ class RigolDG800(InstrumentComm):
             amplitude = float(amplitude)/1000
             unit = 'Vpp'
 
+        # level
+        level_list =['amp', 'low', 'high']
+        if level not in level_list:
+            print('ERROR: Level not recognized!')
+            print('Choice is "amp","low", "high')
+            if self._raise_errors:
+                raise
+            else:
+                return
+
+            
         # take into account  attenuation
         amplitude *= self._attenuation
             
@@ -172,11 +183,16 @@ class RigolDG800(InstrumentComm):
 
         # set amplitude
         command = f':SOUR{source}:VOLT {amplitude}'
+        if level == 'low':
+            command = f':SOUR{source}:VOLT:LOW {amplitude}'
+        elif level == 'high':
+            command = f':SOUR{source}:VOLT:HIGH {amplitude}'
+            
         self.write(command)
         
 
         
-    def get_amplitude(self, source=1, unit='Vpp'):
+    def get_amplitude(self, source=1,  level='amp', unit='Vpp'):
         """
         Get signal amplitude
        
@@ -217,6 +233,16 @@ class RigolDG800(InstrumentComm):
             unit = 'Vpp'
             convert_mVpp = True
             
+        # level
+        level_list =['amp', 'low', 'high']
+        if level not in level_list:
+            print('ERROR: Level not recognized!')
+            print('Choice is "amp","low", "high')
+            if self._raise_errors:
+                raise
+            else:
+                return
+
             
         # set unit
         command = f':SOUR{source}:VOLT:UNIT {unit}'
@@ -224,6 +250,11 @@ class RigolDG800(InstrumentComm):
         
         # get amplitude
         command = f':SOUR{source}:VOLT?'
+        if level == 'low':
+            command = f':SOUR{source}:VOLT:LOW?'
+        elif level == 'high':
+            command = f':SOUR{source}:VOLT:HIGH?'
+            
         amplitude = float(self.query(command))
 
 

@@ -16,39 +16,42 @@ if __name__ == "__main__":
     # read current paramters
     
     shape = myinstrument.get_shape(source=source)
-    voltage =  myinstrument.get_amplitude(source=source, unit='Vpp')
+    voltage_low =  myinstrument.get_amplitude(source=source, unit='Vpp', level='low')
+    voltage_high =  myinstrument.get_amplitude(source=source, unit='Vpp', level='high')
     frequency = myinstrument.get_frequency(source=source, unit='Hz')
-    phase = myinstrument.get_frequency(source=source)
+    phase = myinstrument.get_phase(source=source)
     offset = myinstrument.get_offset(source=source, unit='V')
     output_state = myinstrument.get_generator_onoff(source=source)
 
     print(f'Shape = {shape}')
-    print(f'Amplitude = {voltage} Vpp')
+    print(f'Voltgage HIGH = {voltage_high} Vpp')
+    print(f'Voltgage LOW = {voltage_low} Vpp')
     print(f'Frequency = {frequency} Hz')
     print(f'Phase = {phase} degrees')
     print(f'Offset = {offset} V')
     print(f'Output State = {output_state }')
 
     # test write
-    myinstrument.set_amplitude(0.2, source=source, unit='Vpp')
+    myinstrument.set_amplitude(0.21, source=source, unit='Vpp', level='low')
+    myinstrument.set_amplitude(0.22, source=source, unit='Vpp', level='high')
     myinstrument.set_offset(0.1, source=source, unit='V')
     myinstrument.set_shape('square', source=source)
     myinstrument.set_phase(10, source=source)
     myinstrument.set_frequency(200, source=source)
 
 
-
-
     # read back
     shape = myinstrument.get_shape(source=source)
-    voltage =  myinstrument.get_amplitude(source=source, unit='Vpp')
+    voltage_low =  myinstrument.get_amplitude(source=source, unit='Vpp', level='low')
+    voltage_high =  myinstrument.get_amplitude(source=source, unit='Vpp', level='high')
     frequency = myinstrument.get_frequency(source=source, unit='Hz')
-    phase = myinstrument.get_frequency(source=source)
+    phase = myinstrument.get_phase(source=source)
     offset = myinstrument.get_offset(source=source, unit='V')
 
     print(f'\nRead back:')
     print(f'Shape = {shape}')
-    print(f'Amplitude = {voltage} Vpp')
+    print(f'Voltgage HIGH = {voltage_high} Vpp')
+    print(f'Voltgage LOW = {voltage_low} Vpp')
     print(f'Frequency = {frequency} Hz')
     print(f'Phase = {phase} degrees')
     print(f'Offset = {offset} V')
