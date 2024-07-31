@@ -1,6 +1,6 @@
 """
 Function Generators
 """
-from .rigoldg800 import RigoldDG800
+from .rigoldg800 import RigolDG800
 
 

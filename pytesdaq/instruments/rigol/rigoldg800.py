@@ -29,7 +29,10 @@ class RigolDG800(InstrumentComm):
         # signal generator attenuation
         self._attenuation = attenuation
 
-        
+    @property
+    def device_idn(self):
+        return self._device_idn 
+    
     def set_shape(self, shape, source=1):
         """
         Set signal shape
@@ -118,7 +121,7 @@ class RigolDG800(InstrumentComm):
 
 
 
-    def set_amplitude(self, amplitude, unit='Vpp', source=1):
+    def set_amplitude(self, amplitude, source=1, unit='Vpp'):
 
         """
         Set signal amplitude
@@ -173,7 +176,7 @@ class RigolDG800(InstrumentComm):
         
 
         
-    def get_amplitude(self, unit='Vpp', source=1):
+    def get_amplitude(self, source=1, unit='Vpp'):
         """
         Get signal amplitude
        
@@ -233,7 +236,7 @@ class RigolDG800(InstrumentComm):
         return amplitude
 
 
-    def set_offset(self, offset, unit='V', source=1):
+    def set_offset(self, offset, source=1, unit='V'):
 
         """
         Set signal offset
@@ -277,7 +280,7 @@ class RigolDG800(InstrumentComm):
         command = f':SOUR{source}:VOLT:OFFS {offset}'
         self.write(command)
         
-    def get_offset(self, unit='V', source=1):
+    def get_offset(self, source=1, unit='V'):
         
         """
         Get signal offset
@@ -365,7 +368,7 @@ class RigolDG800(InstrumentComm):
         return phase
     
     
-    def set_frequency(self, frequency, unit='Hz', source=1):
+    def set_frequency(self, frequency, source=1, unit='Hz'):
 
         """
         Set signal frequency
@@ -406,7 +409,7 @@ class RigolDG800(InstrumentComm):
         self.write(command)
     
         
-    def get_frequency(self, unit='Hz', source=1):
+    def get_frequency(self, source=1, unit='Hz'):
         """
         Get signal frequency
        
