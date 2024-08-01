@@ -19,7 +19,7 @@
 # if run "duration" longer than series max time
 # then run is splitted in multiple series
 # number of series within group = total duration / series max time
-series_max_time = 15m
+series_max_time = 30m
 
 # split open/restricted series (for blinding purpose)
 split_series = False
@@ -35,24 +35,31 @@ sample_rate = 1250000
 voltage_min = -5
 voltage_max = 5
 
+# Beginning/end of series calib (configuration in "calibration" field)
+add_series_start_calib = False
+add_series_end_calib = False
+calib_run_time = 10s
+
 
 # Beginning/end of series didv (configuration in "didv" field)
 add_series_start_didv = True
 add_series_end_didv = False
 didv_run_time = 60s
-didv_detector_channels = TES50x200Ar,TES200x800Ar,TES200x800Xe
+didv_detector_channels = Mv3025pcBigFinsLeft,Mv3025pcBigFinsRight, Mv3025pcRegularLeft, Mv3025pcRegularRight
+
 
 # Beginning/end of series iv (configuration in "iv" field)
 add_series_start_iv = True
 add_series_end_iv = False
 iv_run_time = 10s
-iv_detector_channels = TES50x200Ar,TES200x800Ar,TES200x800Xe
+iv_detector_channels = Mv3025pcBigFinsLeft,Mv3025pcBigFinsRight, Mv3025pcRegularLeft, Mv3025pcRegularRight
+
 
 
 [randoms] 
 
 # maximum series time
-#series_max_time = 90s
+series_max_time = 20m
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
@@ -124,7 +131,7 @@ voltage_max = 5
 # IMPORT NOTE: frequency/voltage need to have same format!
 
 signal_gen_voltage_mV = 10
-signal_gen_frequency_Hz =  40
+signal_gen_frequency_Hz =  50
 
 
 
@@ -132,17 +139,60 @@ signal_gen_frequency_Hz =  40
 [iv] 
 
 # tes bias
-tes_bias_list = 140,120,100,current
+tes_bias_list = 140,135,130,current
 
 
 # relock (either once or all steps)
 relock_first_step = False
-relock_all_steps  = True
+relock_all_steps  = False
 
 
 # trace length in millisec (ms) or  seconds (s)
 # Alternatively use "nb_samples"
-trace_length = 5ms
+trace_length = 20ms
+
+# sample rate
+sample_rate = 1250000
+
+# voltage min/max
+voltage_min = -5
+voltage_max = 5
+
+
+[calibration]
+
+# -----------
+# laser setup
+# -----------
+#   - offset/voltage [V], voltage = [pp, high, or low]
+#   - pulse width [s]
+#   - frequency [Hz]
+#   - phase = 0 hard coded
+control_channel = 1
+control_offset = 0
+control_voltage_high = 0.2
+control_voltage_low = 0
+control_pulse_width = 10e-6
+control_frequency = 200
+
+# TTL (set ttl_channel = None is no TTL)
+# frequency same as control
+ttl_channel = 2
+ttl_offset = 0
+ttl_voltage_high = 0.3
+ttl_voltage_low = 0
+ttl_pulse_width = 14e-6
+
+# Add TTL channel to raw data
+# leave commented if not saved in data
+ttl_adc_channel = 4
+ttl_adc_id = adc1
+
+# ---------
+# DAQ setup
+# ---------
+# FIXME: only continuous data for now (hard coded)
+trace_length = 10s
 
 # sample rate
 sample_rate = 1250000
