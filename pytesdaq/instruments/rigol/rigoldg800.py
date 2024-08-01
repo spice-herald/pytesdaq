@@ -10,7 +10,7 @@ class RigolDG800(InstrumentComm):
     """
 
     def __init__(self, visa_address, visa_library='@py',
-                 attenuation=1, raise_errors=True,
+                 attenuation=1.0, raise_errors=True,
                  verbose=True):
         super().__init__(visa_address=visa_address, termination='\n',
                          visa_library=visa_library,
@@ -29,6 +29,7 @@ class RigolDG800(InstrumentComm):
         # signal generator attenuation
         self._attenuation = attenuation
 
+         
     @property
     def device_idn(self):
         return self._device_idn 
@@ -141,6 +142,9 @@ class RigolDG800(InstrumentComm):
         NOTE: SCPI Names  = {VPP|VRMS|DBM}
         """
 
+        # set to float
+        amplitude  = float(amplitude)
+        
         # units
         unit_list = ['V', 'Vpp', 'mV', 'mVpp', 'Vrms', 'dbm']
 
@@ -180,14 +184,13 @@ class RigolDG800(InstrumentComm):
         command = f':SOUR{source}:VOLT:UNIT {unit}'
         self.write(command)
 
-
         # set amplitude
         command = f':SOUR{source}:VOLT {amplitude}'
         if level == 'low':
             command = f':SOUR{source}:VOLT:LOW {amplitude}'
         elif level == 'high':
             command = f':SOUR{source}:VOLT:HIGH {amplitude}'
-            
+
         self.write(command)
         
 
@@ -254,7 +257,7 @@ class RigolDG800(InstrumentComm):
             command = f':SOUR{source}:VOLT:LOW?'
         elif level == 'high':
             command = f':SOUR{source}:VOLT:HIGH?'
-            
+
         amplitude = float(self.query(command))
 
 
@@ -397,6 +400,44 @@ class RigolDG800(InstrumentComm):
         command = f':SOUR{source}:PHAS?'
         phase = float(self.query(command))
         return phase
+    
+    def set_pulse_width(self, width, source=1):
+
+        """
+        Set pulse width
+       
+        Parameters
+        ----------
+        width: float
+          pulse width in seconds
+
+        source: integer
+           signal generator output channel
+
+        """
+
+        # set width
+        command = f':SOUR{source}:PULS:WIDT {width}'
+        self.write(command)
+
+
+    def get_pulse_width(self, source=1):
+
+        """
+        Get pulse width
+       
+        Parameters
+        ----------
+           source: integer
+              signal generator output channel
+
+        """
+
+        # get width
+        command = f':SOUR{source}:PULS:WIDT?'
+        width = float(self.query(command))
+        return width
+
     
     
     def set_frequency(self, frequency, source=1, unit='Hz'):
@@ -550,4 +591,23 @@ class RigolDG800(InstrumentComm):
             
         result = result.lower()
         return result
+
     
+    def align_phase(self, source=2, reference_source=1):
+        """
+        Align phase between channels
+        """
+
+        if source == reference_source:
+            raise ValueError('ERROR: Phase cannot be aligned. '
+                             'Need different "source" and '
+                             '"reference_source" ')
+        
+
+        command = f':SOUR{reference_source}:PHAS:INIT'
+        self.write(command)
+        
+        command = f':SOUR{source}:PHAS:SYNC'
+        self.write(command)
+
+        
