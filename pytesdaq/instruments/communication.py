@@ -3,7 +3,6 @@ import socket
 import pyvisa as visa
 import select
 
-
 class InstrumentComm:
     """
     Communication
@@ -91,7 +90,7 @@ class InstrumentComm:
         """
 
         if self._debug:
-            print('DEBUG: Write ' + command)
+            print(f'DEBUG: Write command = "{command}"')
 
         # encode
         if coding is not None:
@@ -149,7 +148,8 @@ class InstrumentComm:
 
         # debug
         if self._debug:
-            print('DEBUG: Query ' + str(command) + ' = ' + str(data))
+            print(f'DEBUG: Query command = "{command}", '
+                  f'return data = "{data}"')
 
 
         return data

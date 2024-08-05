@@ -789,6 +789,10 @@ class DAQControl:
         frequency = self._calibration_config['control_frequency']
         offset = self._calibration_config['control_offset']
         pulse_width = self._calibration_config['control_pulse_width']
+
+        # add noise
+        add_calib_noise = self._calibration_config['add_calib_noise']
+        calib_noise_runtime = self._calibration_config['calib_noise_runtime']
         
 
         self._instruments_inst.set_laser_signal_gen_params(
@@ -829,12 +833,14 @@ class DAQControl:
         # ------------------
         self._instruments_inst.set_laser_signal_gen_onoff(
             'on',
+            load=50,
             signal_gen_num=control_channel
         )
 
         if ttl_channel is not None:
             self._instruments_inst.set_laser_signal_gen_onoff(
                 'on',
+                load=50,
                 signal_gen_num=ttl_channel
             )
                 
@@ -900,9 +906,48 @@ class DAQControl:
                 'off',
                 signal_gen_num=ttl_channel
             )
-                
+
         time.sleep(2)
-              
+
+        # ------------------
+        # Noise
+        # ------------------
+            
+        if add_calib_noise:
+
+            print(f'INFO: Taking Laser Calibration Noise\n')
+                  
+            
+            # configurating ADC
+            daq_inst.set_adc_config_from_dict(adc_config)
+            
+            # set detector config
+            detector_config = self._read_detector_settings(
+                adc_config,
+                laser_control_channel=control_channel,
+                laser_ttl_channel=ttl_channel
+            )
+            
+            daq_inst.set_detector_config(detector_config)
+                
+            # run
+            success = daq_inst.run(
+                run_time=int(calib_noise_runtime),
+                run_type=self._data_purpose,
+                run_comment=run_comment,
+                group_name=group_name,
+                group_comment=group_comment,
+                group_time=group_time,
+                data_prefix=f'{data_prefix}_noise',
+                data_path=data_path
+            )
+        
+        if not success:
+            daq_inst.clear()
+            print('ERROR: Problem with data taking. Exiting!')
+            return
+        
+                  
 
     def _create_output_path(self):
         """
@@ -1657,101 +1702,116 @@ class DAQControl:
             output_config['ttl_pulse_with'] = None
             output_config['ttl_adc_channel'] = None
             output_config['ttl_adc_id'] = None
-        
-            if self._daq_config['calibration'] is not None:
-                
-                config = self._daq_config['calibration']
-                
-                # parameters
-                if ('control_channel' in config
-                    and config['control_channel'] != 'None'):
-                    output_config['control_channel'] = int(
-                        config['control_channel']
-                    )
-
-                if ('control_offset' in config
-                    and config['control_offset'] != 'None'):
-                    output_config['control_offset'] = config['control_offset']
-
-                if ('control_voltage_pp' in config
-                    and config['control_voltage_pp'] != 'None'):
-                    output_config['control_voltage_pp'] = (
-                        config['control_voltage_pp']
-                    )
-
-                if ('control_voltage_high' in config
-                    and config['control_voltage_high'] != 'None'):
-                    output_config['control_voltage_high'] = (
-                        config['control_voltage_high']
-                    )
-                
-                if ('control_voltage_low' in config
-                    and config['control_voltage_low'] != 'None'):
-                    output_config['control_voltage_low'] = (
-                        config['control_voltage_low']
-                    )   
-
-                if ('control_pulse_width' in config
-                    and config['control_pulse_width'] != 'None'):
-                    output_config['control_pulse_width'] = (
-                        config['control_pulse_width']
-                    )
+            output_config['add_calib_noise']= False
+            output_config['calib_noise_runtime'] = 60
                     
-                if ('control_frequency' in config
-                    and config['control_frequency'] != 'None'):
-                    output_config['control_frequency'] = (
-                        config['control_frequency']
-                    )   
-
-                # parameters
-                if ('ttl_channel' in config
-                    and config['ttl_channel'] != 'None'):
-                    output_config['ttl_channel'] = int(
-                        config['ttl_channel']
-                    )
-
-                if ('ttl_offset' in config
-                    and config['ttl_offset'] != 'None'):
-                    output_config['ttl_offset'] = (
-                        config['ttl_offset']
-                    )
-
-                if ('ttl_voltage_pp' in config
-                    and config['ttl_voltage_pp'] != 'None'):
-                    output_config['ttl_voltage_pp'] = (
-                        config['ttl_voltage_pp']
-                    )
-
-                if ('ttl_voltage_high' in config
-                    and config['ttl_voltage_high'] != 'None'):
-                    output_config['ttl_voltage_high'] = (
-                        config['ttl_voltage_high']
-                    )
+            if self._daq_config['calibration'] is None:
+                return output_config
                 
-                if ('ttl_voltage_low' in config
-                    and config['ttl_voltage_low'] != 'None'):
-                    output_config['ttl_voltage_low'] = (
-                        config['ttl_voltage_low']
-                    )   
+            config = self._daq_config['calibration']
+            
+            # parameters
+            if ('control_channel' in config
+                and config['control_channel'] != 'None'):
+                output_config['control_channel'] = int(
+                    config['control_channel']
+                )
 
-                if ('ttl_pulse_width' in config
-                    and config['ttl_pulse_width'] != 'None'):
-                    output_config['ttl_pulse_width'] = (
-                        config['ttl_pulse_width']
-                    )
+            if ('control_offset' in config
+                and config['control_offset'] != 'None'):
+                output_config['control_offset'] = config['control_offset']
+                
+            if ('control_voltage_pp' in config
+                and config['control_voltage_pp'] != 'None'):
+                output_config['control_voltage_pp'] = (
+                    config['control_voltage_pp']
+                )
 
-                if ('ttl_adc_channel' in config
-                    and config['ttl_adc_channel'] != 'None'):
-                    output_config['ttl_adc_channel'] = (
-                        config['ttl_adc_channel']
-                    )
+            if ('control_voltage_high' in config
+                and config['control_voltage_high'] != 'None'):
+                output_config['control_voltage_high'] = (
+                    config['control_voltage_high']
+                )
+                
+            if ('control_voltage_low' in config
+                and config['control_voltage_low'] != 'None'):
+                output_config['control_voltage_low'] = (
+                    config['control_voltage_low']
+                )   
+                
+            if ('control_pulse_width' in config
+                and config['control_pulse_width'] != 'None'):
+                output_config['control_pulse_width'] = (
+                    config['control_pulse_width']
+                )
+                    
+            if ('control_frequency' in config
+                and config['control_frequency'] != 'None'):
+                output_config['control_frequency'] = (
+                    config['control_frequency']
+                )   
 
-                if ('ttl_adc_id' in config
-                    and config['ttl_adc_id'] != 'None'):
-                    output_config['ttl_adc_id'] = (
-                        config['ttl_adc_id']
-                    )
+            # TTL parameters
+            if ('ttl_channel' in config
+                and config['ttl_channel'] != 'None'):
+                output_config['ttl_channel'] = int(
+                    config['ttl_channel']
+                )
+
+            if ('ttl_offset' in config
+                and config['ttl_offset'] != 'None'):
+                output_config['ttl_offset'] = (
+                    config['ttl_offset']
+                )
+
+            if ('ttl_voltage_pp' in config
+                and config['ttl_voltage_pp'] != 'None'):
+                output_config['ttl_voltage_pp'] = (
+                    config['ttl_voltage_pp']
+                )
+
+            if ('ttl_voltage_high' in config
+                and config['ttl_voltage_high'] != 'None'):
+                output_config['ttl_voltage_high'] = (
+                    config['ttl_voltage_high']
+                )
+                
+            if ('ttl_voltage_low' in config
+                and config['ttl_voltage_low'] != 'None'):
+                output_config['ttl_voltage_low'] = (
+                    config['ttl_voltage_low']
+                )   
+
+            if ('ttl_pulse_width' in config
+                and config['ttl_pulse_width'] != 'None'):
+                output_config['ttl_pulse_width'] = (
+                    config['ttl_pulse_width']
+                )
+
+            if ('ttl_adc_channel' in config
+                and config['ttl_adc_channel'] != 'None'):
+                output_config['ttl_adc_channel'] = (
+                    config['ttl_adc_channel']
+                )
+
+            if ('ttl_adc_id' in config
+                and config['ttl_adc_id'] != 'None'):
+                output_config['ttl_adc_id'] = (
+                    config['ttl_adc_id']
+                )
    
-                    
+
+            # noise
+            if 'add_calib_noise' in config:
+                output_config['add_calib_noise']  = (
+                    config['add_calib_noise']
+                )
+            if 'calib_noise_run_time' in config:
+                noise_run_time = config[ 'calib_noise_run_time']
+                output_config['calib_noise_runtime'] = (
+                    arg_utils.convert_to_seconds(noise_run_time)
+                )
+                
+                
         return  output_config 
             

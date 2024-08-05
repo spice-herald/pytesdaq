@@ -29,7 +29,7 @@ class RigolDG800(InstrumentComm):
         # signal generator attenuation
         self._attenuation = attenuation
 
-         
+           
     @property
     def device_idn(self):
         return self._device_idn 
@@ -602,8 +602,25 @@ class RigolDG800(InstrumentComm):
             raise ValueError('ERROR: Phase cannot be aligned. '
                              'Need different "source" and '
                              '"reference_source" ')
-        
 
+        command = f':COUP{source}:PHAS:STAT OFF'
+        self.write(command)
+        
+        command = f':COUP{reference_source}:PHAS:STAT OFF'
+        self.write(command)
+        
+        command = f':COUP{reference_source}:PHAS:DEV 0'
+        self.write(command)
+
+        command = f':COUP{source}:PHAS:DEV 0'
+        self.write(command)
+
+        command = f':COUP{source}:PHAS:STAT ON'
+        self.write(command)
+        
+        command = f':COUP{reference_source}:PHAS:STAT ON'
+        self.write(command)
+        
         command = f':SOUR{reference_source}:PHAS:INIT'
         self.write(command)
         
@@ -611,3 +628,30 @@ class RigolDG800(InstrumentComm):
         self.write(command)
 
         
+    def set_load_resistance(self, load, source=1):
+        """
+        Set load (Ohms, inf)
+        """
+
+        # load 
+        if not isinstance(load, int):
+            load = load.upper()
+            load_list = ['INF', 'INFINITY', 'MAX', 'MIN',
+                         'MAXIMUM','MINIMUM']
+            if load not in load_list:
+                raise ValueError(f'ERROR: load "{load}" is not recognized! '
+                                 f'Should be integer or "inf/max/min"')
+            
+        command = f':OUTP{source}:IMP {load}'
+        self.write(command)
+
+    def get_load_resistance(self, source=1):
+        """
+        Get load 
+        """
+        
+        command = f':OUTP{source}:IMP?'
+        load = self.query(command)
+        return load
+
+    

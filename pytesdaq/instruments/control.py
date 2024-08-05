@@ -899,7 +899,7 @@ class Control:
                     adc_channel=adc_channel)
 
     
-    def set_laser_signal_gen_onoff(self, on_off_flag, signal_gen_num=1):
+    def set_laser_signal_gen_onoff(self, on_off_flag, signal_gen_num=1, load=None):
 
         """
         Set laser signal gen on/off
@@ -926,6 +926,14 @@ class Control:
                   + on_off_flag)
             return
 
+
+        # change load
+        if load is not None:
+            self._laser_signal_generator_inst.set_load_resistance(
+                load,
+                source=signal_gen_num
+            )
+        
 
         # change signal gen state
         self._laser_signal_generator_inst.set_generator_onoff(
@@ -1742,6 +1750,10 @@ class Control:
                           + str(controller_channel))
                     return output_dict
 
+                # ttl/accelerometer -> return nan
+                if (controller_id == 'ttl' or
+                    controller_id == 'accelerometer'):
+                    return output_dict
                 
                 is_connected_to_tes = (
                     self.is_signal_gen_connected_to_tes(
@@ -2608,8 +2620,9 @@ class Control:
 
         param_val = nan
 
-        # ttl -> return nan
-        if controller_channel == 'ttl':
+        # ttl/accelerometer -> return nan
+        if (controller_id == 'ttl' or
+            controller_id == 'accelerometer'):
             return 1
         
         # TES paramaters
