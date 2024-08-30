@@ -430,8 +430,10 @@ class Analyzer:
             r0 = analysis_config['r0'][ichan]
             rp = analysis_config['rp'][ichan]
             dt = analysis_config['dt'][ichan]
-            add180phase=analysis_config['add_180phase'][ichan]
+            add180phase = analysis_config['add_180phase'][ichan]
+            tes_bias = analysis_config['tes_bias'][ichan]
 
+            
             if add_autocuts:
                 cut = qp.autocuts_didv(
                     traces,
@@ -478,78 +480,77 @@ class Analyzer:
                 signal.filtfilt(b, a, data_array_truncated[ichan,:], axis=-1,
                                 padtype='even')
             )
-            
-            
+                  
             # fit
             result = None
+            poles = None
             if do_fit_1pole:
                 print('Info: Starting dIdV 1-pole Fit')
                 didv_inst.dofit(1)
                 result = didv_inst.fitresult(1)
+                poles = 1
                 print('Info: dIdV 1-pole Fit Done')
 
             if do_fit_2pole:
                 print('Info: Starting dIdV 2-pole Fit')
                 didv_inst.dofit(2)
                 result = didv_inst.fitresult(2)
+                poles = 2
                 print('Info: dIdV 2-pole Fit Done')
 
             if do_fit_3pole:
                 print('Info: Starting dIdV 3-pole Fit')
                 didv_inst.dofit(3)
                 result = didv_inst.fitresult(3)
+                poles = 3
                 print('Info: dIdV 3-pole Fit Done')
 
+            # Calculate R0/I0/P0 (infinite loop approximation)
+            ilg_params = None
+            if (do_fit_2pole or do_fit_3pole):
+                ilg_params = qp.get_biasparams_ilg(
+                    result['params'], result['cov'],
+                    tes_bias, tes_bias*0.05,
+                    rshunt, rp)
+            
+            # calc small signal parameters
+            didv_inst.calc_smallsignal_params(
+                biasparams=ilg_params,
+                poles=poles
+            )
 
-
-            # Calculate R0/I0/P0 (infinite loop
-            # approximation)
-            if ((do_fit_2pole or do_fit_3pole)
-                and 'smallsignalparams' in result):
-                didv = result['didv0']
-                tes_bias = self._analysis_config['tes_bias'][ichan]
-              
-                # R0
-                r0_infinite = (abs(1/didv) + rp + rshunt)
-
-                # IO
-                i0_infinite = (tes_bias*rshunt)/(r0_infinite+rshunt+rp)
-
-                # P0
-                p0_infinite = tes_bias*rshunt*i0_infinite - (rp + rshunt)*pow(i0_infinite,2)
-                result['infinite_l'] = dict()
-                result['infinite_l']['r0'] = r0_infinite
-                result['infinite_l']['i0'] = i0_infinite
-                result['infinite_l']['p0'] = p0_infinite
-
-                
-
-                
             # Add result to list
-            result_list.append(result)
+            if do_fit_1pole:
+                result = didv_inst.fitresult(1)
+            if do_fit_2pole:
+                result = didv_inst.fitresult(2)
+            if do_fit_3pole:
+                result = didv_inst.fitresult(3)
 
+            if do_fit_2pole or do_fit_3pole:
+                # add infinite loop gain parameters
+                result['infinite_l'] = dict()
+                result['infinite_l']['r0'] = ilg_params['r0']
+                result['infinite_l']['i0'] = ilg_params['i0']
+                result['infinite_l']['p0'] = ilg_params['p0']
+                
+            result_list.append(result)
+         
             # Fitted response
             dt = 1/sample_rate
             time = np.arange(0,nb_samples)*dt
-                      
-            key = 'params'
-            if 'smallsignalparams' in result:
-                key = 'smallsignalparams'
-
             fit_array[ichan,:] = norm*qp.squarewaveresponse(
                 time,
                 sg_current,
                 sg_freq,
-                dutycycle,
-                **result[key],)
-            
+                result['params'],
+                dutycycle=dutycycle,
+                rsh=rshunt)
+                        
         didv_data_dict['fit_array'] = fit_array
         didv_data_dict['results'] = result_list
             
         return data_array_truncated, didv_data_dict
-
-
-
     
     
     def _store_data(self, data_array, cuts_val):

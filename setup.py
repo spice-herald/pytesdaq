@@ -8,7 +8,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 
 setup(name='pytesdaq',
-      version='0.4.0',
+      version='0.4.1',
       description='DAQ and Intruments control for TES development',
       long_description=long_description,
       long_description_content_type='text/markdown',
@@ -31,7 +31,7 @@ setup(name='pytesdaq',
             'paramiko>=3.2.0',
             'walrus',
             'h5py',
-            'qetpy>=1.6.8',
+            'qetpy>=1.7.2',
             'scipy',
             'seaborn',
             'astropy',
