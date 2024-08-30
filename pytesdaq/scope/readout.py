@@ -508,16 +508,13 @@ class Readout:
             if self._do_get_fit_param:
                 self._fill_fit_param()
                 self._do_get_fit_param = False
-
-
-
                 
             # Do analysis
             self._selected_data_array, self._didv_data_dict, nb_avg = self._analyzer.process(
                 selected_data_array,
                 self._adc_config
             )
-
+            
             # display running avg
             if self._is_qt_ui:
                 if nb_avg>0:
@@ -606,8 +603,6 @@ class Readout:
 
                     self._selected_channel_name_list.append(name)
 
-
-
                     
             # Histogram
             if do_plot:
@@ -621,6 +616,8 @@ class Readout:
                                 fit_dt,
                                 self._analyzer.freq_array)
 
+                if self._didv_data_dict is not None:
+                    self._first_draw = True
 
             # Fit results
             if self._didv_data_dict is not None and self._is_qt_ui:
@@ -632,8 +629,7 @@ class Readout:
                 rp = None
                 if resistance_type!='Rp':
                     rp = float(self._analyzer.get_config('rp'))
-
-                                
+                
                 # loop channel
                 nb_chan = len(self._didv_data_dict['results'])
                                
@@ -651,8 +647,6 @@ class Readout:
                     if 'infinite_l' in self._didv_data_dict['results'][ichan]:
                         result_infinite_l = self._didv_data_dict['results'][ichan]['infinite_l']
                         
-                    
-                    
                     rshunt = result['rsh']
                     result_list.append(['Input Rsh [mOhms]', f"{rshunt*1000:.2f}"])
 
@@ -668,9 +662,9 @@ class Readout:
                     if resistance_type=='Rn':
                         rn = result['rp']-rp
                         result_list.append(['Rn [mOhms]', f"{rn*1000:.2f}"])
-                                      
-                     
-                    if 'tau0' in result:
+                        
+                                   
+                    if ('tau0' in result and result['tau0'] is not None):
                         result_list.append(['tau0 [us]', f"{result['tau0']*1e6:.3f}"])
 
                     #if 'tau3' in result:
@@ -679,13 +673,13 @@ class Readout:
                     result_list.append(['L [nH]', f"{result['L']*1e9:.3f}"])
                     result_list.append(['dt [mus]', f"{result['dt']*1e6:.3f}"])
                   
-                    if 'l' in result:
+                    if ('l' in result and result['l'] is not None):
                         result_list.append(['loop gain (l)', f"{result['l']:.3f}"])
                       
-                    if 'beta' in result:
+                    if ('beta' in result and result['beta'] is not None):
                         result_list.append(['beta', f"{result['beta']:.3f}"])
 
-                    if 'gratio' in result:
+                    if ('gratio' in result and result['gratio'] is not None):
                         result_list.append(['gratio', f"{result['gratio']:.3f}"])
 
                     
@@ -860,11 +854,9 @@ class Readout:
         if self._do_stop_run:
             return
 
-
         # chan/bins
         nchan =  np.size(data_array,0)
         nbins =  np.size(data_array,1)
-
 
         # sanity checks
         if nchan == 0 or nbins==0:
@@ -883,19 +875,14 @@ class Readout:
             if freq_array is None or len(freq_array)!=nbins:
                 return
 
-
         if self._nb_bins != nbins:
             self._nb_bins = nbins
             self._first_draw = True
-
 
         # label
         ylabel = self._analyzer.get_config('unit')
         if self._analyzer.get_config('calc_psd'):
             ylabel = ylabel + '/rtHz'
-            
-        
-
 
         # draw!
         if self._first_draw:
