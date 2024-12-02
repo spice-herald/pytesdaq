@@ -8,8 +8,8 @@ import stat
 import matplotlib.pyplot as plt
 import warnings
 import copy
-
 from pytesdaq.utils import connection_utils
+os.environ["HDF5_USE_FILE_LOCKING"] = 'FALSE'
 
 __all__ = ['H5Reader', 'H5Writer',
            'extract_series_num', 'extract_series_name',

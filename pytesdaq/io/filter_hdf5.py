@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import numpy as np
 from pprint import pprint
+os.environ["HDF5_USE_FILE_LOCKING"] = 'FALSE'
+
 
 __all__ = ['FilterH5IO']
 
