@@ -7,4 +7,4 @@ from . import scope
 from . import sequencer
 from . import utils
 from . import analyzer
-
+from ._version import __version__
