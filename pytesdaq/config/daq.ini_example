@@ -38,22 +38,22 @@ voltage_max = 5
 # Beginning/end of series calib (configuration in "calibration" field)
 add_series_start_calib = False
 add_series_end_calib = False
-calib_run_time = 10s
+calib_run_time =  2.5m
 
 
 # Beginning/end of series didv (configuration in "didv" field)
 add_series_start_didv = True
 add_series_end_didv = False
-didv_run_time = 60s
-didv_detector_channels = Mv3025pcBigFinsLeft,Mv3025pcBigFinsRight, Mv3025pcRegularLeft, Mv3025pcRegularRight
+didv_run_time = 40s
+#didv_detector_channels = Mv41pcRadLeft, Mv41pcRadRight,Mv41pcNormLeft, Mv41pcNormRight
+#didv_detector_channels = TES800x200ArB,TES800x200XeA,TES800x200XeB
 
 
 # Beginning/end of series iv (configuration in "iv" field)
 add_series_start_iv = True
 add_series_end_iv = False
 iv_run_time = 10s
-iv_detector_channels = Mv3025pcBigFinsLeft,Mv3025pcBigFinsRight, Mv3025pcRegularLeft, Mv3025pcRegularRight
-
+#iv_detector_channels = Mv3025pcBigFinsLeft,Mv3025pcRegularLeft,Mv3025pcRegularRight
 
 
 [randoms] 
@@ -78,7 +78,7 @@ voltage_max = 5
 [exttrig] 
 
 # single series max time in seconds(s) or minutes (m)
-series_max_time = 10m
+series_max_time = 1m
 
 
 # trace length in millisec (ms) or  seconds (s)
@@ -107,7 +107,7 @@ voltage_max = 5
 sample_rate = 1250000
 
 # number of cycles test signal -> trace length
-nb_cycles = 3
+nb_cycles = 2.1
 
 # voltage range (volts)
 voltage_min = -5
@@ -161,6 +161,11 @@ voltage_max = 5
 
 [calibration]
 
+# add noise on top of calib
+add_calib_noise = False
+calib_noise_run_time = 0.5m
+
+
 # -----------
 # laser setup
 # -----------
@@ -170,18 +175,18 @@ voltage_max = 5
 #   - phase = 0 hard coded
 control_channel = 1
 control_offset = 0
-control_voltage_high = 0.2
-control_voltage_low = 0
-control_pulse_width = 10e-6
-control_frequency = 200
+control_voltage_high = 3.8 
+control_voltage_low = 1
+control_pulse_width = 1.85e-6
+control_frequency = 40
 
 # TTL (set ttl_channel = None is no TTL)
 # frequency same as control
 ttl_channel = 2
 ttl_offset = 0
-ttl_voltage_high = 0.3
+ttl_voltage_high = 1
 ttl_voltage_low = 0
-ttl_pulse_width = 14e-6
+ttl_pulse_width = 100e-6
 
 # Add TTL channel to raw data
 # leave commented if not saved in data
