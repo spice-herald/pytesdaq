@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 import shutil
 import stat
-
+from copy import deepcopy
 
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
@@ -33,6 +33,7 @@ class Sequencer:
           # measurement name and list
           self._measurement_name = measurement_name
           self._measurement_list = measurement_list
+
           if self._measurement_list is None:
                self._measurement_list = [self._measurement_name]
           self._measurement_config = None
@@ -135,7 +136,8 @@ class Sequencer:
           
           self._measurement_config = self._config.get_sequencer_setup(self._measurement_name,
                                                                       self._measurement_list)
-        
+
+
           # save some parameters from user settings
           for key,item in self._measurement_config[self._measurement_name].items():
                if key == 'online':
@@ -296,8 +298,7 @@ class Sequencer:
                                    trigger_channel += adc_dict[adc_id]['trigger_channel']
                               adc_dict[adc_id]['trigger_channel'] = trigger_channel
 
-               self._measurement_config[measurement]['adc_setup'] = adc_dict
-
+               self._measurement_config[measurement]['adc_setup'] = deepcopy(adc_dict)
                          
                          
 

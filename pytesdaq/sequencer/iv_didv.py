@@ -457,7 +457,9 @@ class IV_dIdV(Sequencer):
                 # -----------
                 # Online IV
                 # ----------
-                if self._enable_tes_bias_sweep:
+                if self._enable_tes_bias_sweep and False:
+                    print('I guess were doing this shit')
+                    
 
 
                     # intialize 
@@ -617,6 +619,7 @@ class IV_dIdV(Sequencer):
                 # ----------
                 
                 if self._enable_iv:
+                    print('Starting IV!!!!!!!!!!!!!!!!!!')
 
                     # set detector
                     for channel in self._detector_channels:
@@ -638,7 +641,7 @@ class IV_dIdV(Sequencer):
                     
                     # setup ADC
                     self._daq.set_adc_config_from_dict(iv_config['adc_setup'])
-                    
+
                     # get/set detector config metadata
                     det_config = dict()
                     adc_channel_dict = connection_utils.get_adc_channel_list(
@@ -703,7 +706,6 @@ class IV_dIdV(Sequencer):
 
                     # ADC setup
                     self._daq.set_adc_config_from_dict(didv_config['adc_setup'])
-                    
 
                     # set detector
                     for channel in self._detector_channels:

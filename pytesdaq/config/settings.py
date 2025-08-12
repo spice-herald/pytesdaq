@@ -107,6 +107,7 @@ class Config:
             # convert to dictionary
             config_dict = dict()
             setup_config = self._get_section(measurement_name)
+
             for config in setup_config:
                 if len(config)!=2:
                     continue

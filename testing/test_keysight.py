@@ -1,5 +1,6 @@
 from  pytesdaq.instruments.agilent import Agilent33500B
 import sys
+import time
 if __name__ == "__main__":
 
     setpoint = float(sys.argv[1])
@@ -14,9 +15,11 @@ if __name__ == "__main__":
     # get IDN
     idn = myinstrument.get_idn()
     print('Device name: ' + idn)
+    time.sleep(5)
 
     # set amplitude Vpp
-    myinstrument.set_amplitude(0.01)
+    myinstrument.set_amplitude(0.5)
+    time.sleep(5)
     
     # get amplitude
     amplitude = myinstrument.get_amplitude()
@@ -24,7 +27,8 @@ if __name__ == "__main__":
 
 
     # set frequency
-    myinstrument.set_frequency(500)
+    myinstrument.set_frequency(200)
+    time.sleep(5)
     
     # get frequency
     frequency = myinstrument.get_frequency()
@@ -39,4 +43,4 @@ if __name__ == "__main__":
     myinstrument.set_offset(setpoint) #V
     myinstrument.set_generator_onoff('on')
 
-
+    myinstrument.close()
