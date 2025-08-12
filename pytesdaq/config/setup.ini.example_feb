@@ -25,8 +25,8 @@ facility = 2
 
 # Fridge run number and  date/time fridge was at base temperature
 # (syntax: mm/dd/yyyy HH:MM)
-fridge_run = 43
-fridge_run_start = 04/29/2024 09:00
+fridge_run = 65
+fridge_run_start = 08/04/2025 08:00
 
 # data path 
 data_path = /sdata/runs
@@ -36,6 +36,7 @@ squid_controller = feb
 tes_controller = feb
 signal_generator = agilent33500B
 temperature_controllers = macrt
+laser_signal_generator = rigolDG832
 
 # VISA Library (leave commented if standard path)
 #visa_library = /usr/lib/x86_64-linux-gnu/libvisa.so.20.0.0
@@ -72,13 +73,11 @@ voltage_max = 10
 #   Controller ->  "controller:[controller_name]_[channel]"
 #   TES wiring ->  "tes:[channel]  (optional if same channel name as controller channel)
 #   Detector   ->  "detector:[name]"  (detector channel name)
-connection0 = detector:TES50x200Ar, tes:A, controller:feb1_A
-connection1 = detector:TES200x800Ar, tes:B, controller:feb1_B
-connection2 = detector:TES100x400Xe, tes:C, controller:feb1_C
-connection3 = detector:TES200x800Xe, tes:D, controller:feb1_D
-
-#connection4 = detector:AcceleromterZ, controller:accelerometer
-#connection4 = detector:keysightTTL, controller:keysight_ttl
+connection0 = detector:Mv4025pcBFRadLeft, tes:A, controller:feb1_A
+connection1 = detector:Mv4025pcBFRadRight, tes:B, controller:feb1_B
+connection2 = detector:Mv4025pcBFNormLeft, tes:C, controller:feb1_C
+connection3 = detector:Mv4025pcBFNormRight, tes:D, controller:feb1_D
+connection4 = detector:rigolTTL,  controller:ttl_ttl
 
 
 # Electronics and detector readout constants
@@ -94,10 +93,16 @@ connection3 = detector:TES200x800Xe, tes:D, controller:feb1_D
 #  preamp_gain (for open loop calculation)
 #  signal_gen_resistance: [Ohms]  -> resistance in the TES line
 #     
-detector_config0 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0035
-detector_config1 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0022
-detector_config2 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00265
-detector_config3 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0022
+detector_config0 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.003
+detector_config1 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0019
+detector_config2 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.0018
+detector_config3 = signal_gen_resistance:30000, shunt_resistance: 0.005, squid_turn_ratio:10, feedback_resistance:1250, parasitic_resistance:0.00183
+detector_config4 = signal_gen_resistance:30000, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:0
+detector_config5 = signal_gen_resistance:30000, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:0
+detector_config6 = signal_gen_resistance:30000, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:0
+detector_config7 = signal_gen_resistance:30000, shunt_resistance: 1, squid_turn_ratio:1, feedback_resistance:1, parasitic_resistance:0
+
+
 
 
 
@@ -162,6 +167,12 @@ output_fix_gain = 1
 #visa_address = TCPIP::192.168.2:12::5025::SOCKET
 visa_address =  GPIB::10::INSTR
 attenuation = 5.01
+#attenuation = 1
+
+[rigolDG832]
+visa_address = USB0::0x1AB1::1603::DG8A204201623::INSTR
+
+
 
 
 [temperature_controllers]
@@ -189,8 +200,9 @@ lakeshore_heater0 = name:heaterMCls, global_number:30
 # Format:
 #   macrt_modules = module1:[module name], module2:...
 # (no specific format for module name, need to be unique)
-macrt_modules = module1:mmr3-174, module2:mmr3-184, module3:mgc3-66
-
+#macrt_modules = module1:mmr3-174, module3:mgc3-66
+#macrt_modules = module1:mmr3-174, module2:mmr3-184
+macrt_modules = module1:mmr3-174, module3:mgc3-66
 
 # Individual module setup
 # Format:
@@ -203,12 +215,12 @@ macrt_modules = module1:mmr3-174, module2:mmr3-184, module3:mgc3-66
 
 # Resistance module MMR3-174 - channels are labeled 1, 2, or 3
 macrt_mmr3-174_setup = type:mmr3, ip:192.168.0.31
+macrt_mmr3-174_chan1 = name:MC, global_number:16, type:FR, serial:105D
 macrt_mmr3-174_chan2 = name:CP, global_number:17, type:RX, serial:R654
 macrt_mmr3-174_chan3 = name:Still, global_number:18, type:CX, serial:121325
 
 # Resistance MMR3-184 - channels are labeled 1, 2, or 3
 macrt_mmr3-184_setup = type:mmr3, ip:192.168.0.32
-macrt_mmr3-184_chan1 = name:MC, global_number:19, type:FR, serial:105D
 macrt_mmr3-184_chan2 = name:2nde, global_number:20, type:CX, serial:121324
 macrt_mmr3-184_chan3 = name:1st, global_number:21, type:CX, serial:121322
 

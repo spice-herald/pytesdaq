@@ -36,9 +36,9 @@ voltage_min = -5
 voltage_max = 5
 
 # Beginning/end of series calib (configuration in "calibration" field)
-add_series_start_calib = False
+add_series_start_calib = True
 add_series_end_calib = False
-calib_run_time =  2.5m
+calib_run_time = 5m
 
 
 # Beginning/end of series didv (configuration in "didv" field)
@@ -177,7 +177,7 @@ control_channel = 1
 control_offset = 0
 control_voltage_high = 3.8 
 control_voltage_low = 1
-control_pulse_width = 1.85e-6
+control_pulse_width = 20e-6 # 1.85e-6
 control_frequency = 40
 
 # TTL (set ttl_channel = None is no TTL)
