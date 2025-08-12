@@ -9,6 +9,13 @@ import stat
 import time
 from pprint import pprint
 import copy
+import warnings
+warnings.filterwarnings(
+    'ignore',
+    message=("Unexpected MsgID format. "
+             "Consider updating the device's firmware."))
+
+
 
 if __name__ == "__main__":
 
