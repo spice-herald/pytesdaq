@@ -33,7 +33,7 @@ class DAQControl:
         
         acquisition_types = ['continuous', 'didv', 'iv',
                              'exttrig', 'randoms', 
-                             'threshold']
+                             'threshold', 'calibration']
         if  acquisition_type not in  acquisition_types:
             raise ValueError(
                 f'DAQControl: Acquisition type {acquisition_type} '
@@ -82,7 +82,8 @@ class DAQControl:
         self._daq_config['didv'] = self._config.get_daq_config('didv')
         self._daq_config['iv'] = self._config.get_daq_config('iv')
         self._daq_config['calibration'] = self._config.get_daq_config('calibration')
-        
+
+             
         # -----------------------
         # instruments control
         # -----------------------
@@ -226,7 +227,10 @@ class DAQControl:
             data_prefix = 'thresh'
         elif self._acquisition_type == 'randoms':
             data_prefix = 'rand'
+        elif self._acquisition_type == 'calibration':
+            data_prefix = 'calib'
 
+            
         # keep in a list
         raw_prefix_list = [data_prefix]
             
