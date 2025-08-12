@@ -9,6 +9,13 @@ import stat
 import time
 from pprint import pprint
 import copy
+import warnings
+warnings.filterwarnings(
+    'ignore',
+    message=("Unexpected MsgID format. "
+             "Consider updating the device's firmware."))
+
+
 
 if __name__ == "__main__":
 
@@ -54,6 +61,12 @@ if __name__ == "__main__":
     parser.add_argument('--acquire-exttrig','--acquire_exttrig',
                         dest="acquire_exttrig", action="store_true",
                         help='Acquire external trigger data')
+
+    parser.add_argument('--acquire-calib','--acquire-calibration','--acquire_calibration',
+                        dest="acquire_calibration", action="store_true",
+                        help='Acquire calibration data')
+
+    
 
     #parser.add_argument('--acquire-thresh','--acquire_thresh',
     #                    '--acquire-threshold',
@@ -140,14 +153,15 @@ if __name__ == "__main__":
     acquisition_types = ['continuous',
                          'didv', 'iv',
                          'exttrig', 'randoms',
-                         'threshold']
+                         'threshold', 'calibration']
 
     acquisition_args = [args.acquire_cont,
                         args.acquire_didv,
                         args.acquire_iv,
                         args.acquire_exttrig,
                         args.acquire_rand,
-                        args.acquire_thresh]
+                        args.acquire_thresh,
+                        args.acquire_calibration]
 
     inds = list(np.where(acquisition_args)[0])
     if len(inds) > 1:

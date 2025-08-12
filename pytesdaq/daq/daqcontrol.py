@@ -32,8 +32,8 @@ class DAQControl:
         # ---------------------
         
         acquisition_types = ['continuous', 'didv', 'iv',
-                             'exttrig', 'randoms',
-                             'threshold']
+                             'exttrig', 'randoms', 
+                             'threshold', 'calibration']
         if  acquisition_type not in  acquisition_types:
             raise ValueError(
                 f'DAQControl: Acquisition type {acquisition_type} '
@@ -81,7 +81,9 @@ class DAQControl:
         self._daq_config[acquisition_type] = self._config.get_daq_config(acquisition_type)
         self._daq_config['didv'] = self._config.get_daq_config('didv')
         self._daq_config['iv'] = self._config.get_daq_config('iv')
+        self._daq_config['calibration'] = self._config.get_daq_config('calibration')
 
+             
         # -----------------------
         # instruments control
         # -----------------------
@@ -93,12 +95,14 @@ class DAQControl:
         self._current_tes_bias = self._read_tes_bias()
 
         # ------------------------
-        # IV/dIdV specific
+        # IV/dIdV/calibration specific
         # configuration
         # ------------------------
 
         self._iv_didv_config = self._get_iv_didv_configuration()
-     
+        self._calibration_config = self._get_calibration_configuration()
+      
+        
         #-------------------------
         # ADC setup(s)
         # ------------------------
@@ -106,7 +110,7 @@ class DAQControl:
         adc_setup_default = dict()
         for adc_id in self._channels_dict['adc_ids']:
             adc_setup_default[adc_id] = self._config.get_adc_setup(adc_id)
-
+            
         # ADC setup
         self._adc_config = dict()
         self._adc_config[acquisition_type] = self._get_adc_configuration(
@@ -115,7 +119,7 @@ class DAQControl:
         )
 
         # IV/dIdV ADC setup  (for beginning/end series IV/dIdV)
-        if (self._iv_didv_config['didv']['channels']is not None
+        if (self._iv_didv_config['didv']['channels'] is not None
             and self._daq_config['didv'] is not None):
             self._adc_config['didv'] = self._get_adc_configuration(
                 'didv',
@@ -129,7 +133,6 @@ class DAQControl:
                 adc_setup_default
             )
             
-
     def run(self, duration=None, comment='No Comment'):
         """
         run daq
@@ -225,7 +228,10 @@ class DAQControl:
             data_prefix = 'thresh'
         elif self._acquisition_type == 'randoms':
             data_prefix = 'rand'
+        elif self._acquisition_type == 'calibration':
+            data_prefix = 'cont'
 
+            
         # keep in a list
         raw_prefix_list = [data_prefix]
             
@@ -240,11 +246,11 @@ class DAQControl:
             raw_prefix_list = [f'restricted_{data_prefix}',
                                f'open_{data_prefix}']
 
-        # didv / iv config
+        # didv / iv / calib config
         didv_config = self._iv_didv_config['didv']
         iv_config = self._iv_didv_config['iv']
-
-            
+        calib_config = copy.deepcopy(self._calibration_config)
+               
         # loop sub-runs
         for irun in range(nb_runs):
 
@@ -254,9 +260,40 @@ class DAQControl:
                       f' (out of {nb_runs} total)')
                 print('===========================================')
                 
-
+                
             # --------------------
-            # dIdV (Beg. of series)
+            # Calibration
+            # (Beg of Series)
+            # --------------------
+            if (self._acquisition_type == 'calibration'
+                or calib_config['do_beginning_series']):
+
+                # calib config
+                calib_prefix = data_prefix
+                calib_comment = comment
+                calib_runtime = series_time_sec
+                           
+                if calib_config['do_beginning_series']:
+                    calib_prefix = 'calib_bor'
+                    calib_comment = 'Beginning of Series Calibration'
+                    calib_runtime = calib_config['run_time']
+
+                # run daq
+                self._run_calib(mydaq,
+                                run_time=calib_runtime,
+                                run_comment=calib_comment,
+                                group_name=group_name,
+                                group_comment=comment,
+                                group_time=group_timestamp,
+                                data_prefix=calib_prefix,
+                                data_path=group_path)
+                
+                # done is calib only acquisition
+                if self._acquisition_type == 'calibration':
+                    continue
+                
+            # --------------------
+            # dIdV (Beg of Series)
             # --------------------
             if (self._acquisition_type == 'didv'
                 or didv_config['series']['do_beginning_series']):
@@ -286,7 +323,7 @@ class DAQControl:
                     continue
 
             # --------------------
-            # IV (Beg. of series)
+            # IV (Beg of Series)
             # --------------------
             if (self._acquisition_type == 'iv'
                 or iv_config['series']['do_beginning_series']):
@@ -373,6 +410,27 @@ class DAQControl:
                     return
 
                 
+            # --------------------
+            # Calibration
+            # (end of series)
+            # --------------------
+            
+            if calib_config['do_end_series']:
+
+                # calib config
+                calib_prefix = 'calib_eor'
+                calib_comment = 'End of Series Calibration'
+                calib_runtime = calib_config['run_time']
+                
+                # run daq
+                self._run_calib(mydaq,
+                                run_time=calib_runtime,
+                                run_comment=calib_comment,
+                                group_name=group_name,
+                                group_comment=comment,
+                                group_time=group_timestamp,
+                                data_prefix=calib_prefix,
+                                data_path=group_path)
             # --------------------
             # dIdV (End of series)
             # --------------------
@@ -607,7 +665,7 @@ class DAQControl:
                 group_comment=None,
                 group_time=None,
                 data_prefix=None,
-                 data_path=None):
+                data_path=None):
         """
         Function to run IV
         """
@@ -701,8 +759,200 @@ class DAQControl:
                 )
              
         time.sleep(2)
+
         
+    def _run_calib(self, daq_inst,
+                   run_time=None,
+                   run_comment=None,
+                   group_name=None,
+                   group_comment=None,
+                   group_time=None,
+                   data_prefix=None,
+                   data_path=None):
+        """
+        Function to run laser calibration
+        """
+
+        if self._verbose:
+                print('\n-------------------------------------')
+                print(f'INFO: Starting Laser Calibration\n'
+                      f'({run_comment})')
+                print('-------------------------------------')
+  
+        if run_time is None:
+            daq_inst.clear()
+            raise ValueError('DAQControl: didv run time missing!')
+
+        # ------------------
+        # Set laser
+        # ------------------
+
+        # control
+        control_channel = self._calibration_config['control_channel']
+        voltage_high = self._calibration_config['control_voltage_high']
+        voltage_low = self._calibration_config['control_voltage_low']
+        frequency = self._calibration_config['control_frequency']
+        offset = self._calibration_config['control_offset']
+        pulse_width = self._calibration_config['control_pulse_width']
+
+        # add noise
+        add_calib_noise = self._calibration_config['add_calib_noise']
+        calib_noise_runtime = self._calibration_config['calib_noise_runtime']
+        
+
+        self._instruments_inst.set_laser_signal_gen_params(
+            signal_gen_num=control_channel,
+            shape='pulse',
+            voltage_high=voltage_high, voltage_low=voltage_low,
+            voltage_unit='V',
+            frequency=frequency,
+            offset=offset, offset_unit='V',
+            phase=0,
+            pulse_width=pulse_width)
+        
+        # TTL channel
+        ttl_channel = self._calibration_config['ttl_channel']
+        
+        if ttl_channel is not None:
             
+              voltage_high = self._calibration_config['ttl_voltage_high']
+              voltage_low = self._calibration_config['ttl_voltage_low']
+              offset = self._calibration_config['ttl_offset']
+              pulse_width = self._calibration_config['ttl_pulse_width']
+              
+              self._instruments_inst.set_laser_signal_gen_params(
+                  signal_gen_num=ttl_channel,
+                  shape='pulse',
+                  voltage_high=voltage_high, voltage_low=voltage_low,
+                  voltage_unit='V',
+                  frequency=frequency,
+                  offset=offset,
+                  phase=0,  offset_unit='V',
+                  pulse_width=pulse_width,
+                  align_phase_channel=control_channel)
+                  
+        
+        # ------------------
+        # Enable Laser
+        # signal generator
+        # ------------------
+        self._instruments_inst.set_laser_signal_gen_onoff(
+            'on',
+            load=50,
+            signal_gen_num=control_channel
+        )
+
+        if ttl_channel is not None:
+            self._instruments_inst.set_laser_signal_gen_onoff(
+                'on',
+                load=50,
+                signal_gen_num=ttl_channel
+            )
+                
+        # ------------------
+        # Take data
+        # ------------------
+
+        # configure ADC
+        ttl_adc_channel = self._calibration_config['ttl_adc_channel']
+        ttl_adc_id = self._calibration_config['ttl_adc_id']
+        
+        adc_setup_default = dict()
+        for adc_id in self._channels_dict['adc_ids']:
+            adc_setup_default[adc_id] = self._config.get_adc_setup(adc_id)
+            
+        adc_config =self._get_adc_configuration(
+            'calibration',
+            adc_setup_default,
+            ttl_adc_channel=ttl_adc_channel,
+            ttl_adc_id=ttl_adc_id
+        )
+
+        daq_inst.set_adc_config_from_dict(adc_config)
+            
+        # set detector config
+        detector_config = self._read_detector_settings(
+            adc_config,
+            laser_control_channel=control_channel,
+            laser_ttl_channel=ttl_channel
+        )
+      
+        daq_inst.set_detector_config(detector_config)
+                
+        # run
+        time.sleep(1)
+        success = daq_inst.run(
+            run_time=run_time,
+            run_type=self._data_purpose,
+            run_comment=run_comment,
+            group_name=group_name,
+            group_comment=group_comment,
+            group_time=group_time,
+            data_prefix=data_prefix,
+            data_path=data_path
+        )
+        
+        if not success:
+            daq_inst.clear()
+            print('ERROR: Problem with data taking. Exiting!')
+            return
+
+        # ------------------
+        # Disable Laser
+        # signal generator
+        # ------------------
+        self._instruments_inst.set_laser_signal_gen_onoff(
+            'off',
+            signal_gen_num=control_channel
+        )
+
+        if ttl_channel is not None:
+            self._instruments_inst.set_laser_signal_gen_onoff(
+                'off',
+                signal_gen_num=ttl_channel
+            )
+
+        time.sleep(2)
+
+        # ------------------
+        # Noise
+        # ------------------
+            
+        if add_calib_noise:
+
+            print(f'INFO: Taking Laser Calibration Noise\n')
+                  
+            
+            # configurating ADC
+            daq_inst.set_adc_config_from_dict(adc_config)
+            
+            # set detector config
+            detector_config = self._read_detector_settings(
+                adc_config,
+                laser_control_channel=control_channel,
+                laser_ttl_channel=ttl_channel
+            )
+            
+            daq_inst.set_detector_config(detector_config)
+                
+            # run
+            success = daq_inst.run(
+                run_time=int(calib_noise_runtime),
+                run_type=self._data_purpose,
+                run_comment=run_comment,
+                group_name=group_name,
+                group_comment=group_comment,
+                group_time=group_time,
+                data_prefix=f'{data_prefix}_noise',
+                data_path=data_path
+            )
+        
+        if not success:
+            daq_inst.clear()
+            print('ERROR: Problem with data taking. Exiting!')
+            return
+        
+                  
 
     def _create_output_path(self):
         """
@@ -835,7 +1085,9 @@ class DAQControl:
     
     def _get_adc_configuration(self,
                                acquisition_type,
-                               adc_config_default):
+                               adc_config_default,
+                               ttl_adc_channel=None,
+                               ttl_adc_id=None):
         """
         Get ADC setup from configuration files
         """
@@ -849,7 +1101,8 @@ class DAQControl:
                          'didv':2, 'iv':3,
                          'exttrig':2,
                          'randoms':3, 
-                         'threshold':4}
+                         'threshold':4,
+                         'calibration':1}
         
     
         # read voltage min/max and sample_rate
@@ -931,6 +1184,27 @@ class DAQControl:
         adc_channels_dict = dict()
         adc_ids = self._channels_dict['adc_ids']
         adc_channels = self._channels_dict['adc_channels']
+
+        # add TTL channel
+        if ttl_adc_channel is not None:
+            
+            if  ttl_adc_id is None:
+                raise ValueError('ERROR: "ttl_adc_id" '
+                                 'is missing!')
+
+            is_recorded = False
+            for ichan in range(len(adc_channels)):
+                chan = adc_channels[ichan]
+                chan_adc = adc_ids[ichan]
+                if (chan == ttl_adc_channel
+                    and  chan_adc == ttl_adc_id):
+                    is_recorded = True
+                    break
+            if not is_recorded:
+                adc_channels.append(ttl_adc_channel)
+                adc_ids.append(ttl_adc_id)
+                            
+        
         for iadc, adc_id in enumerate(adc_ids):
             if adc_id not in adc_channels_dict:
                 adc_channels_dict[adc_id] = {'channel_list':[]}
@@ -948,7 +1222,7 @@ class DAQControl:
             adc_config[adc_id]['channel_list'] = (
                 adc_channels_dict[adc_id]['channel_list']
             )
-                
+
         return adc_config
 
     def _get_iv_didv_configuration(self):
@@ -1339,22 +1613,27 @@ class DAQControl:
 
     def _read_tes_bias(self):
         """
-        Read signal generator frequency
+        Read TES bias 
         """
         
         tes_bias_setting = dict()
         for chan in self._channels_dict['detector_channels']:
-            tes_bias_setting[chan] = (
+
+            tes_bias = (
                 self._instruments_inst.get_tes_bias(
                     detector_channel=chan,
-                    unit='uA'
-                )
+                    unit='uA')
             )
-            
+
+            if tes_bias != np.nan:
+                tes_bias_setting[chan] = tes_bias 
+                    
         return tes_bias_setting
 
     
-    def _read_detector_settings(self, adc_config):
+    def _read_detector_settings(self, adc_config,
+                                laser_control_channel=None,
+                                laser_ttl_channel=None):
         """ 
         Read detector settings
         """
@@ -1366,8 +1645,180 @@ class DAQControl:
             det_config[adc_id] = copy.deepcopy(
                 self._instruments_inst.read_all(
                     adc_id=adc_id,
-                    adc_channel_list=channels
+                    adc_channel_list=channels,
+                    laser_control_channel=laser_control_channel,
+                    laser_ttl_channel=laser_ttl_channel
                 )
             )
         
         return det_config
+
+
+    def _get_calibration_configuration(self):
+        """
+        Get bor calibration information
+        """
+
+        # initialize
+        output_config = {'do_beginning_series': False,
+                         'do_end_series': False}
+
+
+        # get config
+        daq_config =  copy.deepcopy(
+            self._daq_config[self._acquisition_type]
+        )
+    
+        # check if calibration enabled
+        if ('add_series_start_calib' in daq_config.keys()
+            and daq_config['add_series_start_calib']):
+            output_config['do_beginning_series'] = True
+        if ('add_series_end_calib' in daq_config.keys()
+            and daq_config['add_series_end_calib']):
+            output_config['do_end_series'] = True
+
+
+            
+        # get more parameters if beginning of run calib
+        if (output_config['do_beginning_series']
+            or output_config['do_end_series']):
+
+            # run time
+            if 'calib_run_time' not in  daq_config:
+                raise ValueError('DAQControl: "calib_run_ime" required '
+                                 'for beg/end series calibration!')
+        
+            output_config['run_time'] =  (
+                arg_utils.convert_to_seconds(
+                    daq_config['calib_run_time'])
+            )
+
+        # laser configuration, initialize
+        output_config['control_channel'] = None
+        output_config['control_offset'] = None
+        output_config['control_voltage_pp'] = None
+        output_config['control_voltage_high'] = None
+        output_config['control_voltage_low'] = None
+        output_config['control_pulse_width'] = None
+        output_config['control_frequency'] = None
+        output_config['ttl_channel'] = None
+        output_config['ttl_offset'] = None
+        output_config['ttl_voltage_pp'] = None
+        output_config['ttl_voltage_high'] = None
+        output_config['ttl_voltage_low'] = None
+        output_config['ttl_pulse_with'] = None
+        output_config['ttl_adc_channel'] = None
+        output_config['ttl_adc_id'] = None
+        output_config['add_calib_noise']= False
+        output_config['calib_noise_runtime'] = 60
+            
+        if self._daq_config['calibration'] is None:
+            return output_config
+                
+        config = self._daq_config['calibration']
+            
+        # parameters
+        if ('control_channel' in config
+            and config['control_channel'] != 'None'):
+            output_config['control_channel'] = int(
+                config['control_channel']
+            )
+
+        if ('control_offset' in config
+            and config['control_offset'] != 'None'):
+            output_config['control_offset'] = config['control_offset']
+                
+        if ('control_voltage_pp' in config
+            and config['control_voltage_pp'] != 'None'):
+            output_config['control_voltage_pp'] = (
+                config['control_voltage_pp']
+            )
+            
+        if ('control_voltage_high' in config
+            and config['control_voltage_high'] != 'None'):
+            output_config['control_voltage_high'] = (
+                config['control_voltage_high']
+            )
+                
+        if ('control_voltage_low' in config
+            and config['control_voltage_low'] != 'None'):
+            output_config['control_voltage_low'] = (
+                config['control_voltage_low']
+            )   
+            
+        if ('control_pulse_width' in config
+            and config['control_pulse_width'] != 'None'):
+            output_config['control_pulse_width'] = (
+                config['control_pulse_width']
+            )
+                    
+        if ('control_frequency' in config
+            and config['control_frequency'] != 'None'):
+            output_config['control_frequency'] = (
+                config['control_frequency']
+            )   
+
+        # TTL parameters
+        if ('ttl_channel' in config
+            and config['ttl_channel'] != 'None'):
+            output_config['ttl_channel'] = int(
+                config['ttl_channel']
+            )
+
+        if ('ttl_offset' in config
+            and config['ttl_offset'] != 'None'):
+            output_config['ttl_offset'] = (
+                config['ttl_offset']
+            )
+
+        if ('ttl_voltage_pp' in config
+            and config['ttl_voltage_pp'] != 'None'):
+            output_config['ttl_voltage_pp'] = (
+                config['ttl_voltage_pp']
+            )
+
+        if ('ttl_voltage_high' in config
+            and config['ttl_voltage_high'] != 'None'):
+            output_config['ttl_voltage_high'] = (
+                config['ttl_voltage_high']
+            )
+                
+        if ('ttl_voltage_low' in config
+            and config['ttl_voltage_low'] != 'None'):
+            output_config['ttl_voltage_low'] = (
+                config['ttl_voltage_low']
+            )   
+
+        if ('ttl_pulse_width' in config
+            and config['ttl_pulse_width'] != 'None'):
+            output_config['ttl_pulse_width'] = (
+                config['ttl_pulse_width']
+            )
+
+        if ('ttl_adc_channel' in config
+            and config['ttl_adc_channel'] != 'None'):
+            output_config['ttl_adc_channel'] = (
+                config['ttl_adc_channel']
+            )
+
+        if ('ttl_adc_id' in config
+            and config['ttl_adc_id'] != 'None'):
+            output_config['ttl_adc_id'] = (
+                config['ttl_adc_id']
+            )
+   
+
+        # noise
+        if 'add_calib_noise' in config:
+            output_config['add_calib_noise']  = (
+                config['add_calib_noise']
+            )
+        if 'calib_noise_run_time' in config:
+            noise_run_time = config[ 'calib_noise_run_time']
+            output_config['calib_noise_runtime'] = (
+                arg_utils.convert_to_seconds(noise_run_time)
+            )
+                
+                
+        return  output_config 
+            

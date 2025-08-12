@@ -486,21 +486,21 @@ class Analyzer:
             poles = None
             if do_fit_1pole:
                 print('Info: Starting dIdV 1-pole Fit')
-                didv_inst.dofit(1)
+                didv_inst.dofit(1, fcutoff=100e3)
                 result = didv_inst.fitresult(1)
                 poles = 1
                 print('Info: dIdV 1-pole Fit Done')
 
             if do_fit_2pole:
                 print('Info: Starting dIdV 2-pole Fit')
-                didv_inst.dofit(2)
+                didv_inst.dofit(2, fcutoff=100e3)
                 result = didv_inst.fitresult(2)
                 poles = 2
                 print('Info: dIdV 2-pole Fit Done')
 
             if do_fit_3pole:
                 print('Info: Starting dIdV 3-pole Fit')
-                didv_inst.dofit(3)
+                didv_inst.dofit(3, fcutoff=100e3)
                 result = didv_inst.fitresult(3)
                 poles = 3
                 print('Info: dIdV 3-pole Fit Done')

@@ -25,6 +25,7 @@ class Sequencer:
                   sequencer_file=None, setup_file=None,
                   sequencer_pickle_file=None,
                   dummy_mode=False,
+                  save_raw_data=True,
                   verbose=True):
           
 
@@ -45,7 +46,7 @@ class Sequencer:
           self._daq_driver = 'polaris'
           self._dummy_mode = dummy_mode
           self._facility = 1
-          self._save_raw_data = True
+          self._save_raw_data = save_raw_data
           self._group_name = None
           self._fridge_run = None
           
@@ -405,18 +406,10 @@ class Sequencer:
           if self._save_raw_data and self._detector_channels is not None:
                arg_utils.make_directories(self._raw_data_path)
                              
-          # tc data
-          self._automation_data_path = self._base_automation_data_path + '/' + self._group_name 
-          if self._tc_channels is not None:
-               arg_utils.make_directories(self._automation_data_path + '/' + self._group_name )
-            
-
-          # update automation data
-          if self._automation_data['info'] is None:
-               self._automation_data['info'] = dict()
-
-          self._automation_data['info']['date'] = now
-          self._automation_data['info']['series'] = series
-          self._automation_data['info']['measurements'] = 'Tc'
-          
+          # automation path
+          self._automation_data_path = (self._base_automation_data_path
+                                        + '/' + self._group_name )
+       
+               
+                    
         

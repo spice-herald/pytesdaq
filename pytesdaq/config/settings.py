@@ -240,6 +240,21 @@ class Config:
     
         return controller
 
+    def get_laser_signal_generator(self):
+        """
+        get signal generator device name
+            
+        Returns:
+             str o NoneType
+        """
+        controller = None
+        try:
+            controller = self._get_setting('setup','laser_signal_generator')
+        except:
+            pass
+    
+        return controller
+    
 
     def enable_redis(self):
         """

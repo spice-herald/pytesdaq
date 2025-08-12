@@ -7,13 +7,14 @@ import pytesdaq.config.settings as settings
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
-from  pytesdaq.instruments.feb  import FEB
+from pytesdaq.instruments.feb  import FEB
 from pytesdaq.instruments.magnicon import Magnicon
 from pytesdaq.instruments.lakeshore import Lakeshore
 from pytesdaq.instruments.imacrt import MACRT
-from  pytesdaq.instruments.keysight import KeysightDSOX1200
-from  pytesdaq.instruments.keithley import Keithley2400
-from  pytesdaq.instruments.agilent import Agilent33500B
+from pytesdaq.instruments.keysight import KeysightDSOX1200
+from pytesdaq.instruments.keithley import Keithley2400
+from pytesdaq.instruments.agilent import Agilent33500B
+from pytesdaq.instruments.rigol import RigolDG800
 import pytesdaq.io.redis as redis
 from pytesdaq.utils import connection_utils
 import pytesdaq.utils.remote as remote
@@ -52,7 +53,14 @@ class Control:
         # Signal Generator Controller
         self._signal_generator_name = self._config.get_signal_generator()
         self._signal_generator_inst = None
+
+        # Laser Controller
+        self._laser_signal_generator_name = (
+            self._config.get_laser_signal_generator()
+        )
+        self._laser_signal_generator_inst = None
         
+           
         # Temperature controllers (multiple controller allowed)
         self._temperature_controller_name_list = (
             self._config.get_temperature_controllers()
@@ -149,6 +157,11 @@ class Control:
         """
         return self._signal_generator_inst
 
+    def get_laser_signal_gen_controller(self):
+        """
+        Get Laser Signal Gen Controller
+        """
+        return self._laser_signal_generator_inst
     
     def set_tes_bias(self, bias, unit=None,
                      tes_channel=None,
@@ -515,8 +528,10 @@ class Control:
         return True   
 
 
-    def set_signal_gen_onoff(self, on_off_flag, signal_gen_num=1, tes_channel=None,
-                             detector_channel=None, adc_id=None, adc_channel=None):
+    def set_signal_gen_onoff(self, on_off_flag, signal_gen_num=1,
+                             tes_channel=None,
+                             detector_channel=None,
+                             adc_id=None, adc_channel=None):
 
         """
         Set signal gen on/off
@@ -631,7 +646,9 @@ class Control:
                   'Unable to change signa generator settings!')
             return
 
-
+        # channel
+        signal_gen_num = int(signal_gen_num)
+             
         # case TES bias / SG controllers same
         if self.is_tes_signal_gen_inst_common():
 
@@ -880,8 +897,193 @@ class Control:
                     detector_channel=detector_channel,
                     adc_id=adc_id,
                     adc_channel=adc_channel)
-                
+
+    
+    def set_laser_signal_gen_onoff(self, on_off_flag, signal_gen_num=1, load=None):
+
+        """
+        Set laser signal gen on/off
+        """
         
+        # channel
+        signal_gen_num = int(signal_gen_num)
+                
+        # check SQUID controller
+        if self._laser_signal_generator_inst is None:
+            print('WARNING: No signal generator controller available. '
+                  'Unable to change signa generator settings!')
+            return
+        
+        on_off_flag = on_off_flag.lower()
+        
+        if on_off_flag not in ['on','off']:
+            raise ValueError('ERROR in set_signal_gen_onoff:  '
+                             'Argument is  "on" or "off"')
+       
+        if self._dummy_mode:
+            print('INFO: Setting laser signal generator #'
+                  + str(signal_gen_num) + ' '
+                  + on_off_flag)
+            return
+
+
+        # change load
+        if load is not None:
+            self._laser_signal_generator_inst.set_load_resistance(
+                load,
+                source=signal_gen_num
+            )
+        
+
+        # change signal gen state
+        self._laser_signal_generator_inst.set_generator_onoff(
+            on_off_flag,
+            source=signal_gen_num
+        )
+            
+    
+    def set_laser_signal_gen_params(self,
+                                    signal_gen_num=1,
+                                    voltage=None,
+                                    voltage_low=None, voltage_high=None,
+                                    voltage_unit=None,
+                                    offset=None, offset_unit=None,
+                                    frequency=None, frequency_unit='Hz',
+                                    shape=None, phase=None,
+                                    pulse_width=None,
+                                    align_phase_channel=None,):
+        
+        """
+        Set laser signal generator parameters
+        voltage: peak-to-peak voltage amplitude  [mV or V]
+          frequency: frequency [Hz, kHz, MHz], default unit = [Hz]
+        shape: 'triangle', 'sawtoothpos', 'sawtoothneg', 'square', 'sine', 'noise'
+        offset: DC offset [mV or V]
+        """
+        
+        if self._dummy_mode:
+            print('INFO: Setting laser signal generator #' + str(signal_gen_num))
+            return
+        
+        # check SQUID controller
+        if self._laser_signal_generator_inst is None:
+            print('WARNING: No signal generator controller available. '
+                  'Unable to change signa generator settings!')
+            return
+
+        # units
+        voltage_units = ['V','mV', 'Vpp', 'mVpp']
+        frequency_units = ['Hz', 'kHz', 'MHz']
+
+
+        # channel
+        signal_gen_num = int(signal_gen_num)
+        
+        # shape
+        if shape is not None:
+            if (shape == 'sawtoothpos'
+                or shape == 'sawtoothneg'):
+                shape = 'ramp'
+            self._laser_signal_generator_inst.set_shape(
+                shape, source=signal_gen_num)
+             
+        # offset
+        if offset is not None:
+            
+            if (offset_unit is None
+                or offset_unit not in voltage_units):
+                raise ValueError('ERROR: signal generator "offset_unit" '
+                                 'argument required: "V" or "mV"!')
+
+            if (offset_unit == 'mV' or offset_unit == 'mVpp'):
+                offset = offset / 1e3 
+
+            self._laser_signal_generator_inst.set_offset(
+                offset, unit='V',
+                source=signal_gen_num
+            )
+
+        # Frequency
+        if frequency is not None:
+         
+            if frequency_unit not in frequency_units:
+                raise ValueError(
+                    'ERROR: signal generator "frequency_unit" '
+                    'argument required: "Hz", "kHz" or  "MHz"!'
+                )
+            frequency = float(frequency)
+            if frequency_unit == 'kHz':
+                frequency *= 1e3
+            elif frequency_unit == 'MHz':
+                frequency *= 1e6
+
+            # set
+            self._laser_signal_generator_inst.set_frequency(
+                frequency, unit='Hz',
+                source=signal_gen_num)
+                            
+        # phase
+        if phase is not None:
+            self._laser_signal_generator_inst.set_phase(
+                phase,
+                source=signal_gen_num)
+                
+        # Voltage
+        if (voltage is not None
+            or voltage_low is not None
+            or voltage_high is not None):
+            
+            if (voltage_unit is None
+                or voltage_unit not in voltage_units):
+                raise ValueError('ERROR: signal generator "voltage_unit" '
+                                 'argument required: "V" or "mV"!')
+            
+            # voltage (amp)
+            if voltage is not None:
+
+                if (voltage_unit == 'mV' or voltage_unit == 'mVpp'):
+                    voltage = voltage / 1e3
+                
+                self._laser_signal_generator_inst.set_amplitude(
+                    voltage, source=signal_gen_num, unit='Vpp',
+                    level='amp'
+                )
+
+            # voltage (low)
+            if voltage_low is not None:
+
+                if (voltage_unit == 'mV' or voltage_unit == 'mVpp'):
+                    voltage_low = voltage_low / 1e3
+                
+                self._laser_signal_generator_inst.set_amplitude(
+                    voltage_low, source=signal_gen_num, unit='Vpp',
+                    level='low'
+                )
+
+            # voltage (high)
+            if voltage_high is not None:
+
+                if (voltage_unit == 'mV' or voltage_unit == 'mVpp'):
+                    voltage_high = voltage_high / 1e3
+                
+                self._laser_signal_generator_inst.set_amplitude(
+                    voltage_high, source=signal_gen_num, unit='Vpp',
+                    level='high'
+                )
+
+            # pulse width
+            if pulse_width is not None:
+                self._laser_signal_generator_inst.set_pulse_width(
+                    pulse_width,
+                    source=signal_gen_num)
+
+            # align phase 
+            if align_phase_channel is not None:
+                self._laser_signal_generator_inst.align_phase(
+                    source=signal_gen_num,
+                    reference_source=int(align_phase_channel)
+                )
+                
     def connect_signal_gen_to_feedback(self, do_connect, 
                                     tes_channel=None,
                                     detector_channel=None,
@@ -1431,7 +1633,10 @@ class Control:
             print('WARNING: No signal generator controller available. '
                   'Returning NaN for all settings')
             return
-        
+
+        # channel
+        signal_gen_num = int(signal_gen_num)
+            
         # check if input channel
         is_channel_defined = False
         if (tes_channel is not None
@@ -1522,8 +1727,7 @@ class Control:
                 self._signal_generator_inst.get_phase(
                     source=signal_gen_num)
             )
-            
-            
+
             # source
             if (is_channel_defined
                 and self._squid_controller_name=='feb'):
@@ -1539,7 +1743,6 @@ class Control:
                         adc_channel=adc_channel)
                 )
 
-
                 if self._dummy_mode:
                     print('INFO: Getting signal generator #'
                           + str(signal_gen_num) + ', '
@@ -1547,6 +1750,10 @@ class Control:
                           + str(controller_channel))
                     return output_dict
 
+                # ttl/accelerometer -> return nan
+                if (controller_id == 'ttl' or
+                    controller_id == 'accelerometer'):
+                    return output_dict
                 
                 is_connected_to_tes = (
                     self.is_signal_gen_connected_to_tes(
@@ -1561,7 +1768,6 @@ class Control:
                         detector_channel=detector_channel,
                         adc_id=adc_id, adc_channel=adc_channel)
                 )
-
                 
                 if is_connected_to_tes and is_connected_to_feedback:
                     print('WARNING: Signal generator connected to both TES AND Feedback!')
@@ -1575,6 +1781,123 @@ class Control:
                 
         return output_dict
 
+
+    def get_laser_signal_gen_onoff(self, signal_gen_num=1):
+        """
+        Get laser signal gen state ("on"/"off")
+        """
+        
+        if self._laser_signal_generator_inst is None:
+            print('WARNING: No laser signal generator controller available. '
+                  'Returning NaN')
+            return
+        
+        if self._dummy_mode:
+            return 'on'
+
+        # channel
+        signal_gen_num = int(signal_gen_num)
+                
+        # check output on/off
+        val = self._laser_signal_generator_inst.get_generator_onoff(
+            source=signal_gen_num)
+        
+        return val
+
+    def is_laser_signal_gen_on(self, signal_gen_num=1):
+
+        """
+        Is signal generator on?
+        Return: BOOL
+        """
+
+        if self._laser_signal_generator_inst is None:
+            print('WARNING: No signal generator controller available. '
+                  'Returning NaN')
+            return
+
+        
+        val = self.get_laser_signal_gen_onoff(
+            signal_gen_num=signal_gen_num
+        )
+        
+        val_bool = None
+        if val == 'on':
+            val_bool = True
+        elif  val == 'off':
+            val_bool = False
+        else:
+            val_bool = val
+
+        return val_bool
+            
+        
+    def get_laser_signal_gen_params(self, signal_gen_num=1):
+        """
+        Get signal generator parameters
+        Return:
+           dictionary
+        """
+                
+        # initialize dictionary
+        output_dict = dict()
+        output_dict['frequency'] = nan
+        output_dict['shape'] = nan
+        output_dict['phase'] = nan
+        output_dict['voltage'] = nan
+        output_dict['voltage_low'] = nan
+        output_dict['voltage_high'] = nan
+        output_dict['offset'] = nan
+        output_dict['pulse_width'] = nan
+
+        if self._laser_signal_generator_inst is None:
+            print('WARNING: No signal generator controller available. '
+                  'Returning NaN for all settings')
+            return
+
+        # channel
+        signal_gen_num = int(signal_gen_num)
+        
+        output_dict['voltage'] = float(
+            self._laser_signal_generator_inst.get_amplitude(
+                source=signal_gen_num,  unit='Vpp')
+        )
+        
+        output_dict['voltage_low'] = float(
+            self._laser_signal_generator_inst.get_amplitude(
+                source=signal_gen_num,  level='low', unit='Vpp')
+        )
+        
+        output_dict['voltage_high'] = float(
+            self._laser_signal_generator_inst.get_amplitude(
+                source=signal_gen_num,  level='high', unit='Vpp')
+        )
+
+        output_dict['frequency'] = float(
+            self._laser_signal_generator_inst.get_frequency(
+                source=signal_gen_num, unit='Hz')
+        )
+        
+        output_dict['shape'] = self._laser_signal_generator_inst.get_shape(
+            source=signal_gen_num)
+
+        output_dict['offset'] = float(
+            self._laser_signal_generator_inst.get_offset(
+                source=signal_gen_num,  unit='V')
+        )
+
+        output_dict['phase'] = float(
+            self._laser_signal_generator_inst.get_phase(
+                source=signal_gen_num)
+        )
+
+        output_dict['pulse_width'] = float(
+            self._laser_signal_generator_inst.get_pulse_width(
+                source=signal_gen_num)
+        )
+        
+            
+        return output_dict
 
     def is_signal_gen_connected_to_tes(self, 
                                        tes_channel=None,
@@ -1680,7 +2003,6 @@ class Control:
         
         return float(squid_turn_ratio)
 
-
     def get_signal_gen_resistance(self, tes_channel=None,
                                   detector_channel=None,
                                   adc_id=None, adc_channel=None):
@@ -1698,7 +2020,6 @@ class Control:
             )
                  
         return float(resistance)
-
     
     def get_tes_bias_resistance(self, tes_channel=None,
                                 detector_channel=None,
@@ -1787,9 +2108,7 @@ class Control:
         # calculate normalization
         norm = output_total_gain*preamp_total_gain
         return norm
-        
-
-
+  
     def get_open_loop_full_norm(self, tes_channel=None,
                                 detector_channel=None,
                                 adc_id=None, adc_channel=None):
@@ -1817,7 +2136,10 @@ class Control:
 
     def read_all(self, tes_channel_list=None,
                  detector_channel_list=None,
-                 adc_id=None, adc_channel_list=None):
+                 adc_id=None, adc_channel_list=None,
+                 signal_gen_channel=1,
+                 laser_control_channel=None,
+                 laser_ttl_channel=None):
         """
         Read from board all parameters
         Output in a dictionary: dict['param'] = array values (index based
@@ -1938,12 +2260,14 @@ class Control:
         
             # Signal generator
             sig_gen_dict = self.get_signal_gen_params(
-                signal_gen_num=1, tes_channel=tes_chan,
+                signal_gen_num=signal_gen_channel,
+                tes_channel=tes_chan,
                 detector_channel=detector_chan, 
                 adc_id=adc_chan_id, adc_channel=adc_chan)
             
             onoff = self.get_signal_gen_onoff(
-                signal_gen_num=1, tes_channel=tes_chan,
+                signal_gen_num=signal_gen_channel,
+                tes_channel=tes_chan,
                 detector_channel=detector_chan, 
                 adc_id=adc_chan_id, adc_channel=adc_chan)
 
@@ -2008,16 +2332,77 @@ class Control:
                     adc_id=adc_chan_id, adc_channel=adc_chan)
             )
 
-           
+    
+        # ====================
+        # Laser Control
+        # ====================
+        nb_channels = len(output_dict['tes_bias'])
+          
+        if self._laser_signal_generator_inst is not None:
+
+                    
+            if laser_control_channel is not None:
+                
+                config = self.get_laser_signal_gen_params(
+                    signal_gen_num=laser_control_channel
+                )
+                output_dict['laser_control_voltage_high'] = (
+                    [config['voltage_high']]*nb_channels
+                )
+                output_dict['laser_control_voltage_low'] = (
+                    [config['voltage_low']]*nb_channels
+                )
+                output_dict['laser_control_frequency'] = (
+                    [config['frequency']]*nb_channels
+                )
+                output_dict['laser_control_offset'] = (
+                    [config['offset']]*nb_channels
+                )
+                output_dict['laser_control_phase'] = (
+                    [config['phase']]*nb_channels
+                )
+                output_dict['laser_control_shape'] = (
+                    [config['shape']]*nb_channels
+                )
+                output_dict['laser_control_pulse_width'] = (
+                    [config['pulse_width']]*nb_channels
+                )
+                
+            if laser_ttl_channel is not None:
+                
+                config = self.get_laser_signal_gen_params(
+                    signal_gen_num=laser_ttl_channel
+                )
+                output_dict['laser_ttl_voltage_high'] = (
+                    [config['voltage_high']]*nb_channels
+                )
+                output_dict['laser_ttl_voltage_low'] = (
+                    [config['voltage_low']]*nb_channels
+                )
+                output_dict['laser_ttl_frequency'] = (
+                    [config['frequency']]*nb_channels
+                )
+                output_dict['laser_ttl_offset'] = (
+                    [config['offset']]*nb_channels
+                )
+                output_dict['laser_ttl_phase'] = (
+                    [config['phase']]*nb_channels
+                )
+                output_dict['laser_ttl_shape'] = (
+                    [config['shape']]*nb_channels
+                )
+                output_dict['laser_ttl_pulse_width'] = (
+                    [config['pulse_width']]*nb_channels
+                )
+            
         # ====================
         # Temperature
         # ====================
         if self._temperature_controller_insts  is not None:
             temperature_dict = self.read_all_temperatures()
             for temp_name, temp in temperature_dict.items():
-                output_dict[temp_name] = [temp]*len(
-                    output_dict['tes_bias']
-                )
+                output_dict[temp_name] = [temp]*nb_channels
+                
 
         return output_dict
 
@@ -2235,7 +2620,11 @@ class Control:
 
         param_val = nan
 
-
+        # ttl/accelerometer -> return nan
+        if (controller_id == 'ttl' or
+            controller_id == 'accelerometer'):
+            return 1
+        
         # TES paramaters
         if param_name == 'tes_bias':
 
@@ -2538,7 +2927,14 @@ class Control:
                 adc_channel=adc_channel
             )
         )
-              
+
+
+        # case ttl
+        # ttl -> do nothing and return nan
+        if controller_channel == 'ttl':
+            return nan
+
+        
         # ================
         # Set value
         # ================
@@ -2905,6 +3301,7 @@ class Control:
             address = self._config.get_device_visa_address('agilent33500B')
             attenuation = self._config.get_device_parameters(
                 self._signal_generator_name, parameter='attenuation')
+            
             self._tes_controller_inst = (
                     Agilent33500B(address,
                                   visa_library=visa_library,
@@ -2958,7 +3355,42 @@ class Control:
                 raise ValueError('ERROR: Unrecognized signal generator '
                                  + self._signal_generator_name)
 
-        
+
+        # ----------------
+        # Laser Signal generator
+        # ----------------
+
+        if self._laser_signal_generator_name is not None:
+            
+            address = self._config.get_device_visa_address(
+                self._laser_signal_generator_name)
+            attenuation = self._config.get_device_parameters(
+                self._laser_signal_generator_name,
+                parameter='attenuation')
+
+            if address is None:
+                raise ValueError(
+                    'ERROR: Unable to get laser signal generator '
+                    'visa address!')
+
+            if attenuation is None:
+                attenuation = 1.0
+            else:
+                attenuation = float(attenuation)
+
+                
+            if self._laser_signal_generator_name == 'rigolDG832':
+                
+                self._laser_signal_generator_inst = (
+                    RigolDG800(address,
+                               attenuation=attenuation,
+                               verbose=self._verbose,
+                               raise_errors=self._raise_errors)
+                )
+
+            else:
+                raise ValueError('ERROR: Unrecognized signal generator '
+                                 + self._signal_generator_name)
             
         # ----------------------
         # Temperature controllers
@@ -2998,6 +3430,10 @@ class Control:
             self._signal_generator_inst.disconnect()
             self._signal_generator_inst = None
 
+        if self._laser_signal_generator_inst is not None:
+            self._laser_signal_generator_inst.disconnect()
+            self._laser_signal_generator_inst = None
+            
         if self._tes_controller_inst is not None:
             self._tes_controller_inst.disconnect()
             self._tes_controller_inst = None
