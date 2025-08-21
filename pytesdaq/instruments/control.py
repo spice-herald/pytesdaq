@@ -1532,19 +1532,19 @@ class Control:
       
         if self._dummy_mode:
             return "on"
-              
-        # get readout controller ID and Channel (FIXME: Is it necessary?)
-        controller_id, controller_channel = connection_utils.get_controller_info(
-            self._connection_table,
-            tes_channel=tes_channel,
-            detector_channel=detector_channel,
-            adc_id=adc_id,
-            adc_channel=adc_channel)
-        
+               
         val = nan
         
         if self._signal_generator_name == 'magnicon':
 
+            controller_id, controller_channel = connection_utils.get_controller_info(
+                self._connection_table,
+                tes_channel=tes_channel,
+                detector_channel=detector_channel,
+                adc_id=adc_id,
+                adc_channel=adc_channel)
+
+            
             gen1_onoff, gen2_onoff, mon_onoff = (
                 self._squid_controller_inst.get_generator_onoff(
                     controller_channel)

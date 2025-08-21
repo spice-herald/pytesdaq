@@ -35,9 +35,10 @@ class Agilent33500B(InstrumentComm):
         self._generator_onoff = 'off'
      
         # signal generator attenuation
-        self._attenuation = attenuation
+        self._attenuation = float(attenuation)
 
-        self.set_auto_range(1)
+        # auto range off
+        self.set_auto_range(0)
 
     def set_auto_range(self, auto, source=1):
 

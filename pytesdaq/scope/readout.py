@@ -166,7 +166,9 @@ class Readout:
                 return error_msg
 
             # instantiate daq
-            self._daq  = daq.DAQ(driver_name = 'pydaqmx',verbose = False)
+            self._daq  = daq.DAQ(driver_name='pydaqmx',
+                                 setup_file=self._setup_file,
+                                 verbose=False)
             self._daq.lock_daq = True
             
             # adc name list
