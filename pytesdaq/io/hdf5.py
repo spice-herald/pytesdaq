@@ -1671,11 +1671,10 @@ class H5Reader:
 
             if (trace_min_index<0
                 or trace_max_index>dataset_dims[1]):
-                raise ValueError(
-                    'ERROR: Unable to extract trigger. '
-                    + ' Trace length too long!')
-            
-
+                #print('WARNING: Unable to extract truncated trace '
+                #      'from continuous data. Not enough samples from/to trigger. ')
+                return None, info
+        
 
         # ===================================
         # Extract trace
