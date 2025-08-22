@@ -297,17 +297,28 @@ if __name__ == "__main__":
 
 
     if args.signal_gen_voltage_mV is not None:
-
+        
         #  write to sg
+        print(f'INFO: Setting amplitude to {args.signal_gen_voltage_mV} mV')
+
         if args.signal_gen_voltage_mV is not nan:
-            
-            print(f'INFO: Setting amplitude to {args.signal_gen_voltage_mV} mV')
-            
-            myinstruments.set_signal_gen_params(
-                voltage=float(args.signal_gen_voltage_mV),
-                voltage_unit='mV'
+        
+            if channels:
+                
+                for chan in channels:
+                    myinstruments.set_signal_gen_params(
+                        detector_channel=chan,
+                        voltage=float(args.signal_gen_voltage_mV),
+                        voltage_unit='mV'
+                    )
+            else:
+                myinstruments.set_signal_gen_params(
+                    voltage=float(args.signal_gen_voltage_mV),
+                    voltage_unit='mV'
                 )
-                            
+        else:
+            print('ERROR: voltage is NaN. Doing nothing...')
+                
         # read from board
         readback = myinstruments.get_signal_gen_params()
        
@@ -331,12 +342,23 @@ if __name__ == "__main__":
         #  write to board
         if args.signal_gen_offset_mV is not nan:
             print(f'INFO: Setting offset to {args.signal_gen_offset_mV} mV')
+
             
-            myinstruments.set_signal_gen_params(
-                offset=args.signal_gen_offset_mV,
-                offset_unit='mV'
-            )
-                            
+            if channels:
+                for chan in channels:
+                    myinstruments.set_signal_gen_params(
+                        detector_channel=chan,
+                        offset=args.signal_gen_offset_mV,
+                        offset_unit='mV'
+                    )
+            else:
+                myinstruments.set_signal_gen_params(
+                    offset=args.signal_gen_offset_mV,
+                    offset_unit='mV'
+                )
+        else:
+            print('ERROR: offset value is NaN. Doing nothing...')
+            
         # read from board
         readback = myinstruments.get_signal_gen_params()
 

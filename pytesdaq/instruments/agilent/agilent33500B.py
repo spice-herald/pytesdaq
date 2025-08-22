@@ -77,7 +77,9 @@ class Agilent33500B(InstrumentComm):
             or resistance value in Ohm
         """
         # check input
-        if isinstance(load, int):
+        if (isinstance(load, int)
+            or isinstance(load, float)):
+            load = int(load)
             if load<50:
                 load = 50
             if load>1e6:

@@ -1,14 +1,19 @@
+import sys
+#sys.path.insert(0, '/home/mwilliams/pytesdaq')
 from pytesdaq.instruments.rigol import RigolDG800
+import pyvisa
 
 if __name__ == "__main__":
 
     
     # VISA Address
-    visa_address = 'USB0::0x1AB1::1603::DG8A204201623::INSTR'
+    visa_address = 'USB0::0x1AB1::1603::DG8A211800738::INSTR'
+    #visa_address = 'TCPIP:192.168.001.102::INSTR'
 
     # instantiate and connect
     myinstrument = RigolDG800(visa_address)
     print(f'\nDevice name: {myinstrument.device_idn}')
+    
 
     # channel
     source = 1

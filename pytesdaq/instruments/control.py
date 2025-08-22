@@ -627,7 +627,8 @@ class Control:
                               offset=None, offset_unit=None,
                               frequency=None, frequency_unit='Hz',
                               shape=None, phase=None,
-                              freq_div=None, half_pp_offset=None):
+                              freq_div=None,
+                              half_pp_offset=None):
 
         """
         Set signal generator parameters
@@ -788,6 +789,28 @@ class Control:
         # External function generator
         else:
 
+
+            # shape 
+            if shape is not None:
+                if (shape == 'sawtoothpos'
+                    or shape == 'sawtoothneg'):
+                    shape = 'ramp'
+                self._signal_generator_inst.set_shape(
+                    shape, source=signal_gen_num)
+
+            # frequency
+            if frequency is not None:
+                self._signal_generator_inst.set_frequency(
+                    frequency, unit='Hz',
+                    source=signal_gen_num)
+                
+            # phase
+            if phase is not None:
+                self._signal_generator_inst.set_phase(
+                    phase,
+                    source=signal_gen_num)
+
+            
             # check if channel available
             is_channel_set = True
             if (tes_channel is None
@@ -806,27 +829,26 @@ class Control:
                     adc_channel=adc_channel)
 
                 resistance = float(resistance)
-
-            
+                        
             if (self._squid_controller_name != 'feb'
                 and self._squid_controller_name != 'magnicon'):
 
-                if resistance is None:
-                    raise ValueError(
-                        'ERROR: channel required to get signal '
-                        'generator resistance!'
-                    )
+                modify_voltage = False
+                if (voltage is not None
+                    or current is not None
+                    or offset is not None):
+                    modify_voltage = True
 
-                self._signal_generator_inst.set_load_resistance(resistance)
+                    
+                if (resistance is None and modify_voltage):
+                    raise ValueError(
+                        'ERROR: channel required to get load '
+                        'resistance for signal generator!'
+                    )
+                if modify_voltage:
+                    self._signal_generator_inst.set_load_resistance(resistance)
             
-            # shape
-            if shape is not None:
-                if (shape == 'sawtoothpos'
-                    or shape == 'sawtoothneg'):
-                    shape = 'ramp'
-                self._signal_generator_inst.set_shape(
-                    shape, source=signal_gen_num)
-            
+                   
             # amplitude
             if voltage is None and current is not None:
 
@@ -843,23 +865,11 @@ class Control:
                 self._signal_generator_inst.set_amplitude(
                     voltage/1000, unit='Vpp',
                     source=signal_gen_num)
-
-            # frequency
-            if frequency is not None:
-                self._signal_generator_inst.set_frequency(
-                    frequency, unit='Hz',
-                    source=signal_gen_num)
   
             # offset
             if offset is not None:
                 self._signal_generator_inst.set_offset(
                     offset/1000, unit='V',
-                    source=signal_gen_num)
-
-            # phase
-            if phase is not None:
-                self._signal_generator_inst.set_phase(
-                    phase,
                     source=signal_gen_num)
 
             # source
@@ -1095,8 +1105,8 @@ class Control:
         """
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Unable to change settings!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Unable to change settings!')
             return
         
         try:
@@ -1122,8 +1132,8 @@ class Control:
 
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Unable to change settings!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Unable to change settings!')
             return
 
         try:
@@ -1184,8 +1194,8 @@ class Control:
         
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
 
         
@@ -1225,8 +1235,8 @@ class Control:
 
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
 
         
@@ -1253,8 +1263,8 @@ class Control:
         """
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
 
         
@@ -1282,8 +1292,8 @@ class Control:
 
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning 0')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning 0')
             return 0
 
         
@@ -1312,8 +1322,8 @@ class Control:
 
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning 1!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning 1!')
             return 1
         
         output_variable_gain = 1
@@ -1351,8 +1361,8 @@ class Control:
          
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
         
         preamp_variable_gain = 1
@@ -1389,8 +1399,8 @@ class Control:
         """
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
         
         preamp_gain = self.get_preamp_total_gain(
@@ -1416,8 +1426,8 @@ class Control:
 
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
 
         feedback_polarity = nan
@@ -1443,8 +1453,8 @@ class Control:
         """
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
         
         mode = nan
@@ -1471,8 +1481,8 @@ class Control:
         
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
 
         source = nan
@@ -1497,8 +1507,8 @@ class Control:
         """
         # check SQUID controller
         if self._squid_controller_inst is None:
-            print('WARNING: No SQUID controller available. '
-                  'Returning NaN!')
+            #print('WARNING: No SQUID controller available. '
+            #      'Returning NaN!')
             return nan
         
         is_connected = nan
