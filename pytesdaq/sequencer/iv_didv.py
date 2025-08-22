@@ -148,31 +148,38 @@ class IV_dIdV(Sequencer):
                 self._instruments_inst.get_signal_gen_controller()
             )
             tes_controller = self._instruments_inst.get_tes_controller()
-
+            
+            print('INFO: Tune signal generator range base on max TES bias then '
+                  'set auto range off!')
+            
             for channel in self._detector_channels:
 
-                # set autorange on 
+                # set autorange on  
                 signal_gen_controller.set_auto_range('on')
+
+                # turn on output
+                self._instruments_inst.set_signal_gen_onoff(
+                    'on',
+                    detector_channel=channel)
                 
+                # set TES bias
                 self._instruments_inst.set_tes_bias(
                     np.max(sweep_config['tes_bias_vect']),
                     unit='uA',
                     detector_channel=channel
                 )
-                
+
                 signal_gen_voltage = 2
-                signal_gen_frequency = 80
-                
                 if 'signal_gen_voltage' in didv_config:
                     signal_gen_voltage = didv_config['signal_gen_voltage']
+
+                signal_gen_frequency = 80
                 if 'signal_gen_frequency' in didv_config:
                     signal_gen_frequency = didv_config['signal_gen_frequency']
+             
+                signal_gen_offset = signal_gen_controller.get_offset()*1000
+                print(f"INFO: max func gen offset is {signal_gen_offset} mV")
                     
-                print(f'Max func gen offset is {signal_gen_offset} mV')
-                self._instruments_inst.set_signal_gen_onoff(
-                    'on',
-                    detector_channel=channel)
-                
                 self._instruments_inst.set_signal_gen_params(
                     detector_channel=channel,
                     source='tes', 
@@ -183,11 +190,14 @@ class IV_dIdV(Sequencer):
                     shape='square'
                 )
 
+                print("INFO: Set signal gen to square wave")
+            
                 # set auto range off
                 signal_gen_controller.set_auto_range('off')
-                
+                print("INFO: Done setting voltage range!")
                 time.sleep(5)
-
+                break
+        
         # turn SG ouput off (this set to 'dc' if SG/TES controllers are same)
         for channel in self._detector_channels:
             self._instruments_inst.set_signal_gen_onoff(
