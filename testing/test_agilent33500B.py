@@ -6,9 +6,9 @@ if __name__ == "__main__":
     
     # VISA Address
     #visa_address = 'USB0::2391::9991::MY62000634::0::INSTR'
-    #visa_address = 'TCPIP::192.168.10.1::inst0::INSTR'
-    visa_address = 'GPIB::10::INSTR'
-    
+    visa_address = 'TCPIP::192.168.10.1::inst0::INSTR'
+    #visa_address = 'GPIB::10::INSTR'
+
     # Instantiate instrument
     myinstrument = Agilent33500B(visa_address, attenuation=1)
 
