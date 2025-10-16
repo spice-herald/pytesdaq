@@ -18,6 +18,7 @@ class IV_dIdV(Sequencer):
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
                  tes_bias_sweep=True,
+                 online_iv=True,
                  comment='No comment',
                  sweep_channels=None, saved_channels=None,
                  sequencer_file=None, setup_file=None,
@@ -33,7 +34,13 @@ class IV_dIdV(Sequencer):
         self._enable_rn = rn
         self._enable_temperature_sweep = temperature_sweep
         self._enable_tes_bias_sweep = tes_bias_sweep
-        
+        self._enable_online_iv = online_iv
+        print('ZZZ')
+        print(online_iv)
+        print('ZZZ')
+        print(tes_bias_sweep)
+        print('ZZZ')
+
         # relock/zap
         self._do_zap_tes = do_zap
         self._do_relock = do_relock
@@ -473,11 +480,11 @@ class IV_dIdV(Sequencer):
                             time.sleep(2)
 
 
-                '''                            
+                                         
                 # -----------
                 # Online IV
                 # ----------
-                if self._enable_tes_bias_sweep:
+                if self._enable_tes_bias_sweep and self._enable_online_iv:
 
 
                     # intialize 
@@ -612,7 +619,7 @@ class IV_dIdV(Sequencer):
                     
                         ivobj.analyze()
                         
-                '''            
+                           
                 # -----------
                 # IV
                 # ----------
@@ -848,9 +855,9 @@ class IV_dIdV(Sequencer):
                             
             self._daq.clear()
 
-        '''
+        
         # online IV
-        if (self._enable_tes_bias_sweep
+        if (self._enable_tes_bias_sweep and self._enable_online_iv
             and ivobj is not None):
             
             print('INFO: Making IV diagnostic plots!')
@@ -870,7 +877,7 @@ class IV_dIdV(Sequencer):
                                   savepath=diagnostic_path,
                                   savename=savename)
              
-        '''
+        
         # set heater back to 0%?
         if self._enable_temperature_sweep:
             print('INFO: setting heater back to 0!')

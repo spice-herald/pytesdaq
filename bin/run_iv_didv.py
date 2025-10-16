@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser.add_argument('--enable-didv',dest='enable_didv',action='store_true')
     parser.add_argument('--enable-rp',dest='enable_rp',action='store_true')
     parser.add_argument('--enable-rn',dest='enable_rn',action='store_true')
+    parser.add_argument('--disable-online-iv',dest='disable_online_iv', action='store_true')
     parser.add_argument('--comment', dest='comment',
                         type = str, help = 'Comment (use quotes "")  [default: "No comment"]')
     parser.add_argument('--relock', dest='relock',action='store_true')
@@ -43,12 +44,10 @@ if __name__ == "__main__":
     if args.comment:
         comment = args.comment
 
-    
     dummy_mode = False
     if args.dummy_mode:
         dummy_mode = True
 
-    
     enable_iv = False
     if args.enable_iv:
         enable_iv = True
@@ -64,6 +63,10 @@ if __name__ == "__main__":
     enable_rn = False
     if args.enable_rn:
         enable_rn = True
+    
+    enable_online_iv = True
+    if args.disable_online_iv:
+        enable_online_iv = False
 
     enable_temperature_sweep = False
     if args.enable_temperature_sweep:
@@ -147,6 +150,7 @@ if __name__ == "__main__":
         sequencer = IV_dIdV(dummy_mode=dummy_mode,
                             iv=enable_iv, didv=enable_didv,
                             rp=enable_rp, rn=enable_rn,
+                            online_iv=enable_online_iv,
                             temperature_sweep=enable_temperature_sweep,
                             tes_bias_sweep=enable_bias_sweep,
                             comment=comment,
