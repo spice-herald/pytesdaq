@@ -123,6 +123,7 @@ class IV_dIdV(Sequencer):
         didv_config = dict()
         
         if self._enable_iv:
+            
             iv_config =  self._measurement_config['iv']
 
         if self._enable_didv:
@@ -421,7 +422,7 @@ class IV_dIdV(Sequencer):
                         for  ichan in range(len(self._detector_channels)):
 
                             traces = data_array[:,ichan,:]
-                            cut = qp.autocuts(traces, fs=sample_rate)
+                            #cut = qp.autocuts(traces, fs=sample_rate)
                             trace_mean = np.mean(traces, axis=0)
                             offset = np.median(trace_mean)
 
@@ -472,7 +473,7 @@ class IV_dIdV(Sequencer):
                             time.sleep(2)
 
 
-                            
+                '''                            
                 # -----------
                 # Online IV
                 # ----------
@@ -611,7 +612,7 @@ class IV_dIdV(Sequencer):
                     
                         ivobj.analyze()
                         
-                            
+                '''            
                 # -----------
                 # IV
                 # ----------
@@ -847,7 +848,7 @@ class IV_dIdV(Sequencer):
                             
             self._daq.clear()
 
-
+        '''
         # online IV
         if (self._enable_tes_bias_sweep
             and ivobj is not None):
@@ -869,7 +870,7 @@ class IV_dIdV(Sequencer):
                                   savepath=diagnostic_path,
                                   savename=savename)
              
-
+        '''
         # set heater back to 0%?
         if self._enable_temperature_sweep:
             print('INFO: setting heater back to 0!')
