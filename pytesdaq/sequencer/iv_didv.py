@@ -158,12 +158,6 @@ class IV_dIdV(Sequencer):
         if self._enable_didv:
             
             didv_config = self._measurement_config['didv']
-            
-            # signal gen amplitude can be either voltage or current
-            if 'signal_gen_voltage' not in didv_config:
-                didv_config['signal_gen_voltage'] = None
-            if 'signal_gen_current' not in didv_config:
-                didv_config['signal_gen_current'] = None
 
             #True if we're delivering a single signal generator to all channels.
             #To my knowledge the only (actively used) way to do so is to use a FEB
@@ -171,6 +165,21 @@ class IV_dIdV(Sequencer):
             #rather than in parallel. 
             single_signal_gen_source = (self._instruments_inst._config.get_tes_controller() != 'feb') \
                 or (not self._measurement_config['didv']['loop_channels'])
+            
+            # signal gen amplitude can be either voltage or current
+            if 'signal_gen_voltage' not in didv_config:
+                didv_config['signal_gen_voltage'] = None
+                if single_signal_gen_source:
+                    print('WARNING: You have defined the dIdV amplitude in current \
+                          ather than voltage when you have a single signal generator. \
+                          If your SG line resistances are identical (or you are \
+                          running a single channel) you can safely ignore this warning. \
+                          Otherwise, anticipate misreporting of the amplitude')
+            if 'signal_gen_current' not in didv_config:
+                didv_config['signal_gen_current'] = None
+
+
+
             
             #Precalculate the net resistance seen and store in the instrument control object
             if single_signal_gen_source:
