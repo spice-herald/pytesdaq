@@ -128,9 +128,9 @@ class IV_dIdV(Sequencer):
         if not bias_in_current:
             tes_bias_unit = 'mV'
 
+        #Precalculate the net load that the tes controller will see
         if single_TES_bias_source:
             self._instruments_inst.calc_tes_controller_load(self._detector_channels)
-
 
 
         # display
@@ -165,7 +165,16 @@ class IV_dIdV(Sequencer):
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
 
-        
+            #True if we're delivering a single signal generator to all channels.
+            #To my knowledge the only (actively used) way to do so is to use a FEB
+            #board to open/close bias lines and perform dIdV channel-by-channel 
+            #rather than in parallel. 
+            single_signal_gen_source = (self._instruments_inst._config.get_tes_controller() != 'feb') \
+                or (not self._measurement_config['didv']['loop_channels'])
+            
+            #Precalculate the net resistance seen and store in the instrument control object
+            if single_signal_gen_source:
+                self._instruments_inst.calc_sg_load(self._detector_channels)
 
 
         # for case TES / SG controllers
@@ -220,7 +229,8 @@ class IV_dIdV(Sequencer):
                     voltage_unit='mV',
                     frequency=signal_gen_frequency,
                     frequency_unit='Hz',
-                    shape='square'
+                    shape='square',
+                    use_net_resistance = single_signal_gen_source
                 )
 
                 print("INFO: Set signal gen to square wave")
@@ -752,7 +762,8 @@ class IV_dIdV(Sequencer):
                             current_unit='uA',
                             frequency=didv_config['signal_gen_frequency'],
                             frequency_unit='Hz',
-                            shape='square'
+                            shape='square',
+                            use_net_resistance = single_signal_gen_source
                         )
                    
                         # connect to TES

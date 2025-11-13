@@ -71,8 +71,10 @@ class Control:
             self._connect_instruments()
 
 
-        #Initiallize the impedance of the TES bias line
+        #Initiallize the impedance of the TES bias line 
+        #and signal generator line
         self._tes_controller_load = None
+        self._signal_gen_load = None
 
         # check common controllers
         
@@ -638,7 +640,8 @@ class Control:
                               frequency=None, frequency_unit='Hz',
                               shape=None, phase=None,
                               freq_div=None,
-                              half_pp_offset=None):
+                              half_pp_offset=None,
+                              use_net_resistance = None):
 
         """
         Set signal generator parameters
@@ -856,7 +859,10 @@ class Control:
                         'resistance for signal generator!'
                     )
                 if modify_voltage:
-                    self._signal_generator_inst.set_load_resistance(resistance)
+                    if use_net_resistance:
+                        self._signal_generator_inst.set_load_resistance(self._signal_gen_load)
+                    else:
+                        self._signal_generator_inst.set_load_resistance(resistance)
             
                    
             # amplitude
@@ -2613,6 +2619,7 @@ class Control:
                              max_wait_time=max_wait_time,
                              tolerance=tolerance)
         
+    #calculate net loads seen by respective instruments
     def calc_tes_controller_load(self, detector_channels):
         load_list = []
         for channel in detector_channels:
@@ -2621,6 +2628,15 @@ class Control:
 
         circuit_impedance = 1/sum([1/x for x in load_list])
         self._tes_controller_load = circuit_impedance
+
+    def calc_sg_load(self, detector_channels):
+        load_list = []
+        for channel in detector_channels:
+            load = self.get_signal_gen_resistance( detector_channel = channel )
+            load_list.append(load)
+
+        circuit_impedance = 1/sum([1/x for x in load_list])
+        self._signal_gen_load = circuit_impedance
         
      
     def _get_sensor_val(self, param_name, 
@@ -3062,7 +3078,7 @@ class Control:
                 voltage = resistance*value*1e-6
 
                 if use_net_resistance:
-                    self._tes_controller_inst.set_load_resistacne(self._tes_controller_load)
+                    self._tes_controller_inst.set_load_resistance(self._tes_controller_load)
                 else:
                     self._tes_controller_inst.set_load_resistance(int(resistance))
 
