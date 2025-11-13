@@ -70,6 +70,10 @@ class Control:
         if not self._dummy_mode:
             self._connect_instruments()
 
+
+        #Initiallize the impedance of the TES bias line
+        self._tes_controller_load = None
+
         # check common controllers
         
         # intialize flag(s)
@@ -164,6 +168,7 @@ class Control:
         return self._laser_signal_generator_inst
     
     def set_tes_bias(self, bias, unit=None,
+                     use_net_resistance = None,
                      tes_channel=None,
                      detector_channel=None,
                      adc_id=None, adc_channel=None):
@@ -196,6 +201,7 @@ class Control:
 
         try:
             self._set_sensor_val('tes_bias', bias,
+                                 use_net_resistance = use_net_resistance,
                                  tes_channel=tes_channel,
                                  detector_channel=detector_channel,
                                  adc_id=adc_id, adc_channel=adc_channel)
@@ -2607,6 +2613,15 @@ class Control:
                              max_wait_time=max_wait_time,
                              tolerance=tolerance)
         
+    def calc_tes_controller_load(self, detector_channels):
+        load_list = []
+        for channel in detector_channels:
+            load = self.get_tes_bias_resistance( detector_channel = channel )
+            load_list.append(load)
+
+        circuit_impedance = 1/sum([1/x for x in load_list])
+        self._tes_controller_load = circuit_impedance
+        
      
     def _get_sensor_val(self, param_name, 
                         tes_channel=None,
@@ -2914,6 +2929,7 @@ class Control:
 
           
     def _set_sensor_val(self, param_name, value, 
+                        use_net_resistance = None,
                         tes_channel=None,
                         detector_channel= None,
                         adc_id=None,adc_channel=None):
@@ -3042,8 +3058,14 @@ class Control:
                     adc_channel=adc_channel
                 )
                 
+                
                 voltage = resistance*value*1e-6
-                self._tes_controller_inst.set_load_resistance(int(resistance))
+
+                if use_net_resistance:
+                    self._tes_controller_inst.set_load_resistacne(self._tes_controller_load)
+                else:
+                    self._tes_controller_inst.set_load_resistance(int(resistance))
+
                 self._tes_controller_inst.set_offset(voltage)
                 self._tes_controller_inst.set_generator_onoff('on')                
             else:
