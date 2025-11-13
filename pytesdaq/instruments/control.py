@@ -169,7 +169,7 @@ class Control:
                      adc_id=None, adc_channel=None):
         
         """
-        Set TES bias with unit "uA" or "A"
+        Set TES bias with unit "uA", "A", or "mV"
         """
 
         # check SQUID controller
@@ -179,7 +179,7 @@ class Control:
             return
         
         # units
-        units = ['uA', 'muA', 'A']
+        units = ['uA', 'muA', 'A', 'mV']
         
         if unit is None or unit not in units:
             raise ValueError(
@@ -189,6 +189,10 @@ class Control:
 
         if unit == 'A':
             bias = 1e6*bias
+        elif unit == 'mV':
+            bias = bias / (1000 * self.get_tes_bias_resistance(tes_channel=tes_channel,
+                                                               detector_channel=detector_channel,
+                                                               adc_id=adc_id, adc_channel=adc_channel))
 
         try:
             self._set_sensor_val('tes_bias', bias,

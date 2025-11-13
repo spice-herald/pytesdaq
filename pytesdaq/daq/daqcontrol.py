@@ -684,7 +684,39 @@ class DAQControl:
         iv_config = self._iv_didv_config['iv']
         tes_bias_list = iv_config['tes_bias_list']
         iv_channels = iv_config['channels']
+        bias_in_uA = True
+        if 'bias_in_uA' in iv_config.keys():
+            bias_in_uA = iv_config['bias_in_ua']
+
+        # ZZZ update bias
+        if not bias_in_uA:
+            first_channel_load = self._instruments_inst.get_tes_bias_resistance(detector_channel = self._detector_channels[0])
+            tes_bias_list = [self._instruments_inst.get_tes_bias_resistance(detector_channel = channel) for channel in iv_channels]
+            tes_bias_list = [bias/(1000 * first_channel_load) for bias in tes_bias_list]
+            True
+
+        single_TES_bias_source = self._instruments_inst._config.get_tes_controller() == 'agilent33500B'
+
+        # Precalculate the load impedance as relevant
+        if single_TES_bias_source:
+            self._instruments_inst.calc_tes_controller_load(iv_channels)
         
+        #Warn e.g. LBL user if they define bias in current; this can only be done 
+        #safely if all the channels bias loads (i.e. pots) are identical   
+        if single_TES_bias_source and bias_in_uA:
+            print('WARNING: You are using a bias source incapable of biasing different ' \
+                  'channels independently, but have defined your bias points in current. ' \
+                  'Verify that this is intentional, as differnet channels may see ' \
+                  'different currents if their load resistances differ.')
+        #Raise error if e.g. UCB user defines bias in voltage. UCB does not store values 
+        #for the load bias resistors, so another error would occur downstream
+        elif not single_TES_bias_source and not bias_in_uA:
+            raise ValueError('ERROR: If using a bias source capable of biasing different' \
+                             'channels independently, you must specificy the bias points '\
+                             'in current (µA). Load resistors for the bias line ' \
+                             'are not stored, and so the conversion from voltage to' \
+                             'current cannot be performed.')
+
         # ------------------
         # Loop tes bias
         # ------------------
@@ -692,15 +724,30 @@ class DAQControl:
         for tes_bias in tes_bias_list:
 
             # set tes bias
-            for chan in  iv_channels:
+            if not single_TES_bias_source:
+                for chan in  iv_channels:
 
+                    tes_bias_input = tes_bias
+                    if tes_bias == 'current':
+                        tes_bias_input = self._current_tes_bias[chan]
+
+                    self._instruments_inst.set_tes_bias(
+                        tes_bias_input, unit='uA',
+                        detector_channel=chan
+                    )
+            #If we have a single source for biasing sensors, don't bother with looping
+            else:
+            
                 tes_bias_input = tes_bias
-                if tes_bias == 'current':
-                    tes_bias_input = self._current_tes_bias[chan]
-
+                if not bias_in_uA and tes_bias != 'current':
+                    load = self._instruments_inst.get_tes_bias_resistance(detector_channel = self.iv_channels[0])
+                    tes_bias_input /= (1000 * load)
+                elif tes_bias == 'current':
+                    tes_bias_input = self._current_tes_bias[iv_channels[0]]
+                
                 self._instruments_inst.set_tes_bias(
                     tes_bias_input, unit='uA',
-                    detector_channel=chan
+                    detector_channel = iv_channels[0]
                 )
 
             # relock
