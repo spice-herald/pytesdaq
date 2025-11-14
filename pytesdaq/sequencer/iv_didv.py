@@ -179,7 +179,6 @@ class IV_dIdV(Sequencer):
                 didv_config['signal_gen_current'] = None
 
 
-
             
             #Precalculate the net resistance seen and store in the instrument control object
             if single_signal_gen_source:

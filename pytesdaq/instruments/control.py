@@ -1174,7 +1174,7 @@ class Control:
         Get TES bias 
         """
 
-        units = ['uA', 'muA', 'A']
+        units = ['uA', 'muA', 'A', 'mV']
         
         if unit is None or unit not in units:
             raise ValueError(
@@ -1193,6 +1193,10 @@ class Control:
         bias = float(bias)
         if unit == 'A':
             bias = bias *1e-6
+        elif unit == 'mV':
+            bias = bias * 1e-3 * self.get_tes_bias_resistance(tes_channel=tes_channel,
+                                                              detector_channel=detector_channel,
+                                                              adc_id=adc_id, adc_channel=adc_channel)
            
         return float(bias)
         
@@ -2729,8 +2733,6 @@ class Control:
 
                 ## voltage source ?
                 voltage_source = True
-                #if 'voltage_source' in keithley_params:
-                #    voltage_source = keithley_params['voltage_source']
 
                 if voltage_source:
                     resistance =  self.get_tes_bias_resistance(
