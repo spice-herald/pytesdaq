@@ -155,6 +155,7 @@ class IV_dIdV(Sequencer):
         if self._enable_iv:
             iv_config =  self._measurement_config['iv']
 
+        single_signal_gen_source = False
         if self._enable_didv:
             
             didv_config = self._measurement_config['didv']
@@ -532,7 +533,7 @@ class IV_dIdV(Sequencer):
                 # -----------
                 # Online IV
                 # ----------
-                if self._enable_tes_bias_sweep:
+                if self._enable_tes_bias_sweep and self._enable_online_iv:
 
                     # intialize 
                     offsets = list()

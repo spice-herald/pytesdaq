@@ -197,9 +197,9 @@ class Control:
         if unit == 'A':
             bias = 1e6*bias
         elif unit == 'mV':
-            bias = bias / (1000 * self.get_tes_bias_resistance(tes_channel=tes_channel,
-                                                               detector_channel=detector_channel,
-                                                               adc_id=adc_id, adc_channel=adc_channel))
+            bias = bias * 1e3 / (self.get_tes_bias_resistance(tes_channel=tes_channel,
+                                                              detector_channel=detector_channel,
+                                                              adc_id=adc_id, adc_channel=adc_channel))
 
         try:
             self._set_sensor_val('tes_bias', bias,
