@@ -112,17 +112,17 @@ class IV_dIdV(Sequencer):
         bias_in_current = ('bias_in_ua' not in self._measurement_config['iv_didv']) or (self._measurement_config['iv_didv']['bias_in_ua'])
 
         if bias_in_current and single_TES_bias_source:
-            print('WARNING: You have defined the sweep biases in current \
-            rather than voltage when you have a single source for biasing \
-            them. If your TES bias resistances are identical (or you are \
-            running a single channel) you can safely ignore this warning. \
-            Otherwise, anticipate misreporting of the bias current')
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning '+
+            'Otherwise, anticipate misreporting of the bias current')
         elif not bias_in_current and not single_TES_bias_source:
-            raise ValueError('Error: You have defined the sweep biases in \
-            voltage when you have a bias source capable of delivering \
-            individual biases to each TES. Since we dont store the load \
-            resistances for such sources, you will need to define the \
-            biases in voltage.')
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
         
         tes_bias_unit = 'uA'
         if not bias_in_current:
@@ -171,11 +171,11 @@ class IV_dIdV(Sequencer):
             if 'signal_gen_voltage' not in didv_config:
                 didv_config['signal_gen_voltage'] = None
                 if single_signal_gen_source:
-                    print('WARNING: You have defined the dIdV amplitude in current \
-                          ather than voltage when you have a single signal generator. \
-                          If your SG line resistances are identical (or you are \
-                          running a single channel) you can safely ignore this warning. \
-                          Otherwise, anticipate misreporting of the amplitude')
+                    print('WARNING: You have defined the dIdV amplitude in current '+
+                          'rather than voltage when you have a single signal generator. '+
+                          'If your SG line resistances are identical (or you are '+
+                          'running a single channel) you can safely ignore this warning. '+
+                          'Otherwise, anticipate misreporting of the amplitude')
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
 

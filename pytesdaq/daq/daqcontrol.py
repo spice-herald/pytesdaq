@@ -533,17 +533,17 @@ class DAQControl:
             self._instruments_inst.calc_tes_controller_load(didv_channels)
         
         if bias_in_current and single_TES_bias_source:
-            print('WARNING: You have defined the sweep biases in current \
-            rather than voltage when you have a single source for biasing \
-            them. If your TES bias resistances are identical (or you are \
-            running a single channel) you can safely ignore this warning. \
-            Otherwise, anticipate misreporting of the bias current')
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning. '+
+            'Otherwise, anticipate misreporting of the bias current')
         elif not bias_in_current and not single_TES_bias_source:
-            raise ValueError('Error: You have defined the sweep biases in \
-            voltage when you have a bias source capable of delivering \
-            individual biases to each TES. Since we dont store the load \
-            resistances for such sources, you will need to define the \
-            biases in voltage.')
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
         
         tes_bias_unit = 'uA'
         if not bias_in_current:
@@ -743,17 +743,17 @@ class DAQControl:
             self._instruments_inst.calc_tes_controller_load(iv_channels)
         
         if bias_in_current and single_TES_bias_source:
-            print('WARNING: You have defined the sweep biases in current \
-            rather than voltage when you have a single source for biasing \
-            them. If your TES bias resistances are identical (or you are \
-            running a single channel) you can safely ignore this warning. \
-            Otherwise, anticipate misreporting of the bias current')
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning. '+
+            'Otherwise, anticipate misreporting of the bias current')
         elif not bias_in_current and not single_TES_bias_source:
-            raise ValueError('Error: You have defined the sweep biases in \
-            voltage when you have a bias source capable of delivering \
-            individual biases to each TES. Since we dont store the load \
-            resistances for such sources, you will need to define the \
-            biases in voltage.')
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
         
 
         tes_bias_unit = 'uA'
