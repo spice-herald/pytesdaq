@@ -1372,6 +1372,17 @@ class DAQControl:
                 iv_didv_tes_bias['iv']['tes_bias_list']
             )
         
+        #optional unit definitions (defaults to current unless specified)
+        unit_dict = self._get_iv_didv_tes_bias_unit()
+
+        if iv_didv_tes_bias['didv'] is not None:
+            if unit_dict['didv'] is not None:
+                config['didv']['bias_in_ua'] = unit_dict['didv']
+
+        if iv_didv_tes_bias['iv'] is not None:
+            if unit_dict['iv'] is not None:
+                config['iv']['bias_in_ua'] = unit_dict['diivdv']
+
 
         # IV relock
         config['iv']['relock_first_step'] = False
@@ -1449,6 +1460,16 @@ class DAQControl:
                 
                                 
         return tes_bias_dict
+    
+    def _get_iv_didv_tes_bias_unit(self):
+
+        measurements = ['iv', 'didv']
+        return_dict = {}
+        for measurement in measurements:
+            if 'bias_in_ua' in self._daq_config[measurement]:
+                return_dict[measurement] = self._daq_config[measurement]
+            else: return_dict[measurement] = None
+        return return_dict
 
     
 
