@@ -555,7 +555,7 @@ class DAQControl:
         single_signal_gen_source = (self._instruments_inst._config.get_tes_controller() != 'feb')
 
         if single_signal_gen_source:
-            self._instruments_inst.calc_signal_generator_load(didv_channels)
+            self._instruments_inst.calc_sg_load(didv_channels)
         
         # ------------------
         # Loop tes bias
