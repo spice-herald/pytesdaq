@@ -1381,7 +1381,7 @@ class DAQControl:
 
         if iv_didv_tes_bias['iv'] is not None:
             if unit_dict['iv'] is not None:
-                config['iv']['bias_in_ua'] = unit_dict['diivdv']
+                config['iv']['bias_in_ua'] = unit_dict['iv']
 
 
         # IV relock
