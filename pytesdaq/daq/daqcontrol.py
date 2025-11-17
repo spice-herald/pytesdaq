@@ -1467,7 +1467,7 @@ class DAQControl:
         return_dict = {}
         for measurement in measurements:
             if 'bias_in_ua' in self._daq_config[measurement]:
-                return_dict[measurement] = self._daq_config[measurement]
+                return_dict[measurement] = self._daq_config[measurement]['bias_in_ua']
             else: return_dict[measurement] = None
         return return_dict
 
