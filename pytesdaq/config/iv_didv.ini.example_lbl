@@ -13,35 +13,21 @@ use_negative_tes_bias = false
 # TES bias sweep: use vect OR  min/max/step 
 use_tes_bias_vect = false
 
-# bias vect [uA]
+#Units: if not in microamps, then mV is assumed
+bias_in_ua = false
+
+# bias vect [mV]
 #tes_bias_vect = 100, 50,20,10,5,1
 
-# min/max/steps [all in muAmps]
+# min/max/steps [all in mV]
 # 100x25: 400,0,80,20,40,5,5
 # 800x200: 2000,0,400,100,200,25,25
 # 1%: 1500,0,250,75,250,15,15
 # Ch1 4%: 2000,0,1000,250,250,30,25
 # Ch4 4%: 400,0,200,50,50,6,5
 
-#bias parameters used on 3/3/25 (for channel 7
-#tes_bias_max = 1100 
-#tes_bias_min = 0
-#tes_bias_T =  300
-#tes_bias_SC =  10
-#tes_bias_step_N = 200
-#tes_bias_step_T = 20
-#tes_bias_step_SC = 3
 
-#bias parameters used to run IV for all dry channels (run24)
-#tes_bias_max = 1500 
-#tes_bias_min = 0
-#tes_bias_T =  400
-#tes_bias_SC =  50
-#tes_bias_step_N = 200
-#tes_bias_step_T = 14
-#tes_bias_step_SC = 10
-
-#Run 24 modification for the SQUID tests
+#Run 24 modification for the SQUID tests [all in mV]
 tes_bias_max = 1500 
 tes_bias_min = 0
 tes_bias_T =  300
@@ -50,24 +36,6 @@ tes_bias_step_N = 200
 tes_bias_step_T = 14
 tes_bias_step_SC = 10
 
-#Mini dIdV taken 3/12 at 14.3 SL condensed
-#tes_bias_max = 247.26
-#tes_bias_min = 244.26
-#tes_bias_T = 246.26
-#tes_bias_SC = 245.126
-#tes_bias_step_N = 1
-#tes_bias_step_T = 1
-#tes_bias_step_SC = 1
- 
-#test parameters for short runs
-#tes_bias_max = 120 
-#tes_bias_min = 117
-#tes_bias_T =  119
-#tes_bias_SC =  118
-#tes_bias_step_N = 1
-#tes_bias_step_T = 1scp -r ./run21/raw/didv_I4_D20241219_T175712/ wmatava@tessy.lbl.gov:/data/lbl/run21/raw
-
-#tes_bias_step_SC = 1
 
 
 # Temperature sweep, temperature in mk

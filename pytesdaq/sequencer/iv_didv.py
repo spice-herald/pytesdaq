@@ -350,18 +350,24 @@ class IV_dIdV(Sequencer):
         
 
             # ZAP TES
-            # ZZZ Maybe fix this to work in mV also? Not sure...
             if self._do_zap_tes:
-                tes_bias_max = 140
-                if sweep_config['use_negative_tes_bias']:
-                    tes_bias_max = -140
+
+                if tes_bias_unit == 'uA':
+                    tes_bias_max = 140
+                    if sweep_config['use_negative_tes_bias']:
+                        tes_bias_max = -140
+
+                else: #bias units given in mV
+                    tes_bias_max = 500
+                    if sweep_config['use_negative_tes_bias']:
+                        tes_bias_max = 500
                     
                 print('INFO: Zapping TES  with bias '
-                      + str(tes_bias_max) + 'uA')
+                      + str(tes_bias_max) + tes_bias_unit)
                 
                 for channel in self._detector_channels:
                     self._instruments_inst.set_tes_bias(
-                        tes_bias_max, unit='uA',
+                        tes_bias_max, unit=tes_bias_unit,
                         detector_channel=channel,
                         use_net_resistance=single_TES_bias_source
                         )
