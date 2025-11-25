@@ -21,6 +21,11 @@ if __name__ == "__main__":
     # Detector settings
     parser.add_argument('--tes_bias_uA', nargs='?', type=float, const=nan, default=None,
                        help='Read/write TES bias in units of "uA"')
+    parser.add_argument('--tes_bias_mV', nargs='?', type=float, const=nan, default=None,
+                       help='Read/write TES bisa in units of "mV"')
+    parser.add_argument('--tes_bias_use_net_resistance', nargs='?', type=bool, default=False,
+                       const=nan, help='Whether to pass single line load to the TES bias '+
+                       'generator or to calculate the net of load of the changed lines')
     parser.add_argument('--squid_bias_uA', nargs='?', type=float, const=nan, default=None,
                        help='Read/write SQUID bias in units of "uA"')
     parser.add_argument('--lock_point_mV', nargs='?', type=float, const=nan, default=None,
@@ -57,7 +62,10 @@ if __name__ == "__main__":
                        help='Signal generator shape [sine, square, triangle, ramp, dc]')
     parser.add_argument('--signal_gen_phase', nargs='?', type=float, default=None, const=nan,
                        help='Signal generator phase')
-    
+    parser.add_argument('--signal_gen_use_net_resistance', nargs='?', type=bool, default=False,
+                       const=nan, help='Whether to pass single line load to the signal '+
+                       'generator or to calculate the net of load of the changed lines')
+        
     # verbose
     parser.add_argument('--verbose', action="store_true", help='Screen output')
     
@@ -158,6 +166,14 @@ if __name__ == "__main__":
     myinstruments = instrument.Control(setup_file=setup_file,
                                        dummy_mode=False, verbose=verbose)
 
+    #Pre-calculate load 
+    if args.tes_bias_use_net_resistance:
+        myinstruments.calc_tes_controller_load(detector_channels)
+
+    #Precalculate load
+    if args.signal_gen_use_net_resistance and channels:
+        myinstruments.calc_sg_load(detector_channels)
+
 
 
     
@@ -174,19 +190,37 @@ if __name__ == "__main__":
         # -----------
         # TES bias
         # -----------
-        if args.tes_bias_uA is not None:
+        if args.tes_bias_uA is not None and args.tes_bias_mV is not None:
+            raise ValueError('ERROR: cannot define tes bias in both voltage and current')
+        else:
+            if args.tes_bias_uA is not None:
 
-            #  write to board
-            if args.tes_bias_uA is not nan:
+                #  write to board
+                if args.tes_bias_uA is not nan:
                 
-                myinstruments.set_tes_bias(float(args.tes_bias_uA), unit='uA',
-                                          detector_channel=chan)
+                    myinstruments.set_tes_bias(float(args.tes_bias_uA), unit='uA',
+                                              detector_channel=chan,
+                                              use_net_resistance = args.tes_bias_use_net_resistance)
 
-            # read from board
-            readback = myinstruments.get_tes_bias(detector_channel=chan,
-                                                 unit='uA')
+                # read from board
+                readback = myinstruments.get_tes_bias(detector_channel=chan,
+                                                     unit='uA')
                 
-            print(f'TES bias for channel {chan_display}  = {readback} uA')
+                print(f'TES bias for channel {chan_display}  = {readback} uA')
+
+            if args.tes_bias_mV is not None:
+
+                #  write to board
+                if args.tes_bias_mV is not nan:
+                    myinstruments.set_tes_bias(float(args.tes_bias_mV), unit='mV',
+                                              detector_channel=chan,
+                                              use_net_resistance = args.tes_bias_use_net_resistance)
+
+                # read from board
+                readback = myinstruments.get_tes_bias(detector_channel=chan,
+                                                     unit='mV')
+                
+                print(f'TES bias for channel {chan_display}  = {readback} mV')
                     
             
         # -----------
@@ -309,12 +343,15 @@ if __name__ == "__main__":
                     myinstruments.set_signal_gen_params(
                         detector_channel=chan,
                         voltage=float(args.signal_gen_voltage_mV),
-                        voltage_unit='mV'
+                        voltage_unit='mV',
+                        use_net_resistance=args.signal_gen_use_net_resistance
+                        
                     )
             else:
                 myinstruments.set_signal_gen_params(
                     voltage=float(args.signal_gen_voltage_mV),
-                    voltage_unit='mV'
+                    voltage_unit='mV',
+                    use_net_resistance=False
                 )
         else:
             print('ERROR: voltage is NaN. Doing nothing...')
