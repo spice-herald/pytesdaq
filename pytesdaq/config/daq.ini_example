@@ -159,7 +159,7 @@ start_frequency_hz = 5
 stop_frequency_hz = 200
 frequency_points = 50
 frequency_spacing = linear
-frequency_hold_time_s = 0.0
+frequency_hold_time = 0.0
 
 # optional focus frequencies for denser sampling
 #focus_frequencies_hz = 30, 60
@@ -178,7 +178,7 @@ start_amplitude_vpp = 0.02
 stop_amplitude_vpp = 0.2
 amplitude_points = 10
 amplitude_spacing = linear
-amplitude_hold_time_s = 0.0
+amplitude_hold_time = 0.0
 
 # optional override for run time per amplitude step
 #amplitude_run_time = 5s

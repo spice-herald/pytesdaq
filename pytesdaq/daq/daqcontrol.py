@@ -1167,9 +1167,9 @@ class DAQControl:
             spacing = daq_config['frequency_spacing']
 
         hold_time_s = 0.0
-        if 'frequency_hold_time_s' in daq_config:
+        if 'frequency_hold_time' in daq_config:
             hold_time_s = arg_utils.convert_to_seconds(
-                daq_config['frequency_hold_time_s']
+                daq_config['frequency_hold_time']
             )
 
         focus_frequencies_hz = None
@@ -1267,9 +1267,9 @@ class DAQControl:
             spacing = daq_config['amplitude_spacing']
 
         hold_time_s = 0.0
-        if 'amplitude_hold_time_s' in daq_config:
+        if 'amplitude_hold_time' in daq_config:
             hold_time_s = arg_utils.convert_to_seconds(
-                daq_config['amplitude_hold_time_s']
+                daq_config['amplitude_hold_time']
             )
 
         sweep_config = {
