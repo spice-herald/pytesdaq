@@ -57,6 +57,12 @@ if __name__ == "__main__":
     parser.add_argument('--acquire-iv','--acquire_iv',
                         dest="acquire_iv", action="store_true",
                         help='Acquire IV data')
+
+    parser.add_argument('--acquire-accel-freq-sweep',
+                        '--acquire-accel_freq_sweep',
+                        dest="acquire_accel_freq_sweep",
+                        action="store_true",
+                        help='Acquire accel_freq_sweep data')
     
     parser.add_argument('--acquire-exttrig','--acquire_exttrig',
                         dest="acquire_exttrig", action="store_true",
@@ -152,12 +158,14 @@ if __name__ == "__main__":
     # check acquisition
     acquisition_types = ['continuous',
                          'didv', 'iv',
+                         'accel_freq_sweep',
                          'exttrig', 'randoms',
                          'threshold', 'calibration']
 
     acquisition_args = [args.acquire_cont,
                         args.acquire_didv,
                         args.acquire_iv,
+                        args.acquire_accel_freq_sweep,
                         args.acquire_exttrig,
                         args.acquire_rand,
                         args.acquire_thresh,

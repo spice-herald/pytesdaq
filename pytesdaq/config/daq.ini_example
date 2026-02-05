@@ -134,6 +134,54 @@ signal_gen_voltage_mV = 10
 signal_gen_frequency_Hz =  50
 
 
+[accel_freq_sweep]
+
+# sample rate [Hz]
+sample_rate = 1250000
+
+# trace length in millisec (ms) or  seconds (s)
+# Alternatively use "nb_samples" or "nb_cycles"
+trace_length = 5s
+
+# voltage range (volts)
+voltage_min = -5
+voltage_max = 5
+
+# run time per sweep step (can override with frequency_run_time or amplitude_run_time)
+sweep_run_time = 5s
+
+# ------------------------
+# Frequency sweep settings
+# ------------------------
+do_frequency_sweep = True
+amplitude_vpp = 0.2
+start_frequency_hz = 5
+stop_frequency_hz = 200
+frequency_points = 50
+frequency_spacing = linear
+frequency_hold_time_s = 0.0
+
+# optional focus frequencies for denser sampling
+#focus_frequencies_hz = 30, 60
+#focus_freqs_width_hz = 2.0
+#focus_freqs_spacing_hz = 0.2
+
+# optional override for run time per frequency step
+#frequency_run_time = 5s
+
+# ------------------------
+# Amplitude sweep settings
+# ------------------------
+do_amplitude_sweep = False
+frequency_hz = 50
+start_amplitude_vpp = 0.02
+stop_amplitude_vpp = 0.2
+amplitude_points = 10
+amplitude_spacing = linear
+amplitude_hold_time_s = 0.0
+
+# optional override for run time per amplitude step
+#amplitude_run_time = 5s
 
 
 [iv] 
