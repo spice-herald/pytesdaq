@@ -113,6 +113,9 @@ nb_cycles = 2.1
 voltage_min = -5
 voltage_max = 5
 
+# accelerometer gain (ADC to g conversion factor)
+accel_gain = 100
+
 # Signal generator voltage/frequency (optional)
 #
 # Parameters: signal_gen_voltage_mV, signal_gen_frequency_Hz

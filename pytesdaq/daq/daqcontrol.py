@@ -1006,6 +1006,16 @@ class DAQControl:
 
         # set detector config
         detector_config = self._read_detector_settings(adc_config)
+        if daq_config is not None and 'accel_gain' in daq_config:
+            accel_gain = float(daq_config['accel_gain'])
+            for adc_id, adc_dict in detector_config.items():
+                channel_list = adc_dict.get('channel_list', [])
+                if not isinstance(channel_list, (list, np.ndarray)):
+                    channel_list = [channel_list]
+                adc_dict['accel_gain'] = np.full(
+                    len(channel_list),
+                    accel_gain
+                )
         daq_inst.set_detector_config(detector_config)
         time.sleep(2)
 
