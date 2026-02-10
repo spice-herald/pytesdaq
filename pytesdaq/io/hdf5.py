@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from glob import glob
+import copy
 import stat
 import matplotlib.pyplot as plt
 import warnings
@@ -344,8 +345,6 @@ class H5Reader:
         info : dict
            file/event/detector metadata (if "include_metadata" = True)
         """
-
-        
         info = dict()
         array = np.array([])
         
@@ -395,7 +394,7 @@ class H5Reader:
          
         
         # get event index and trigger index (event_index start from 1)
-        event_index = self._current_file_event_counter+1
+        event_index = self._current_file_event_counter + 1
         trigger_index = None
         if self._current_file_event_list is not None:
             event_dict = (
@@ -506,23 +505,13 @@ class H5Reader:
                 'ERROR: No file available. '
                 + 'Use "file_name" argument!') 
 
-
-        
-        # current file dict
-        current_file_dict = copy.deepcopy(self._file_dict)
-        
-        #  set file list (clear internal data)
+        #  open file 
         if file_name is not None:
-            self.set_files(file_name)
+            self._open_file(file_name, segments=None)
+        elif self._current_file is None:
+            raise SystemExit('ERROR: No file open. A "filename" needs to be '
+                             'provided!')
 
-        # list of files
-        file_list = list(self._file_dict.keys())
-            
-        # open file if needed 
-        if self._current_file is None:
-            self._open_file(file_list[0], event_list=None)
-
-        
         # load event
         array, info = self._load_event(
             event_index,
@@ -537,12 +526,7 @@ class H5Reader:
             baselineinds=baselineinds,
             adc_name=adc_name)
 
-
-
-        # set back file dict
-        self.clear()
-        self._file_dict = current_file_dict
-
+        
         # return
         if include_metadata:
             return array, info
@@ -1799,6 +1783,7 @@ class H5Reader:
         # available in event_list
         group_names = list()
         if event_list is not None:
+            event_list = copy.deepcopy(event_list)
             for event_dict in event_list:
                 if 'group_name' in event_dict.keys():
                     group_names.append(str(event_dict['group_name']))
@@ -1821,8 +1806,7 @@ class H5Reader:
                     # add group name to path if not
                     # already in path
                     if group_name not in filepath:
-                        filepath =  (filepath + '/'
-                                     + group_name)
+                        filepath =  f'{filepath}/{group_name}')
                         
                     # add to search list
                     search_str = filepath + '/*.hdf5'
@@ -1838,7 +1822,7 @@ class H5Reader:
 
             # case a file
             else:
-                if filepath[-4:]!='hdf5':
+                if filepath[-4:] != 'hdf5':
                     filepath += '.hdf5'
                 if os.path.isfile(filepath):
                     file_list.append(filepath)
