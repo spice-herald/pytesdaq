@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument('--setup_file', type=str,
                         help=('Setup configuration file name (full path) '
                               '[default: pytesdaq/config/setup.ini]'))
-    parser.add_argument('--sequencer_file', type=str,
+    parser.add_argument('--config_file', type=str,
                         help=('Transducer sweep configuration file name '
                               '(full path) '
                               '[default: pytesdaq/config/transducer_sweep.ini]'))
@@ -31,8 +31,6 @@ if __name__ == "__main__":
     parser.add_argument('--data_purpose', '--run_purpose',
                         dest='data_purpose',
                         help='Data purpose [string or int], default="test"')
-    parser.add_argument('--dummy_mode', dest='dummy_mode',
-                        action='store_true')
     parser.add_argument('--dry-run', '--dry_run', dest='dry_run',
                         action='store_true',
                         help=('Print sweep plan (frequencies, amplitudes, '
@@ -45,11 +43,6 @@ if __name__ == "__main__":
     # ========================
     # Parse arguments
     # ========================
-
-    # dummy mode
-    dummy_mode = False
-    if args.dummy_mode:
-        dummy_mode = True
 
     # dry run
     dry_run = False
@@ -88,17 +81,17 @@ if __name__ == "__main__":
         print('ERROR: Setup file "' + setup_file + '" not found!')
         exit()
 
-    # sequencer file
+    # config file
     sequencer_file = None
-    if args.sequencer_file:
-        sequencer_file = args.sequencer_file
+    if args.config_file:
+        sequencer_file = args.config_file
     else:
         this_dir = os.path.dirname(os.path.realpath(__file__))
         sequencer_file = (this_dir
                           + '/../pytesdaq/config/transducer_sweep.ini')
 
     if not os.path.isfile(sequencer_file):
-        print('ERROR: Sequencer file "' + sequencer_file + '" not found!')
+        print('ERROR: Config file "' + sequencer_file + '" not found!')
         exit()
 
 
@@ -121,7 +114,6 @@ if __name__ == "__main__":
         setup_file=setup_file,
         comment=comment,
         data_purpose=data_purpose,
-        dummy_mode=dummy_mode,
         dry_run=dry_run,
         verbose=verbose
     )

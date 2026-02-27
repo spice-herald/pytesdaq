@@ -16,7 +16,7 @@ class TransducerSweep(Sequencer):
                  sequencer_file=None, setup_file=None,
                  comment='No comment',
                  data_purpose='test',
-                 dummy_mode=False, dry_run=False, verbose=True):
+                 dry_run=False, verbose=True):
         """
         Transducer frequency/amplitude sweep measurement.
 
@@ -32,8 +32,6 @@ class TransducerSweep(Sequencer):
             Comment string for the measurement.
         data_purpose : str
             Data purpose / run type string.
-        dummy_mode : bool
-            If True, no actual instrument I/O.
         dry_run : bool
             If True, only print the sweep plan without
             any hardware interaction or data taking.
@@ -56,7 +54,6 @@ class TransducerSweep(Sequencer):
             detector_channels=None,
             sequencer_file=sequencer_file,
             setup_file=setup_file,
-            dummy_mode=dummy_mode,
             verbose=verbose
         )
 
