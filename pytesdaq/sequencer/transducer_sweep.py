@@ -521,6 +521,13 @@ class TransducerSweep(Sequencer):
             Signal generator frequency in Hz.
         """
 
+        # Enable auto-range before setting voltage so the generator
+        # selects the appropriate range for the new amplitude, avoiding
+        # silent failures when the current fixed range is too small.
+        signal_gen_controller = self._instrument.get_signal_gen_controller()
+        if signal_gen_controller is not None:
+            signal_gen_controller.set_auto_range('on')
+
         for chan in detector_channels:
             self._instrument.set_signal_gen_params(
                 detector_channel=chan,
@@ -533,6 +540,11 @@ class TransducerSweep(Sequencer):
                 offset_unit='V',
                 phase=0.0
             )
+
+        # Disable auto-range after voltage is set to prevent unintended
+        # range changes during the measurement.
+        if signal_gen_controller is not None:
+            signal_gen_controller.set_auto_range('off')
 
     def _get_adc_config_for_step(self, config_dict=None,
                                  frequency_hz=None):
