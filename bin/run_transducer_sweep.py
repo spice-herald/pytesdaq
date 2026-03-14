@@ -20,7 +20,7 @@ if __name__ == "__main__":
                               'channel names'))
     parser.add_argument('--setup_file', type=str,
                         help=('Setup configuration file name (full path) '
-                              '[default: pytesdaq/config/setup.ini]'))
+                              '[default: pytesdaq/config/setup_accel.ini]'))
     parser.add_argument('--config_file', type=str,
                         help=('Transducer sweep configuration file name '
                               '(full path) '
@@ -31,6 +31,10 @@ if __name__ == "__main__":
     parser.add_argument('--data_purpose', '--run_purpose',
                         dest='data_purpose',
                         help='Data purpose [string or int], default="test"')
+    parser.add_argument('--filename_override', type=str,
+                        help=('Override the run directory name. Data will be '
+                              'saved to <data_path>/<filename_override>/... '
+                              'instead of <data_path>/run<fridge_run>/...'))
     parser.add_argument('--dry-run', '--dry_run', dest='dry_run',
                         action='store_true',
                         help=('Print sweep plan (frequencies, amplitudes, '
@@ -64,6 +68,11 @@ if __name__ == "__main__":
     if args.data_purpose:
         data_purpose = args.data_purpose
 
+    # filename override
+    filename_override = None
+    if args.filename_override:
+        filename_override = args.filename_override
+
     # channels
     detector_channels = None
     if args.detector_channels:
@@ -75,7 +84,7 @@ if __name__ == "__main__":
         setup_file = args.setup_file
     else:
         this_dir = os.path.dirname(os.path.realpath(__file__))
-        setup_file = this_dir + '/../pytesdaq/config/setup.ini'
+        setup_file = this_dir + '/../pytesdaq/config/setup_accel.ini'
 
     if not os.path.isfile(setup_file):
         print('ERROR: Setup file "' + setup_file + '" not found!')
@@ -114,6 +123,7 @@ if __name__ == "__main__":
         setup_file=setup_file,
         comment=comment,
         data_purpose=data_purpose,
+        filename_override=filename_override,
         dry_run=dry_run,
         verbose=verbose
     )

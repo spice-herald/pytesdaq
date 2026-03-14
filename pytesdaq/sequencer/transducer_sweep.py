@@ -16,6 +16,7 @@ class TransducerSweep(Sequencer):
                  sequencer_file=None, setup_file=None,
                  comment='No comment',
                  data_purpose='test',
+                 filename_override=None,
                  dry_run=False, verbose=True):
         """
         Transducer frequency/amplitude sweep measurement.
@@ -32,6 +33,12 @@ class TransducerSweep(Sequencer):
             Comment string for the measurement.
         data_purpose : str
             Data purpose / run type string.
+        filename_override : str or None
+            If provided, data is saved to
+            <data_path>/<filename_override>/... instead of
+            <data_path>/run<fridge_run>/... . Useful for
+            separating accelerometer data from regular
+            fridge run data.
         dry_run : bool
             If True, only print the sweep plan without
             any hardware interaction or data taking.
@@ -45,6 +52,7 @@ class TransducerSweep(Sequencer):
         # signal gen parameters that don't apply here).
         self._raw_detector_channels = detector_channels
         self._data_purpose = data_purpose
+        self._filename_override = filename_override
         self._dry_run = dry_run
 
         # Call the Sequencer class constructor.
@@ -293,9 +301,14 @@ class TransducerSweep(Sequencer):
         # data path
         data_path = self._config.get_data_path()
         self._fridge_run = self._config.get_fridge_run()
-        fridge_run_name = 'run' + str(self._fridge_run)
-        if data_path.find(fridge_run_name) == -1:
-            data_path += ('/' + fridge_run_name)
+        # If filename_override is set, use it instead of run<fridge_run>
+        # so accelerometer data can be saved separately.
+        if self._filename_override is not None:
+            data_path += ('/' + self._filename_override)
+        else:
+            fridge_run_name = 'run' + str(self._fridge_run)
+            if data_path.find(fridge_run_name) == -1:
+                data_path += ('/' + fridge_run_name)
         self._base_raw_data_path = data_path + '/raw'
         self._base_automation_data_path = data_path + '/automation'
 
