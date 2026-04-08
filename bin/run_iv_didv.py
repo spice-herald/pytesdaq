@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--snap', '--zap_tes', dest='zap_tes', action='store_true')
     parser.add_argument('--enable-temperature-sweep', dest='enable_temperature_sweep', action='store_true')
     parser.add_argument('--disable-bias-sweep', dest='disable_bias_sweep', action='store_true')
+    parser.add_argument('--disable-online-iv', dest='disable_online_iv', action ='store_true')
     parser.add_argument('--saved_channels',  dest='saved_channels', nargs='+', type=str,
                         help=('Comma and/or space separated detector or TES readout channels '
                               'saved in raw data\n(sweep channels automatically saved)'))
@@ -72,6 +73,10 @@ if __name__ == "__main__":
     enable_bias_sweep = True
     if args.disable_bias_sweep:
         enable_bias_sweep = False
+
+    enable_online_iv = True
+    if args.disable_online_iv:
+        enable_online_iv = False
     
 
     enable_iv_didv = (enable_iv or enable_rp or enable_rn or enable_didv)
@@ -149,6 +154,7 @@ if __name__ == "__main__":
                             rp=enable_rp, rn=enable_rn,
                             temperature_sweep=enable_temperature_sweep,
                             tes_bias_sweep=enable_bias_sweep,
+                            online_iv=enable_online_iv,
                             comment=comment,
                             do_relock=do_relock,
                             do_zero=do_zero,

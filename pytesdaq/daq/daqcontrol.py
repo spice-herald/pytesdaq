@@ -91,8 +91,6 @@ class DAQControl:
             setup_file=setup_file,
             verbose=verbose
         )
-        self._current_signal_gen = self._read_signal_gen()
-        self._current_tes_bias = self._read_tes_bias()
 
         # ------------------------
         # IV/dIdV/calibration specific
@@ -102,6 +100,17 @@ class DAQControl:
         self._iv_didv_config = self._get_iv_didv_configuration()
         self._calibration_config = self._get_calibration_configuration()
       
+        # ------------------------
+        # Reading the current instrument
+        # settings
+        # ------------------------
+        if ('bias_in_ua' not in self._iv_didv_config['iv']) or (self._iv_didv_config['iv']['bias_in_ua']):
+            self._current_tes_bias = self._read_tes_bias(unit = 'uA')
+        else:
+            self._current_tes_bias = self._read_tes_bias(unit = 'mV')
+
+        self._current_signal_gen = self._read_signal_gen()      
+
         
         #-------------------------
         # ADC setup(s)
@@ -513,6 +522,41 @@ class DAQControl:
             modify_tes = True
 
 
+        #True if we have a single DC source for biasing the TES's
+        single_TES_bias_source = self._instruments_inst._config.get_tes_controller() == 'agilent33500B'
+
+        #True if the user has defined biases in currents (rather than voltage)
+        bias_in_current = ('bias_in_ua' not in didv_config) or (didv_config['bias_in_ua'])
+
+        # Precalculate the load impedance as relevant
+        if single_TES_bias_source:
+            self._instruments_inst.calc_tes_controller_load(didv_channels)
+        
+        if bias_in_current and single_TES_bias_source:
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning. '+
+            'Otherwise, anticipate misreporting of the bias current')
+        elif not bias_in_current and not single_TES_bias_source:
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
+        
+        tes_bias_unit = 'uA'
+        if not bias_in_current:
+            tes_bias_unit = 'mV'
+
+        # True if we're applying the signal gen to one channel at a time.
+        # To my knowledge this is only true if we have a feb that's capable
+        # of restricting which channels see the signal
+        single_signal_gen_source = (self._instruments_inst._config.get_tes_controller() != 'feb')
+
+        if single_signal_gen_source:
+            self._instruments_inst.calc_sg_load(didv_channels)
+        
         # ------------------
         # Loop tes bias
         # ------------------
@@ -529,8 +573,9 @@ class DAQControl:
                         tes_bias_input = self._current_tes_bias[chan]
 
                     self._instruments_inst.set_tes_bias(
-                        tes_bias_input, unit='uA',
-                        detector_channel=chan
+                        tes_bias_input, unit=tes_bias_unit,
+                        detector_channel=chan,
+                        use_net_resistance=single_TES_bias_source
                     )
 
             # relock
@@ -569,7 +614,8 @@ class DAQControl:
                         detector_channel=chan,
                         voltage=voltage, voltage_unit='mV',
                         frequency=frequency,
-                        shape='square')
+                        shape='square',
+                        use_net_resistance = single_signal_gen_source)
                 
                     # turn output on
                     self._instruments_inst.set_signal_gen_onoff(
@@ -645,8 +691,9 @@ class DAQControl:
             if modify_tes:
                 tes_bias_input = self._current_tes_bias[chan]
                 self._instruments_inst.set_tes_bias(
-                    tes_bias_input, unit='uA',
-                    detector_channel=chan
+                    tes_bias_input, unit=tes_bias_unit,
+                    detector_channel=chan,
+                    use_net_resistance=single_TES_bias_source
                 )
 
                 # relock
@@ -684,23 +731,52 @@ class DAQControl:
         iv_config = self._iv_didv_config['iv']
         tes_bias_list = iv_config['tes_bias_list']
         iv_channels = iv_config['channels']
+
+        #True if we have a single DC source for biasing the TES's
+        single_TES_bias_source = self._instruments_inst._config.get_tes_controller() == 'agilent33500B'
+
+        #True if the user has defined biases in currents (rather than voltage)
+        bias_in_current = ('bias_in_ua' not in iv_config) or (iv_config['bias_in_ua'])
+
+        # Precalculate the load impedance as relevant
+        if single_TES_bias_source:
+            self._instruments_inst.calc_tes_controller_load(iv_channels)
         
+        if bias_in_current and single_TES_bias_source:
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning. '+
+            'Otherwise, anticipate misreporting of the bias current')
+        elif not bias_in_current and not single_TES_bias_source:
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
+        
+
+        tes_bias_unit = 'uA'
+        if not bias_in_current:
+            tes_bias_unit = 'mV'
+
         # ------------------
         # Loop tes bias
         # ------------------
         step_num = 0
         for tes_bias in tes_bias_list:
 
-            # set tes bias
             for chan in  iv_channels:
 
+                #This block is unit-agnostic (e.g. it handles mV-µA conversion)
                 tes_bias_input = tes_bias
                 if tes_bias == 'current':
                     tes_bias_input = self._current_tes_bias[chan]
 
                 self._instruments_inst.set_tes_bias(
-                    tes_bias_input, unit='uA',
-                    detector_channel=chan
+                    tes_bias_input, unit=tes_bias_unit,
+                    detector_channel=chan,
+                    use_net_resistance=single_TES_bias_source
                 )
 
             # relock
@@ -748,8 +824,9 @@ class DAQControl:
             tes_bias_input = self._current_tes_bias[chan]
 
             self._instruments_inst.set_tes_bias(
-                tes_bias_input, unit='uA',
-                detector_channel=chan
+                tes_bias_input, unit=tes_bias_unit,
+                detector_channel=chan,
+                use_net_resistance=single_TES_bias_source
             )
 
             # relock
@@ -1295,6 +1372,17 @@ class DAQControl:
                 iv_didv_tes_bias['iv']['tes_bias_list']
             )
         
+        #optional unit definitions (defaults to current unless specified)
+        unit_dict = self._get_iv_didv_tes_bias_unit()
+
+        if iv_didv_tes_bias['didv'] is not None:
+            if unit_dict['didv'] is not None:
+                config['didv']['bias_in_ua'] = unit_dict['didv']
+
+        if iv_didv_tes_bias['iv'] is not None:
+            if unit_dict['iv'] is not None:
+                config['iv']['bias_in_ua'] = unit_dict['iv']
+
 
         # IV relock
         config['iv']['relock_first_step'] = False
@@ -1372,6 +1460,16 @@ class DAQControl:
                 
                                 
         return tes_bias_dict
+    
+    def _get_iv_didv_tes_bias_unit(self):
+
+        measurements = ['iv', 'didv']
+        return_dict = {}
+        for measurement in measurements:
+            if 'bias_in_ua' in self._daq_config[measurement]:
+                return_dict[measurement] = self._daq_config[measurement]['bias_in_ua']
+            else: return_dict[measurement] = None
+        return return_dict
 
     
 
@@ -1611,7 +1709,7 @@ class DAQControl:
             
         return signal_gen_settings
 
-    def _read_tes_bias(self):
+    def _read_tes_bias(self, unit = 'mV'):
         """
         Read TES bias 
         """
@@ -1622,7 +1720,7 @@ class DAQControl:
             tes_bias = (
                 self._instruments_inst.get_tes_bias(
                     detector_channel=chan,
-                    unit='uA')
+                    unit=unit)
             )
 
             if tes_bias != np.nan:

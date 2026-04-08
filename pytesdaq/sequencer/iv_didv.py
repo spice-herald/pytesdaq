@@ -18,6 +18,7 @@ class IV_dIdV(Sequencer):
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
                  tes_bias_sweep=True,
+                 online_iv=True,
                  comment='No comment',
                  sweep_channels=None, saved_channels=None,
                  sequencer_file=None, setup_file=None,
@@ -33,6 +34,7 @@ class IV_dIdV(Sequencer):
         self._enable_rn = rn
         self._enable_temperature_sweep = temperature_sweep
         self._enable_tes_bias_sweep = tes_bias_sweep
+        self._enable_online_iv = online_iv
         
         # relock/zap
         self._do_zap_tes = do_zap
@@ -102,6 +104,34 @@ class IV_dIdV(Sequencer):
 
         if not (self._enable_iv or self._enable_didv):
             return True
+        
+        #True if we have a single DC source for biasing the TES's
+        single_TES_bias_source = self._instruments_inst._config.get_tes_controller() == 'agilent33500B'
+
+        #True if the user has defined biases in currents (rather than voltage)
+        bias_in_current = ('bias_in_ua' not in self._measurement_config['iv_didv']) or (self._measurement_config['iv_didv']['bias_in_ua'])
+
+        if bias_in_current and single_TES_bias_source:
+            print('WARNING: You have defined the sweep biases in current '+
+            'rather than voltage when you have a single source for biasing '+
+            'them. If your TES bias resistances are identical (or you are '+
+            'running a single channel) you can safely ignore this warning '+
+            'Otherwise, anticipate misreporting of the bias current')
+        elif not bias_in_current and not single_TES_bias_source:
+            raise ValueError('Error: You have defined the sweep biases in '+
+            'voltage when you have a bias source capable of delivering '+
+            'individual biases to each TES. Since we dont store the load '+
+            'resistances for such sources, you will need to define the '+
+            'biases in voltage.')
+        
+        tes_bias_unit = 'uA'
+        if not bias_in_current:
+            tes_bias_unit = 'mV'
+
+        #Precalculate the net load that the tes controller will see
+        if single_TES_bias_source:
+            self._instruments_inst.calc_tes_controller_load(self._detector_channels)
+
 
         # display
         if self._verbose:
@@ -125,15 +155,35 @@ class IV_dIdV(Sequencer):
         if self._enable_iv:
             iv_config =  self._measurement_config['iv']
 
+        single_signal_gen_source = False
         if self._enable_didv:
             
             didv_config = self._measurement_config['didv']
+
+            #True if we're delivering a single signal generator to all channels.
+            #To my knowledge the only (actively used) way to do so is to use a FEB
+            #board to open/close bias lines and perform dIdV channel-by-channel 
+            #rather than in parallel. 
+            single_signal_gen_source = (self._instruments_inst._config.get_tes_controller() != 'feb') \
+                or (not self._measurement_config['didv']['loop_channels'])
             
             # signal gen amplitude can be either voltage or current
             if 'signal_gen_voltage' not in didv_config:
                 didv_config['signal_gen_voltage'] = None
+                if single_signal_gen_source:
+                    print('WARNING: You have defined the dIdV amplitude in current '+
+                          'rather than voltage when you have a single signal generator. '+
+                          'If your SG line resistances are identical (or you are '+
+                          'running a single channel) you can safely ignore this warning. '+
+                          'Otherwise, anticipate misreporting of the amplitude')
             if 'signal_gen_current' not in didv_config:
                 didv_config['signal_gen_current'] = None
+
+
+            
+            #Precalculate the net resistance seen and store in the instrument control object
+            if single_signal_gen_source:
+                self._instruments_inst.calc_sg_load(self._detector_channels)
 
 
         # for case TES / SG controllers
@@ -165,8 +215,9 @@ class IV_dIdV(Sequencer):
                 # set TES bias
                 self._instruments_inst.set_tes_bias(
                     np.max(sweep_config['tes_bias_vect']),
-                    unit='uA',
-                    detector_channel=channel
+                    unit=tes_bias_unit,
+                    detector_channel=channel,
+                    use_net_resistance=single_TES_bias_source
                 )
 
                 signal_gen_voltage = 2
@@ -187,7 +238,8 @@ class IV_dIdV(Sequencer):
                     voltage_unit='mV',
                     frequency=signal_gen_frequency,
                     frequency_unit='Hz',
-                    shape='square'
+                    shape='square',
+                    use_net_resistance = single_signal_gen_source
                 )
 
                 print("INFO: Set signal gen to square wave")
@@ -299,17 +351,26 @@ class IV_dIdV(Sequencer):
 
             # ZAP TES
             if self._do_zap_tes:
-                tes_bias_max = 140
-                if sweep_config['use_negative_tes_bias']:
-                    tes_bias_max = -140
+
+                if tes_bias_unit == 'uA':
+                    tes_bias_max = 140
+                    if sweep_config['use_negative_tes_bias']:
+                        tes_bias_max = -140
+
+                else: #bias units given in mV
+                    tes_bias_max = 500
+                    if sweep_config['use_negative_tes_bias']:
+                        tes_bias_max = 500
                     
                 print('INFO: Zapping TES  with bias '
-                      + str(tes_bias_max) + 'uA')
+                      + str(tes_bias_max) + tes_bias_unit)
                 
                 for channel in self._detector_channels:
                     self._instruments_inst.set_tes_bias(
-                        tes_bias_max, unit='uA',
-                        detector_channel=channel)
+                        tes_bias_max, unit=tes_bias_unit,
+                        detector_channel=channel,
+                        use_net_resistance=single_TES_bias_source
+                        )
                     
                 time.sleep(5)
             
@@ -355,13 +416,15 @@ class IV_dIdV(Sequencer):
                           f'out of total {nb_steps} steps!')
                     
                     print(f'INFO: Setting TES bias all channels to : '
-                          f'{bias} uA!')
+                        f'{bias} ' + ' ' + tes_bias_unit +'!')
+     
                     # set TES bias all channels
                     for channel in self._detector_channels:
 
                         self._instruments_inst.set_tes_bias(
-                            bias, unit='uA',
-                            detector_channel=channel
+                            bias, unit=tes_bias_unit,
+                            detector_channel=channel,
+                            use_net_resistance=single_TES_bias_source
                         )
                                 
                     # sleep
@@ -476,23 +539,22 @@ class IV_dIdV(Sequencer):
                 # -----------
                 # Online IV
                 # ----------
-                if self._enable_tes_bias_sweep:
-
+                if self._enable_tes_bias_sweep and self._enable_online_iv:
 
                     # intialize 
                     offsets = list()
                     offsets_err = list()
                     stds = list()
-                                   
-                     # instantiate nidaq
+                                    
+                    # instantiate nidaq
                     daq_online = daq.DAQ(driver_name='pydaqmx', verbose=False)
-                                   
+                                    
                     # get corresponding ADC channels
                     adc_dict = connection_utils.get_adc_channel_list(
                         self._detector_connection_table,
                         detector_channel_list=self._detector_channels
                     )
-                                  
+                                
                     # set ADC
                     sample_rate = None
                     setup_dict = dict()
@@ -506,30 +568,28 @@ class IV_dIdV(Sequencer):
                         sample_rate = setup_dict[adc_id]['sample_rate']
                         
                     daq_online.set_adc_config_from_dict(setup_dict)
-
                     # get data
                     data_array = daq_online.read_many_events(100,
-                                                             adctovolt=True)
-
+                                                            adctovolt=True)
                     # clear
                     daq_online.clear()
-
+                    
                     # loop channels and zero once for each
                     for  ichan in range(len(self._detector_channels)):
 
                         traces = data_array[:,ichan,:]
                         cut = qp.autocuts(traces,
-                                          fs=sample_rate)
+                                        fs=sample_rate)
                         
                         traces = traces[cut]
-                        
+                            
                         # convert to amps
                         norm = (
                             self._instruments_inst.get_volts_to_amps_close_loop_norm(
-                                detector_channel=channel
+                            detector_channel=channel
                             )
                         )
-
+                    
                         traces /= norm
 
                         # offset
@@ -542,49 +602,49 @@ class IV_dIdV(Sequencer):
                         cut_off = 50000/nyq
                         b,a = signal.butter(2, cut_off)
                         traces = signal.filtfilt(b, a, traces, axis=1,
-                                                 padtype='even')
+                                                padtype='even')
 
                         traces_std = np.std(traces, axis=1)
                         std_median = np.median(traces_std, axis=0)
                         stds.append([std_median])
-          
-                    # save
-                    bias_array = [[-bias*1e-6]]*nb_channels
-                    bias_err_array = [[0]]*nb_channels
-                    
-                    if online_iv_offset is None:
-                        online_iv_offset = np.array(offsets)
-                    else:
-                        online_iv_offset = np.append(
-                            online_iv_offset, offsets, axis=1
-                        )
+                
+                        # save
+                        bias_array = [[-bias*1e-6]]*nb_channels
+                        bias_err_array = [[0]]*nb_channels
+                            
+                        if online_iv_offset is None:
+                                online_iv_offset = np.array(offsets)
+                        else:
+                            online_iv_offset = np.append(
+                                online_iv_offset, offsets, axis=1
+                            )
 
-                    if online_iv_offset_err is None:
-                        online_iv_offset_err = np.array(offsets_err)
-                    else:
-                        online_iv_offset_err = np.append(
-                            online_iv_offset_err, offsets_err, axis=1
-                        )
+                        if online_iv_offset_err is None:
+                            online_iv_offset_err = np.array(offsets_err)
+                        else:
+                            online_iv_offset_err = np.append(
+                                online_iv_offset_err, offsets_err, axis=1
+                            )
 
-                    if online_iv_std is None:
-                        online_iv_std = np.array(stds)
-                    else:
-                        online_iv_std = np.append(
-                            online_iv_std, stds, axis=1
-                        )  
-                        
-                    if online_iv_tes_bias is None:
-                        online_iv_tes_bias = np.array(bias_array)
-                    else:
-                        online_iv_tes_bias = np.append(
-                            online_iv_tes_bias,  bias_array, axis=1
-                        )  
+                        if online_iv_std is None:
+                            online_iv_std = np.array(stds)
+                        else:
+                            online_iv_std = np.append(
+                                online_iv_std, stds, axis=1
+                            )  
+                            
+                        if online_iv_tes_bias is None:
+                            online_iv_tes_bias = np.array(bias_array)
+                        else:
+                            online_iv_tes_bias = np.append(
+                                online_iv_tes_bias,  bias_array, axis=1
+                            )  
 
-                    if online_iv_tes_bias_err is None:
-                        online_iv_tes_bias_err = np.array(bias_err_array)
-                    else:
-                        online_iv_tes_bias_err = np.append(
-                            online_iv_tes_bias_err,  bias_err_array, axis=1
+                        if online_iv_tes_bias_err is None:
+                            online_iv_tes_bias_err = np.array(bias_err_array)
+                        else:
+                            online_iv_tes_bias_err = np.append(
+                                online_iv_tes_bias_err,  bias_err_array, axis=1
                         )  
 
                     # analyze
@@ -610,7 +670,7 @@ class IV_dIdV(Sequencer):
                         )
                     
                         ivobj.analyze()
-                        
+                            
                             
                 # -----------
                 # IV
@@ -666,10 +726,10 @@ class IV_dIdV(Sequencer):
                     # take data
                     if self._enable_tes_bias_sweep:
                         run_comment = ('IV: ' + ' TES bias = '
-                                       + str(bias) + 'uA')
-                        
+                                    + str(bias) + ' ' + tes_bias_unit)
                         print('INFO: Starting IV data taking with TES bias = '
-                              + str(bias) + 'uA!')
+                                + str(bias) + ' ' + tes_bias_unit + '!')
+
                     else:
                         run_comment = 'IV (bias sweep disabled)'
                         print('INFO: Starting IV data taking (bias sweep disabled)!')
@@ -696,7 +756,6 @@ class IV_dIdV(Sequencer):
                 
                 if self._enable_didv:
 
-
                     # ADC setup
                     self._daq.set_adc_config_from_dict(didv_config['adc_setup'])
                                                                               
@@ -718,7 +777,8 @@ class IV_dIdV(Sequencer):
                             current_unit='uA',
                             frequency=didv_config['signal_gen_frequency'],
                             frequency_unit='Hz',
-                            shape='square'
+                            shape='square',
+                            use_net_resistance = single_signal_gen_source
                         )
                    
                         # connect to TES
@@ -760,14 +820,14 @@ class IV_dIdV(Sequencer):
                             # take data
                             run_comment = ('dIdV chan ' + str(channel)
                                            + ': TES bias = '
-                                           + str(bias) + 'uA')
-                         
+                                           + str(bias) + ' ' + tes_bias_unit)
+                                 
                             if self._enable_tes_bias_sweep:
                                 run_comment = ('dIdV chan ' + str(channel)
-                                               + ': TES bias = ' + str(bias) + 'uA')
+                                               + ': TES bias = ' + str(bias) + ' ' + tes_bias_unit)
                                 print('INFO: Starting dIdV data taking for channel '
                                       + str(channel)
-                                      + ' with TES bias = ' + str(bias) + 'uA!')
+                                      + ' with TES bias = ' + str(bias) + ' ' + tes_bias_unit +'!')
                             else:
                                 run_comment = ('dIdV chan ' + str(channel)
                                                + ' (bias sweep disabled)')
@@ -850,7 +910,7 @@ class IV_dIdV(Sequencer):
 
         # online IV
         if (self._enable_tes_bias_sweep
-            and ivobj is not None):
+            and ivobj is not None and self._enable_online_iv):
             
             print('INFO: Making IV diagnostic plots!')
 
