@@ -1,6 +1,7 @@
 
 *__pycache__/*
 *.pyc
+.claude/
 
 ### ignore jupyter checkpoints
 
