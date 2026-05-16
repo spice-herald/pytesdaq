@@ -155,7 +155,7 @@ class H5Reader:
     """
     
     
-    def __init__(self, raise_errors=True, verbose=True):
+    def __init__(self, raise_errors=True, verbose=True, edit_mode=False):
         """
         Initialize H5Reader
 
@@ -167,6 +167,10 @@ class H5Reader:
 
         verbose : boolean, optional
           if True, display messages (default)
+
+        edit_mode : boolean, optional
+          if True, allows users to edit files via ZZZ
+          False by default to protect data integrity
         
         
         Return
@@ -177,6 +181,11 @@ class H5Reader:
 
         self._raise_errors = raise_errors
         self._verbose = verbose
+        self._edit_mode = edit_mode
+
+        self._rw_string = 'r'
+        if self._edit_mode:
+            self._rw_string = 'r+'
         
         # file dictionary {file: list of event dict}
         self._file_dict = dict()
@@ -284,6 +293,49 @@ class H5Reader:
         self._file_counter = 0
         self._current_file_event_counter = 0
         self._global_events_counter = 0
+
+
+    def set_this_event(self, data, detector_chans=None,
+                       adc_name='adc1'):
+        """
+        Overwrite the currently opened event. (wrapper for _set_event)
+
+        Parameters
+        ----------
+        data : array
+            array of signals to write
+
+        detector_chans : list
+            list of channels corresponding to waveforms in data
+
+        adc_name : string, optional
+            name of (often fake) adc used to digitize data
+
+        
+        """
+        
+
+        info = dict()
+        array = np.array([])
+    
+        
+        # get event index and trigger index (event_index start from 1)
+        event_index = self._current_file_event_counter
+        trigger_index = None
+        if self._current_file_event_list is not None:
+            event_dict = (
+                self._current_file_event_list[self._current_file_event_counter]
+            )
+            
+            event_index = int(event_dict['event_number']%100000)
+            if 'trigger_index' in event_dict.keys():
+                trigger_index = event_dict['trigger_index']
+            
+                     
+        self._set_event(data,
+                        event_index, 
+                        detector_chans=detector_chans,
+                        adc_name=adc_name)
      
 
 
@@ -1270,7 +1322,7 @@ class H5Reader:
 
     
     def _open_file(self, file_name, event_list=None,
-                   rw_string='r', load_metadata=True):
+                    load_metadata=True):
         """
         open file 
         """
@@ -1279,7 +1331,7 @@ class H5Reader:
             
         file = None
         try:
-            file = h5py.File(file_name, rw_string)
+            file = h5py.File(file_name, self._rw_string)
         except:
             print('ERROR: unable to open file ' + file_name)
             return
@@ -1439,7 +1491,135 @@ class H5Reader:
                     value = ' '.join(list(value))                    
             metadata_dict[key] = value
         return metadata_dict
+    
+    def _set_event(self, data,
+                   event_index,
+                   detector_chans=None,
+                   adc_name='adc1'):
         
+        """
+        Overwrite a waveform in the HDF5 file being opened
+
+        Paramters
+        ---------
+        data : array
+          Array of waveforms to rewrite
+        
+        event_index : integer
+          integer corresponding to the event to be overwritten
+        
+        detector_chans : list, optional
+          strings corresponding to channels being overwritten.
+          If none, defaults to all channels, with data intepreted to
+          have the same channel ordering as the hdf5
+
+        adc_name : string, optional
+          string corresponding to name of (fake) adc for routing inside the 
+          hdf5 file
+
+        """
+        
+        # ===================================
+        # Get HDF5 dataset
+        # ===================================
+
+        # check file open
+        if self._current_file is None:
+            raise ValueError('No file open!')
+
+        # get dataset
+        dataset_name = 'event_' + str(event_index)
+        dataset = self._current_file[adc_name][dataset_name]
+
+        # get dataset metadata
+        info = self._extract_metadata(dataset.attrs)
+        info.update(self._extract_metadata(self._current_file.attrs))
+        info.update(self._extract_metadata(self._current_file[adc_name].attrs))
+        info['read_status'] = 0
+        info['error_msg'] = ''
+
+        # ===================================
+        # Channel indices
+        # ===================================
+
+        # extract list of adc channels, index correspond to array index!
+        adc_nums_file = info['adc_channel_indices']
+        if (not isinstance(adc_nums_file, list)
+            and not isinstance(adc_nums_file, np.ndarray)):
+            adc_nums_file = np.array([adc_nums_file])
+        nb_channels_file = len(adc_nums_file)
+
+
+        # get connection map and convert to numpy array
+        connections = self.get_connection_dict(adc_name=adc_name, metadata=info)
+              
+        # Filter based on detector_chans argument
+        selected_array_indices = list()
+        selected_adc_nums = list()
+        selected_detector_chans = list()
+        selected_tes_chans = list()
+        selected_controller_chans = list()
+
+
+        if detector_chans is not None:
+            
+            # convert detector_chans to list if needed
+            if (not isinstance(detector_chans, list)
+                and not isinstance(detector_chans, np.ndarray)):
+                detector_chans = [detector_chans]
+                            
+
+            # loop selected channels
+            for chan in detector_chans:
+
+                # check
+                if chan not in connections['detector_chans']:
+                    raise ValueError('Detector channel ' + chan
+                                     + ' not available in raw data.'
+                                     + ' Check connection map!')
+                
+                # find channel index in connection map
+                ind = connections['detector_chans'].index(chan)
+
+                # extract selected ADC number
+                selected_adc = int(connections['adc_chans'][ind])
+                if selected_adc not in adc_nums_file:
+                    raise ValueError('Problem with raw data. Unable to find ADC channel')
+                
+                # save connections
+                selected_adc_nums.append(selected_adc)
+                selected_detector_chans.append(connections['detector_chans'][ind])
+                if 'tes_chans' in connections:
+                    selected_tes_chans.append(connections['tes_chans'][ind])
+                if 'controller_chans' in connections:
+                    selected_controller_chans.append(connections['controller_chans'][ind])
+
+                # save array index
+                ind_adc = int(np.where(adc_nums_file==selected_adc)[0])
+                selected_array_indices.append(ind_adc)                
+                
+        else:
+            selected_array_indices = list(range(nb_channels_file))
+            selected_adc_nums = list(adc_nums_file)
+            for adc_chan in selected_adc_nums:
+                ind = connections['adc_chans'].index(adc_chan)
+                selected_detector_chans.append(connections['detector_chans'][ind])
+                if 'tes_chans' in connections:
+                    selected_tes_chans.append(connections['tes_chans'][ind])
+                if 'controller_chans' in connections:
+                    selected_controller_chans.append(
+                        connections['controller_chans'][ind]
+                    )
+
+        # check number channels
+        if not selected_array_indices or len(selected_array_indices)==0:
+            raise ValueError('Unable to find selected channel(s). Check connection table!')
+
+
+        # Read the portion of the array using write_direct
+        for i, index in enumerate(selected_array_indices):
+            dataset[index] = data[i]
+            # dataset.write_direct(data[i], np.s_[index])        
     
     def _load_event(self, event_index,
                     trigger_index=None,
@@ -2100,7 +2280,7 @@ class H5Writer:
         self._adc_config = None
      
         
-    def write_event(self, data_array, prefix=None, dataset_metadata=None,
+    def write_event(self, data_array, time, prefix=None, dataset_metadata=None,
                     data_mode=None, adc_name='adc1'):
         """
         write pulse data in files
@@ -2132,6 +2312,7 @@ class H5Writer:
         dataset.attrs['event_id'] = self._global_event_counter 
         dataset.attrs['event_index'] = self._current_file_event_counter
         dataset.attrs['event_num'] = self._file_counter *100000 + self._current_file_event_counter
+        dataset.attrs['event_time'] = time
                 
         # update number of events
         self._current_file_adc_group.attrs['nb_events'] = self._current_file_event_counter
@@ -2145,9 +2326,6 @@ class H5Writer:
 
 
 
-
-
-                    
     def _open_file(self, prefix=None):
         """
         open file 
