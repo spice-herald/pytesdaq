@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument('--acquire-iv','--acquire_iv',
                         dest="acquire_iv", action="store_true",
                         help='Acquire IV data')
-
+    
     parser.add_argument('--acquire-exttrig','--acquire_exttrig',
                         dest="acquire_exttrig", action="store_true",
                         help='Acquire external trigger data')
