@@ -1,7 +1,7 @@
 
 *__pycache__/*
 *.pyc
-.claude/
+
 
 ### ignore jupyter checkpoints
 
@@ -28,3 +28,9 @@ __pycache__/
 */*/__pycache__/
 */*/*/__pycache__/
 */*/*/*/__pycache__/
+
+
+# Agents
+.claude/
+CLAUDE.md
+AGENTS.md
