@@ -32,7 +32,7 @@ class DAQControl:
         # ---------------------
         
         acquisition_types = ['continuous', 'didv', 'iv',
-                             'exttrig', 'randoms',
+                             'exttrig', 'randoms', 
                              'threshold', 'calibration']
         if  acquisition_type not in  acquisition_types:
             raise ValueError(
@@ -351,7 +351,8 @@ class DAQControl:
                 # done is iv only acquisition
                 if self._acquisition_type == 'iv':
                     continue
-
+            
+                
             # for split series, reverse order each time
             # so we reverse order of restricted/open
             # series datasets
@@ -759,6 +760,7 @@ class DAQControl:
              
         time.sleep(2)
 
+        
     def _run_calib(self, daq_inst,
                    run_time=None,
                    run_comment=None,
@@ -1098,7 +1100,7 @@ class DAQControl:
         trigger_types = {'continuous':1,
                          'didv':2, 'iv':3,
                          'exttrig':2,
-                         'randoms':3,
+                         'randoms':3, 
                          'threshold':4,
                          'calibration':1}
         
