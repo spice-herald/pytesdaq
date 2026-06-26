@@ -1577,7 +1577,7 @@ class H5Reader:
                     selected_controller_chans.append(connections['controller_chans'][ind])
 
                 # save array index
-                ind_adc = int(np.where(adc_nums_file==selected_adc)[0])
+                ind_adc = int(np.where(adc_nums_file==selected_adc)[0][0])
                 selected_array_indices.append(ind_adc)                
                 
         else:
