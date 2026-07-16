@@ -401,10 +401,11 @@ class GabSweep(Sequencer):
 
         self._adc_config = {adc_id: adc_setup}
 
-    def measure_baseline(self, nb_events=None):
+    def measure_baseline_quality(self, nb_events=None):
         """
         Measure the thermometer TES baseline: read traces, apply
-        qetpy autocuts, return the mean of the per-trace medians.
+        qetpy autocuts, return the mean of the per-trace medians
+        together with its data quality metrics.
 
         Parameters
         ----------
@@ -413,8 +414,9 @@ class GabSweep(Sequencer):
 
         Returns
         -------
-        baseline : float
-            Thermometer TES baseline [ADC units].
+        quality : dict
+            Keys: baseline [ADC units], spread [ADC units],
+            nb_traces, nb_traces_kept.
         """
 
         if nb_events is None:
@@ -432,9 +434,61 @@ class GabSweep(Sequencer):
                   'using all traces instead!')
             cut = np.ones(traces.shape[0], dtype=bool)
 
-        baseline = float(np.mean(np.median(traces[cut, :], axis=1)))
+        trace_medians = np.median(traces[cut, :], axis=1)
 
-        return baseline
+        quality = {
+            'baseline': float(np.mean(trace_medians)),
+            'spread': float(np.std(trace_medians)),
+            'nb_traces': int(traces.shape[0]),
+            'nb_traces_kept': int(np.sum(cut)),
+        }
+
+        return quality
+
+    def measure_baseline(self, nb_events=None):
+        """
+        Measure the thermometer TES baseline.
+
+        Parameters
+        ----------
+        nb_events : int or None
+            Number of traces to read. Defaults to nb_events_baseline.
+
+        Returns
+        -------
+        baseline : float
+            Thermometer TES baseline [ADC units].
+        """
+
+        quality = self.measure_baseline_quality(nb_events=nb_events)
+
+        return quality['baseline']
+
+    def _print_baseline_quality(self, quality=None, label=None):
+        """
+        Print one baseline measurement with its quality metrics.
+
+        Parameters
+        ----------
+        quality : dict
+            Output of measure_baseline_quality.
+        label : str
+            Short label describing the measurement.
+        """
+
+        message = (f'INFO: {label}: baseline = '
+                   f'{quality["baseline"]:.6g} [ADC units], '
+                   f'spread = {quality["spread"]:.3g}, '
+                   f'{quality["nb_traces_kept"]}/{quality["nb_traces"]} '
+                   'traces kept by autocuts')
+
+        if self._baseline_ref is not None and self._baseline_ref != 0:
+            offset = (quality['baseline'] - self._baseline_ref)
+            offset = offset / abs(self._baseline_ref) * 100.0
+            message = message + (f', {offset:+.3g} percent from '
+                                 'reference')
+
+        print(message)
 
     def wait_for_stable_baseline(self):
         """
@@ -573,9 +627,18 @@ class GabSweep(Sequencer):
                 print('REMINDER: thermometer TES must be biased in '
                       'transition, PID pre-set. The heater TES bias '
                       f'will be set to bias_min = {self._bias_min:.6g} '
-                      'uA (must keep it normal) and restored to '
-                      f'{self._heater_initial_bias_ua:.6g} uA at '
-                      'shutdown.')
+                      'uA (must keep it normal) and set back to its '
+                      'original value at shutdown.')
+
+            # sanity check the thermometer TES readout before
+            # committing to the sweep: taken as found, at the current
+            # MC temperature and heater TES bias
+            startup_quality = self.measure_baseline_quality()
+            self._diagnostics['startup_baseline'] = startup_quality
+            self._print_baseline_quality(
+                quality=startup_quality,
+                label='Startup check'
+            )
 
             for step_index, temperature_mk in (
                     enumerate(self._temperature_list_mk)):
@@ -636,8 +699,8 @@ class GabSweep(Sequencer):
                         unit='uA',
                         detector_channel=self._heater_tes_channel
                     )
-                    print('INFO: Heater TES bias restored to '
-                          f'{self._heater_initial_bias_ua:.6g} uA')
+                    print('INFO: Heater TES bias set back to its '
+                          'original pre-run value')
                 except Exception as err:
                     print(f'ERROR restoring heater TES bias: {err}')
 
@@ -864,15 +927,29 @@ class GabSweep(Sequencer):
             if self._post_bias_wait > 0:
                 time.sleep(self._post_bias_wait)
 
-            stability_ok, stability_history = (
-                self.wait_for_stable_baseline()
+        # settled baseline at this temperature, before any feedback:
+        # on later steps its offset from the reference is the bias
+        # point shift the feedback has to undo
+        stability_ok, stability_history = (
+            self.wait_for_stable_baseline()
+        )
+        settled_quality = self.measure_baseline_quality()
+        step_diagnostics['stability_history'] = stability_history
+        step_diagnostics['settled_quality'] = settled_quality
+
+        if self._verbose:
+            self._print_baseline_quality(
+                quality=settled_quality,
+                label=f'Step {step_index} settled'
             )
-            baseline = self.measure_baseline()
+
+        if step_index == 0:
+
+            baseline = settled_quality['baseline']
             self._baseline_ref = baseline
             converged = True
             bias_history = list()
             baseline_history = [baseline]
-            step_diagnostics['stability_history'] = stability_history
 
             if self._verbose:
                 print(f'INFO: Reference baseline: {baseline:.6g} '
@@ -883,7 +960,8 @@ class GabSweep(Sequencer):
             result = self._run_feedback()
             baseline = result['baseline_history'][-1]
             converged = result['converged']
-            stability_ok = result['stability_ok']
+            if not result['stability_ok']:
+                stability_ok = False
             end_sweep = result['cap_reached']
             bias_history = result['bias_history']
             baseline_history = result['baseline_history']
@@ -921,6 +999,15 @@ class GabSweep(Sequencer):
         step_diagnostics['baseline_history'] = baseline_history
         step_diagnostics['row'] = row_dict
         self._diagnostics['steps'].append(step_diagnostics)
+
+        if self._verbose:
+            print(f'INFO: Step {step_index} recorded: MC = '
+                  f'{row_dict["mc_temperature_mk"]:.6g} mK, '
+                  f'heater TES bias = {heater_bias_ua:.6g} uA, '
+                  f'baseline = {baseline:.6g} [ADC units] '
+                  f'({offset_percent:+.3g} percent from reference), '
+                  f'converged = {converged}, '
+                  f'stability_ok = {stability_ok}')
 
         return end_sweep
 

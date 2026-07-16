@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from pytesdaq.sequencer.gab_sweep import (
@@ -178,6 +179,34 @@ def test_rejects_same_thermometer_and_heater_channel(tmp_path):
             setup_file='pytesdaq/config/setup.ini',
             dry_run=True,
         )
+
+
+def test_measure_baseline_quality_reports_metrics():
+    # fake DAQ returning flat noisy traces around a known level
+    sweep = _make_dry_sweep()
+
+    rng = np.random.default_rng(seed=42)
+    nb_events = 20
+    traces = rng.normal(loc=500.0, scale=1.0, size=(nb_events, 1, 4000))
+
+    class FakeDaq:
+        @staticmethod
+        def read_many_events(nevents, adctovolt=False):
+            return traces
+
+    sweep._daq = FakeDaq()
+
+    quality = sweep.measure_baseline_quality()
+
+    assert quality['nb_traces'] == nb_events
+    assert 0 < quality['nb_traces_kept'] <= nb_events
+    assert quality['baseline'] == pytest.approx(500.0, abs=1.0)
+    assert quality['spread'] >= 0.0
+
+    # measure_baseline stays a thin float-returning wrapper
+    assert sweep.measure_baseline() == pytest.approx(
+        quality['baseline'], abs=1.0
+    )
 
 
 def test_run_feedback_converges_with_fake_device():
