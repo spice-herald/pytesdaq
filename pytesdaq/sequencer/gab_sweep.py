@@ -276,6 +276,13 @@ class GabSweep(Sequencer):
         )
         self._heater_tes_channel = str(require('heater_tes_channel'))
 
+        if self._thermometer_tes_channel == self._heater_tes_channel:
+            raise ValueError(
+                'GabSweep: "thermometer_tes_channel" and '
+                '"heater_tes_channel" must be different channels, '
+                f'both are "{self._heater_tes_channel}"!'
+            )
+
         # temperature setpoints [mK]
         self._temperature_list_mk = build_temperature_list(
             config_dict=config_dict
@@ -358,6 +365,14 @@ class GabSweep(Sequencer):
         self._thermometer_tes_channel = channels[0]
         self._heater_tes_channel = channels[1]
 
+        # two different config names can still resolve to one channel
+        if self._thermometer_tes_channel == self._heater_tes_channel:
+            raise ValueError(
+                'GabSweep: "thermometer_tes_channel" and '
+                '"heater_tes_channel" resolve to the same detector '
+                f'channel "{self._heater_tes_channel}"!'
+            )
+
         # DAQ is instantiated by the base class only if
         # detector_channels is set
         self._detector_channels = [self._thermometer_tes_channel]
@@ -373,7 +388,10 @@ class GabSweep(Sequencer):
         adc_setup['nb_samples'] = int(
             round(self._trace_length_ms / 1000.0 * self._sample_rate)
         )
-        adc_setup['trigger_type'] = 2
+
+        # randoms (type 3): no external trigger to wait on, the
+        # baseline traces are taken whenever they are requested
+        adc_setup['trigger_type'] = 3
 
         config_dict = self._measurement_config[self._measurement_name]
         if 'voltage_min' in config_dict:

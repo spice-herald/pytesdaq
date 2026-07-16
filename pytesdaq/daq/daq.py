@@ -256,7 +256,7 @@ class DAQ:
         nchannels = len(daq_config['adc1']['channel_list'])
 
         data_type = 'int16'
-        if adctovolt or adctoamp:
+        if adctovolt:
             data_type = 'float64'
 
         output_array =  np.zeros((nevents, nchannels, nsamples),

@@ -158,6 +158,28 @@ def _make_dry_sweep():
     return sweep
 
 
+def test_rejects_same_thermometer_and_heater_channel(tmp_path):
+    # one TES cannot be both the thermometer and the heater
+    from pytesdaq.sequencer import GabSweep
+
+    with open('pytesdaq/config/gab_sweep.ini.example', 'r') as f:
+        config_text = f.read()
+
+    config_text = config_text.replace(
+        'heater_tes_channel = C',
+        'heater_tes_channel = B'
+    )
+    config_file = tmp_path / 'gab_sweep_same_channel.ini'
+    config_file.write_text(config_text)
+
+    with pytest.raises(ValueError, match='must be different channels'):
+        GabSweep(
+            sequencer_file=str(config_file),
+            setup_file='pytesdaq/config/setup.ini',
+            dry_run=True,
+        )
+
+
 def test_run_feedback_converges_with_fake_device():
     # fake linear device: baseline responds linearly to heater bias;
     # the device starts at bias_min (100 uA in the example config)

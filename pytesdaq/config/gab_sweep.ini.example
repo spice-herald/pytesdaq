@@ -10,6 +10,7 @@ thermometer_instrument = macrt
 heater_name = heaterMC
 
 # TES channels (detector or TES readout names defined in setup.ini)
+# the two channels must be different: one TES cannot be both devices
 # thermometer TES: biased in transition manually by the user before the run
 # heater TES: controlled by this script; it can be left at its usual
 # operating bias, the script raises it to bias_min at the start of the
