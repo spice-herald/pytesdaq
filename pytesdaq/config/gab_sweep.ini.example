@@ -1,0 +1,50 @@
+[gab_sweep]
+
+# DAQ driver: read_many_events requires pydaqmx
+daq_driver = pydaqmx
+
+# fridge thermometry (MC thermometer is labeled CP in the heater software)
+# PID settings are never touched by this script; set them manually first
+thermometer_name = CP
+thermometer_instrument = macrt
+heater_name = heaterMC
+
+# TES channels (detector or TES readout names defined in setup.ini)
+# thermometer TES: biased in transition manually by the user before the run
+# heater TES: controlled by this script, must start at 0 bias
+thermometer_tes_channel = B
+heater_tes_channel = C
+
+# temperature sweep [mK]: explicit vector OR start/stop/step
+use_temperature_vect = true
+temperature_vect = 42, 41, 40, 38, 36, 34, 30, 26, 22, 16, 10
+#temperature_start = 42
+#temperature_stop = 10
+#temperature_step = 1
+
+# set_temperature wait parameters (values validated in Gab_planning/test.py)
+# wait_cycle_time, wait_stable_time, max_wait_time are in minutes
+# tolerance is fractional (0.02 means 2 percent)
+temperature_wait_cycle_time = 5
+temperature_wait_stable_time = 35
+temperature_max_wait_time = 300
+temperature_tolerance = 0.02
+
+# thermometer TES baseline measurement
+# stability_timeout is in seconds
+sample_rate = 1250000
+trace_length_ms = 8
+voltage_min = -10
+voltage_max = 10
+nb_events_baseline = 100
+nb_events_stability = 10
+baseline_tolerance_percent = 2
+stability_timeout = 300
+
+# heater TES feedback
+# bias_step_start and bias_max are in uA
+# feedback_timeout and post_bias_wait are in seconds
+bias_step_start = 15
+bias_max = 500
+feedback_timeout = 600
+post_bias_wait = 60

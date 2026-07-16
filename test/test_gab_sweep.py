@@ -1,0 +1,202 @@
+import pytest
+
+from pytesdaq.sequencer.gab_sweep import (
+    build_temperature_list,
+    compute_next_bias,
+)
+
+
+def test_build_temperature_list_from_vect():
+    config_dict = {
+        'use_temperature_vect': True,
+        'temperature_vect': ['42', 41.0, '40.5', '38'],
+    }
+    result = build_temperature_list(config_dict=config_dict)
+    assert result == [42.0, 41.0, 40.5, 38.0]
+
+
+def test_build_temperature_list_from_single_value_vect():
+    # get_sequencer_setup collapses single-element lists to a scalar
+    config_dict = {
+        'use_temperature_vect': True,
+        'temperature_vect': 42.0,
+    }
+    result = build_temperature_list(config_dict=config_dict)
+    assert result == [42.0]
+
+
+def test_build_temperature_list_from_start_stop_step():
+    config_dict = {
+        'use_temperature_vect': False,
+        'temperature_start': '42',
+        'temperature_stop': '38',
+        'temperature_step': '1',
+    }
+    result = build_temperature_list(config_dict=config_dict)
+    assert result == [42.0, 41.0, 40.0, 39.0, 38.0]
+
+
+def test_build_temperature_list_rejects_ascending_vect():
+    config_dict = {
+        'use_temperature_vect': True,
+        'temperature_vect': [38, 40, 42],
+    }
+    with pytest.raises(ValueError):
+        build_temperature_list(config_dict=config_dict)
+
+
+def test_build_temperature_list_rejects_zero_step():
+    config_dict = {
+        'use_temperature_vect': False,
+        'temperature_start': 42,
+        'temperature_stop': 38,
+        'temperature_step': 0,
+    }
+    with pytest.raises(ValueError):
+        build_temperature_list(config_dict=config_dict)
+
+
+def test_compute_next_bias_first_move_is_fixed_step_up():
+    # with a single history point, physics says increase the heater bias
+    result = compute_next_bias(
+        bias_history=[0.0],
+        baseline_history=[100.0],
+        baseline_ref=120.0,
+        bias_step_start=15.0,
+    )
+    assert result == 15.0
+
+
+def test_compute_next_bias_secant_moves_toward_reference():
+    # baseline rose from 100 to 110 when bias went 0 -> 15
+    # slope is 10/15, reference 120 needs 10 more baseline units
+    result = compute_next_bias(
+        bias_history=[0.0, 15.0],
+        baseline_history=[100.0, 110.0],
+        baseline_ref=120.0,
+        bias_step_start=15.0,
+    )
+    assert result == pytest.approx(30.0)
+
+
+def test_compute_next_bias_clamps_large_secant_step():
+    # very shallow slope would suggest a huge jump; clamp to 2x step
+    result = compute_next_bias(
+        bias_history=[0.0, 15.0],
+        baseline_history=[100.0, 100.001],
+        baseline_ref=120.0,
+        bias_step_start=15.0,
+    )
+    assert result == pytest.approx(15.0 + 30.0)
+
+
+def test_compute_next_bias_corrects_overshoot_downward():
+    # baseline overshot the reference; secant must step back down
+    result = compute_next_bias(
+        bias_history=[15.0, 30.0],
+        baseline_history=[110.0, 130.0],
+        baseline_ref=120.0,
+        bias_step_start=15.0,
+    )
+    assert result < 30.0
+    assert result == pytest.approx(22.5)
+
+
+def test_compute_next_bias_never_negative():
+    result = compute_next_bias(
+        bias_history=[5.0, 2.0],
+        baseline_history=[130.0, 125.0],
+        baseline_ref=50.0,
+        bias_step_start=15.0,
+    )
+    assert result >= 0.0
+
+
+def test_compute_next_bias_rejects_mismatched_history():
+    with pytest.raises(ValueError):
+        compute_next_bias(
+            bias_history=[0.0, 15.0],
+            baseline_history=[100.0],
+            baseline_ref=120.0,
+            bias_step_start=15.0,
+        )
+
+
+def _make_dry_sweep():
+    from pytesdaq.sequencer import GabSweep
+    sweep = GabSweep(
+        sequencer_file='pytesdaq/config/gab_sweep.ini.example',
+        setup_file='pytesdaq/config/setup.ini',
+        dry_run=True,
+    )
+    return sweep
+
+
+def test_run_feedback_converges_with_fake_device():
+    # fake linear device: baseline responds linearly to heater bias
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 0.0}
+    baseline_ref = 150.0
+
+    def fake_baseline(nb_events=None):
+        # baseline rises 1 ADC unit per uA of heater bias from 100
+        return 100.0 + device['bias']
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_stable_baseline = lambda: (True, [])
+    sweep._baseline_ref = baseline_ref
+    sweep._post_bias_wait = 0.0
+
+    result = sweep._run_feedback()
+
+    assert result['converged'] is True
+    assert result['cap_reached'] is False
+    final_baseline = result['baseline_history'][-1]
+    offset = abs(final_baseline - baseline_ref) / baseline_ref
+    assert offset * 100.0 <= sweep._baseline_tolerance_percent
+
+
+def test_run_feedback_stops_at_bias_cap():
+    # device too weak: baseline barely responds, cap must end feedback
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 0.0}
+
+    def fake_baseline(nb_events=None):
+        return 100.0 + (0.001 * device['bias'])
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_stable_baseline = lambda: (True, [])
+    sweep._baseline_ref = 150.0
+    sweep._post_bias_wait = 0.0
+
+    result = sweep._run_feedback()
+
+    assert result['cap_reached'] is True
+    assert result['converged'] is False
+    assert result['bias_history'][-1] == sweep._bias_max
