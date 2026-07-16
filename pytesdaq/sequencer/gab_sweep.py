@@ -3,9 +3,9 @@ Gab sweep sequencer.
 
 Automates the thermal conductance (Gab) measurement: sweep the MC stage
 temperature downward while adjusting the heater TES bias so that the
-thermometer TES stays at a fixed bias point. Records one datapoint per
-temperature step (MC temperature, heater TES bias current). No raw TES
-data is saved. See Gab_planning/Gab_sweep_design.md for the full design.
+thermometer TES stays at a fixed bias point. The heater TES bias is
+never taken below bias_min so it stays normal. No raw TES data is
+saved. See Gab_planning/Gab_sweep_design.md for the full design.
 """
 
 import copy
@@ -25,18 +25,13 @@ from pytesdaq.utils import connection_utils
 
 def build_temperature_list(config_dict=None):
     """
-    Build the MC temperature setpoint list in mK from the sequencer
-    configuration.
-
-    Uses "temperature_vect" if "use_temperature_vect" is true, otherwise
-    builds a uniformly spaced descending list from "temperature_start",
-    "temperature_stop", "temperature_step". Values may arrive as strings
-    because the config parser only converts integer-looking values.
+    Build the MC temperature setpoint list in mK from the config,
+    using "temperature_vect" or start/stop/step.
 
     Parameters
     ----------
     config_dict : dict
-        Measurement configuration dictionary from get_sequencer_setup.
+        Measurement configuration dictionary.
 
     Returns
     -------
@@ -107,33 +102,31 @@ def build_temperature_list(config_dict=None):
 def compute_next_bias(bias_history=None,
                       baseline_history=None,
                       baseline_ref=None,
-                      bias_step_start=None):
+                      bias_step_start=None,
+                      bias_min=0.0):
     """
     Compute the next heater TES bias from the feedback history.
 
-    With a single history point the physics fixes the direction: after
-    lowering the bath temperature, more heater power is always needed,
-    so step the bias up by bias_step_start. With two or more points a
-    secant update estimates the local baseline-vs-bias slope and jumps
-    toward the reference baseline, clamped to at most 2x bias_step_start
-    per move. Falls back to the fixed step if the slope is degenerate.
+    First move: fixed step up by bias_step_start. Later moves: secant
+    update toward baseline_ref, clamped to 2x bias_step_start.
 
     Parameters
     ----------
     bias_history : list of float
-        Heater TES bias values applied so far at this temperature [uA].
+        Heater TES biases applied so far at this temperature [uA].
     baseline_history : list of float
-        Thermometer TES baseline measured after each bias in
-        bias_history [ADC units].
+        Thermometer TES baseline after each bias [ADC units].
     baseline_ref : float
-        Reference thermometer TES baseline to return to [ADC units].
+        Reference baseline to return to [ADC units].
     bias_step_start : float
         Initial and fallback bias step [uA].
+    bias_min : float
+        Minimum bias keeping the heater TES normal [uA].
 
     Returns
     -------
     next_bias : float
-        Next heater TES bias to apply [uA], never negative.
+        Next heater TES bias [uA], never below bias_min.
     """
 
     if (bias_history is None or baseline_history is None
@@ -147,28 +140,28 @@ def compute_next_bias(bias_history=None,
     last_bias = float(bias_history[-1])
     fixed_step = float(bias_step_start)
     max_step = 2.0 * fixed_step
+    min_bias = float(bias_min)
 
     if len(bias_history) < 2:
-        return last_bias + fixed_step
-
-    delta_bias = float(bias_history[-1]) - float(bias_history[-2])
-    delta_baseline = (float(baseline_history[-1])
-                      - float(baseline_history[-2]))
-
-    if delta_bias == 0 or delta_baseline == 0:
-        return last_bias + fixed_step
-
-    slope = delta_baseline / delta_bias
-    step = (float(baseline_ref) - float(baseline_history[-1])) / slope
-
-    if step > max_step:
-        step = max_step
-    if step < -max_step:
-        step = -max_step
+        step = fixed_step
+    else:
+        delta_bias = float(bias_history[-1]) - float(bias_history[-2])
+        delta_baseline = (float(baseline_history[-1])
+                          - float(baseline_history[-2]))
+        if delta_bias == 0 or delta_baseline == 0:
+            step = fixed_step
+        else:
+            slope = delta_baseline / delta_bias
+            step = ((float(baseline_ref) - float(baseline_history[-1]))
+                    / slope)
+            if step > max_step:
+                step = max_step
+            if step < -max_step:
+                step = -max_step
 
     next_bias = last_bias + step
-    if next_bias < 0:
-        next_bias = 0.0
+    if next_bias < min_bias:
+        next_bias = min_bias
 
     return next_bias
 
@@ -195,13 +188,12 @@ class GabSweep(Sequencer):
         setup_file : str or None
             Path to setup.ini config file.
         comment : str
-            Comment string saved with the measurement.
+            Comment string for the measurement.
         dry_run : bool
-            If True, only print the sweep plan without any hardware
-            interaction.
+            If True, only print the sweep plan without
+            any hardware interaction.
         dummy_mode : bool
-            If True, instrument calls are no-ops (for testing the
-            state machine off the DAQ computer).
+            If True, no actual instrument I/O.
         verbose : bool
             If True, print status messages.
         """
@@ -224,15 +216,15 @@ class GabSweep(Sequencer):
 
         # runtime state
         self._baseline_ref = None
+        self._heater_initial_bias_ua = None
         self._csv_path = None
         self._output_path = None
         self._diagnostics = {'config': None, 'steps': list()}
 
     def _read_measurement_config(self):
         """
-        Override the base class config reader: read the gab_sweep
-        section, store the data paths, and skip directory creation
-        in dry-run mode.
+        Override base class to read the gab_sweep section and skip
+        directory creation in dry-run mode.
         """
 
         self._measurement_config = self._config.get_sequencer_setup(
@@ -262,9 +254,6 @@ class GabSweep(Sequencer):
     def _parse_gab_config(self):
         """
         Cast the gab_sweep config section into typed attributes.
-
-        The config parser only converts integer-looking values, so
-        every numeric parameter is explicitly cast here.
         """
 
         config_dict = self._measurement_config[self._measurement_name]
@@ -319,6 +308,7 @@ class GabSweep(Sequencer):
         self._stability_timeout = float(require('stability_timeout'))
 
         # heater TES feedback
+        self._bias_min = float(require('bias_min'))
         self._bias_step_start = float(require('bias_step_start'))
         self._bias_max = float(require('bias_max'))
         self._feedback_timeout = float(require('feedback_timeout'))
@@ -327,6 +317,14 @@ class GabSweep(Sequencer):
         if self._bias_step_start <= 0:
             raise ValueError(
                 'GabSweep: "bias_step_start" must be positive!'
+            )
+        if self._bias_min < 0:
+            raise ValueError(
+                'GabSweep: "bias_min" must not be negative!'
+            )
+        if self._bias_min >= self._bias_max:
+            raise ValueError(
+                'GabSweep: "bias_min" must be less than "bias_max"!'
             )
         if self._nb_events_baseline < 1:
             raise ValueError(
@@ -340,10 +338,7 @@ class GabSweep(Sequencer):
     def _configure_adc(self):
         """
         Build the ADC configuration for the thermometer TES channel.
-
-        Resolves the detector channel through the connection table and
-        stores a single-ADC config dict in self._adc_config. Skipped in
-        dry-run mode.
+        Skipped in dry-run mode.
         """
 
         self._adc_config = None
@@ -390,19 +385,13 @@ class GabSweep(Sequencer):
 
     def measure_baseline(self, nb_events=None):
         """
-        Measure the thermometer TES baseline.
-
-        Reads traces from the thermometer TES ADC channel, removes
-        traces contaminated by pulses or vibration with qetpy autocuts,
-        and returns the mean over surviving traces of the per-trace
-        median. The value is in raw ADC units and is only used
-        relatively as a bias point proxy.
+        Measure the thermometer TES baseline: read traces, apply
+        qetpy autocuts, return the mean of the per-trace medians.
 
         Parameters
         ----------
         nb_events : int or None
-            Number of traces to read. Defaults to nb_events_baseline
-            from the config.
+            Number of traces to read. Defaults to nb_events_baseline.
 
         Returns
         -------
@@ -431,11 +420,8 @@ class GabSweep(Sequencer):
 
     def wait_for_stable_baseline(self):
         """
-        Wait until the thermometer TES baseline is stable.
-
-        Repeats quick baseline measurements until the last 5 agree
-        with the most recent one within baseline_tolerance_percent,
-        or stability_timeout is reached.
+        Wait until the last 5 quick baseline measurements agree within
+        baseline_tolerance_percent, or stability_timeout is reached.
 
         Returns
         -------
@@ -492,6 +478,9 @@ class GabSweep(Sequencer):
         print(f'\nThermometer TES channel: '
               f'{self._thermometer_tes_channel}')
         print(f'Heater TES channel: {self._heater_tes_channel}')
+        print(f'Heater TES bias range: {self._bias_min:.6g} uA '
+              f'(bias_min, keeps the heater normal) to '
+              f'{self._bias_max:.6g} uA (bias_max)')
         print(f'MC thermometer: {self._thermometer_name} '
               f'({self._thermometer_instrument}), '
               f'heater: {self._heater_name}')
@@ -513,12 +502,7 @@ class GabSweep(Sequencer):
 
     def run(self):
         """
-        Run the full Gab sweep.
-
-        Any exit path (normal completion, KeyboardInterrupt, or an
-        instrument error) funnels to shutdown(): MC heater setpoint
-        to 0, heater TES bias to 0, diagnostics saved. The thermometer
-        TES bias is never touched.
+        Run the full Gab sweep. All exit paths funnel to shutdown().
         """
 
         if self._dry_run:
@@ -543,6 +527,9 @@ class GabSweep(Sequencer):
                 detector_channel=self._heater_tes_channel,
                 unit='uA'
             )
+            # remembered so shutdown can restore the user's bias point
+            self._heater_initial_bias_ua = float(heater_bias_ua)
+
             if self._verbose:
                 print(f'INFO: Preflight: MC temperature = '
                       f'{float(mc_temperature_k) * 1000.0:.6g} mK, '
@@ -566,7 +553,11 @@ class GabSweep(Sequencer):
                     print(f'  ({self._comment})')
                 print('=====================================')
                 print('REMINDER: thermometer TES must be biased in '
-                      'transition, heater TES at 0 bias, PID pre-set.')
+                      'transition, PID pre-set. The heater TES bias '
+                      f'will be set to bias_min = {self._bias_min:.6g} '
+                      'uA (must keep it normal) and restored to '
+                      f'{self._heater_initial_bias_ua:.6g} uA at '
+                      'shutdown.')
 
             for step_index, temperature_mk in (
                     enumerate(self._temperature_list_mk)):
@@ -596,12 +587,13 @@ class GabSweep(Sequencer):
 
     def shutdown(self):
         """
-        Safe shutdown: MC heater setpoint to 0, heater TES bias to 0,
+        Safe shutdown: MC heater setpoint to 0, heater TES bias
+        restored to its pre-run value (left untouched if unknown),
         diagnostics flushed. The thermometer TES bias is never touched.
         """
 
-        print('INFO: Safe shutdown, setting heater setpoint and '
-              'heater TES bias to 0')
+        print('INFO: Safe shutdown, setting heater setpoint to 0 '
+              'and restoring the heater TES bias')
 
         if self._instrument is not None:
 
@@ -616,14 +608,20 @@ class GabSweep(Sequencer):
             except Exception as err:
                 print(f'ERROR setting heater setpoint to 0: {err}')
 
-            try:
-                self._instrument.set_tes_bias(
-                    0,
-                    unit='uA',
-                    detector_channel=self._heater_tes_channel
-                )
-            except Exception as err:
-                print(f'ERROR zeroing heater TES bias: {err}')
+            if self._heater_initial_bias_ua is None:
+                print('INFO: Pre-run heater TES bias unknown, '
+                      'leaving heater TES bias untouched')
+            else:
+                try:
+                    self._instrument.set_tes_bias(
+                        self._heater_initial_bias_ua,
+                        unit='uA',
+                        detector_channel=self._heater_tes_channel
+                    )
+                    print('INFO: Heater TES bias restored to '
+                          f'{self._heater_initial_bias_ua:.6g} uA')
+                except Exception as err:
+                    print(f'ERROR restoring heater TES bias: {err}')
 
         try:
             self._save_diagnostics()
@@ -671,9 +669,6 @@ class GabSweep(Sequencer):
         """
         Append one datapoint to the science dataset CSV.
 
-        The file is opened, written, and closed per call so a crash
-        never loses completed datapoints.
-
         Parameters
         ----------
         row_dict : dict
@@ -686,11 +681,8 @@ class GabSweep(Sequencer):
 
     def _run_feedback(self):
         """
-        Adjust the heater TES bias until the thermometer TES baseline
-        returns to the reference value.
-
-        Iterates compute_next_bias until convergence within
-        baseline_tolerance_percent, feedback_timeout, or bias_max.
+        Adjust the heater TES bias (between bias_min and bias_max)
+        until the thermometer TES baseline returns to the reference.
 
         Returns
         -------
@@ -709,6 +701,20 @@ class GabSweep(Sequencer):
             detector_channel=self._heater_tes_channel,
             unit='uA'
         ))
+
+        if current_bias < self._bias_min:
+            print('WARNING: Heater TES bias below bias_min '
+                  f'({self._bias_min:.6g} uA), raising it to keep '
+                  'the heater TES normal!')
+            self._instrument.set_tes_bias(
+                self._bias_min,
+                unit='uA',
+                detector_channel=self._heater_tes_channel
+            )
+            if self._post_bias_wait > 0:
+                time.sleep(self._post_bias_wait)
+            current_bias = self._bias_min
+
         bias_history = [current_bias]
         baseline_history = [self.measure_baseline()]
         stability_ok = True
@@ -737,7 +743,8 @@ class GabSweep(Sequencer):
                 bias_history=bias_history,
                 baseline_history=baseline_history,
                 baseline_ref=self._baseline_ref,
-                bias_step_start=self._bias_step_start
+                bias_step_start=self._bias_step_start,
+                bias_min=self._bias_min
             )
 
             if next_bias >= self._bias_max:
@@ -787,11 +794,9 @@ class GabSweep(Sequencer):
 
     def run_single_step(self, temperature_mk=None, step_index=None):
         """
-        Run one full temperature point of the Gab sweep.
-
-        Sets the MC temperature, waits for stability, runs the heater
-        TES feedback (or measures the reference baseline on the first
-        point), and records the datapoint.
+        Run one full temperature point of the Gab sweep: set the MC
+        temperature, run the heater TES feedback (or measure the
+        reference baseline on the first point), record the datapoint.
 
         Parameters
         ----------
@@ -803,7 +808,7 @@ class GabSweep(Sequencer):
         Returns
         -------
         end_sweep : bool
-            True if the sweep should end (heater TES bias cap reached).
+            True if the sweep should end (bias cap reached).
         """
 
         if self._verbose:
@@ -828,8 +833,19 @@ class GabSweep(Sequencer):
 
         if step_index == 0:
 
-            # first point: establish the reference baseline with the
-            # heater TES at its starting bias (normally 0)
+            # the reference baseline must be measured with the heater
+            # TES normal, so raise its bias to bias_min first
+            if self._verbose:
+                print('INFO: Setting heater TES bias to bias_min = '
+                      f'{self._bias_min:.6g} uA')
+            self._instrument.set_tes_bias(
+                self._bias_min,
+                unit='uA',
+                detector_channel=self._heater_tes_channel
+            )
+            if self._post_bias_wait > 0:
+                time.sleep(self._post_bias_wait)
+
             stability_ok, stability_history = (
                 self.wait_for_stable_baseline()
             )
@@ -892,8 +908,7 @@ class GabSweep(Sequencer):
 
     def _save_diagnostics(self):
         """
-        Save the diagnostics dictionary (feedback iteration histories,
-        stability traces, timings) as a pickle.
+        Save the diagnostics dictionary as a pickle.
         """
 
         if self._output_path is None:

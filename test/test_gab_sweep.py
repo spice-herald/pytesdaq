@@ -112,6 +112,32 @@ def test_compute_next_bias_never_negative():
     assert result >= 0.0
 
 
+def test_compute_next_bias_never_below_bias_min():
+    # secant wants to go far below the minimum; the heater TES must
+    # stay normal, so the result is floored at bias_min
+    result = compute_next_bias(
+        bias_history=[120.0, 110.0],
+        baseline_history=[130.0, 125.0],
+        baseline_ref=50.0,
+        bias_step_start=15.0,
+        bias_min=100.0,
+    )
+    assert result == 100.0
+
+
+def test_compute_next_bias_first_move_respects_bias_min():
+    # a first move from below the minimum lands at bias_min, not at
+    # last_bias plus the fixed step
+    result = compute_next_bias(
+        bias_history=[0.0],
+        baseline_history=[100.0],
+        baseline_ref=120.0,
+        bias_step_start=15.0,
+        bias_min=100.0,
+    )
+    assert result == 100.0
+
+
 def test_compute_next_bias_rejects_mismatched_history():
     with pytest.raises(ValueError):
         compute_next_bias(
@@ -133,11 +159,12 @@ def _make_dry_sweep():
 
 
 def test_run_feedback_converges_with_fake_device():
-    # fake linear device: baseline responds linearly to heater bias
+    # fake linear device: baseline responds linearly to heater bias;
+    # the device starts at bias_min (100 uA in the example config)
     sweep = _make_dry_sweep()
 
-    device = {'bias': 0.0}
-    baseline_ref = 150.0
+    device = {'bias': 100.0}
+    baseline_ref = 250.0
 
     def fake_baseline(nb_events=None):
         # baseline rises 1 ADC unit per uA of heater bias from 100
@@ -170,7 +197,9 @@ def test_run_feedback_converges_with_fake_device():
 
 
 def test_run_feedback_stops_at_bias_cap():
-    # device too weak: baseline barely responds, cap must end feedback
+    # device too weak: baseline barely responds, cap must end feedback;
+    # the device starts below bias_min so the feedback must first raise
+    # the bias to keep the heater TES normal
     sweep = _make_dry_sweep()
 
     device = {'bias': 0.0}
@@ -199,4 +228,59 @@ def test_run_feedback_stops_at_bias_cap():
 
     assert result['cap_reached'] is True
     assert result['converged'] is False
+    assert result['bias_history'][0] == sweep._bias_min
     assert result['bias_history'][-1] == sweep._bias_max
+    assert min(result['bias_history']) >= sweep._bias_min
+
+
+def test_shutdown_restores_initial_heater_bias():
+    # shutdown must put the heater TES back at the bias the user had
+    # it at before the run
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 500.0}
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_set_temperature(value, **kwargs):
+        return True
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        set_temperature = staticmethod(fake_set_temperature)
+
+    sweep._instrument = FakeInstrument()
+    sweep._daq = None
+    sweep._heater_initial_bias_ua = 42.0
+
+    sweep.shutdown()
+
+    assert device['bias'] == 42.0
+
+
+def test_shutdown_leaves_heater_bias_when_initial_unknown():
+    # a failure before preflight means the pre-run bias was never
+    # read, so shutdown must not touch the heater TES bias
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 500.0}
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_set_temperature(value, **kwargs):
+        return True
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        set_temperature = staticmethod(fake_set_temperature)
+
+    sweep._instrument = FakeInstrument()
+    sweep._daq = None
+
+    sweep.shutdown()
+
+    assert device['bias'] == 500.0

@@ -11,7 +11,9 @@ heater_name = heaterMC
 
 # TES channels (detector or TES readout names defined in setup.ini)
 # thermometer TES: biased in transition manually by the user before the run
-# heater TES: controlled by this script, must start at 0 bias
+# heater TES: controlled by this script; it can be left at its usual
+# operating bias, the script raises it to bias_min at the start of the
+# sweep and restores the pre-run bias at shutdown
 thermometer_tes_channel = B
 heater_tes_channel = C
 
@@ -42,8 +44,12 @@ baseline_tolerance_percent = 2
 stability_timeout = 300
 
 # heater TES feedback
-# bias_step_start and bias_max are in uA
+# bias_min, bias_step_start and bias_max are in uA
+# bias_min is the minimum current that keeps the heater TES normal
+# (above its critical current); test it manually for the configured
+# heater_tes_channel, it is different for each channel
 # feedback_timeout and post_bias_wait are in seconds
+bias_min = 100
 bias_step_start = 15
 bias_max = 500
 feedback_timeout = 600

@@ -13,9 +13,13 @@ if __name__ == "__main__":
         description=(
             'Gab thermal conductance sweep automation. '
             'Preconditions: PID pre-set manually, thermometer TES '
-            'biased in transition, heater TES at 0 bias. If the '
-            'feedback cannot converge, first suspect that one of the '
-            'TESs went superconducting or normal during the sweep.'
+            'biased in transition. The heater TES can be left at its '
+            'usual operating bias: the script raises it to bias_min '
+            '(which must keep the heater TES normal, above its '
+            'critical current) and restores the pre-run bias at '
+            'shutdown. If the feedback cannot converge, first suspect '
+            'that one of the TESs went superconducting or normal '
+            'during the sweep.'
         )
     )
     parser.add_argument('--setup_file', type=str,
