@@ -108,13 +108,15 @@ def compute_next_bias(bias_history=None,
     """
     Compute the next heater TES bias from the feedback history.
 
-    First move: fixed step up by bias_step_start. Later moves: slope
-    update toward baseline_ref, clamped to 2x bias_step_start and
-    halved after overshooting the reference. The slope comes from a
-    least squares fit over the full history (3+ points) or the secant
-    of the last pair of distinct biases (2 points). When the measured
-    baseline response is buried in the noise floor, the probe step
-    doubles in the same direction instead, up to 4x bias_step_start.
+    First move: fixed step up by bias_step_start. Later moves: least
+    squares fit of baseline versus bias over the full history, then a
+    step toward baseline_ref along the fit, clamped to
+    2x bias_step_start and halved after overshooting the reference.
+    Repeated biases in the history (confirmation readings) are
+    averaged naturally by the fit. Only when the fit sees no baseline
+    response above the noise floor across the whole history does the
+    probe step double in the same direction instead, up to
+    4x bias_step_start.
 
     Parameters
     ----------
@@ -130,8 +132,8 @@ def compute_next_bias(bias_history=None,
         Minimum bias keeping the heater TES normal [uA].
     noise_floor : float
         Baseline repeatability scatter at fixed conditions
-        [ADC units]. A baseline response smaller than 3x this value
-        is treated as unmeasurable.
+        [ADC units]. A fitted baseline response across the history
+        smaller than 2x this value is treated as unmeasurable.
 
     Returns
     -------
@@ -155,8 +157,9 @@ def compute_next_bias(bias_history=None,
     min_bias = float(bias_min)
 
     # most recent pair of consecutive points with distinct biases:
-    # repeated biases (confirmation readings, clamping at the floor)
-    # carry no slope information
+    # sets the probe direction and the overshoot cap, since repeated
+    # biases (confirmation readings, clamping at the floor) carry no
+    # slope information
     pair_index = None
     for index in range(len(bias_history) - 1, 0, -1):
         if float(bias_history[index]) != float(bias_history[index - 1]):
@@ -172,14 +175,26 @@ def compute_next_bias(bias_history=None,
 
         delta_bias = (float(bias_history[pair_index])
                       - float(bias_history[pair_index - 1]))
-        delta_baseline = (float(baseline_history[pair_index])
-                          - float(baseline_history[pair_index - 1]))
 
-        if abs(delta_baseline) <= (3.0 * float(noise_floor)):
+        # least squares fit of baseline versus bias over the full
+        # history: repeated biases are averaged, drift on single
+        # points is diluted
+        fit = np.polyfit(
+            np.asarray(bias_history, dtype=float),
+            np.asarray(baseline_history, dtype=float),
+            1
+        )
+        slope = float(fit[0])
 
-            # response unmeasurable: no slope can be trusted, double
-            # the probe in the same direction until the baseline
-            # responds above the noise
+        bias_span = (float(np.max(bias_history))
+                     - float(np.min(bias_history)))
+        predicted_response = abs(slope) * bias_span
+
+        if predicted_response <= (2.0 * float(noise_floor)):
+
+            # even across the full bias span the fitted response does
+            # not rise above the noise: no slope can be trusted,
+            # double the probe in the same direction until one appears
             step_magnitude = 2.0 * abs(delta_bias)
             if step_magnitude < fixed_step:
                 step_magnitude = fixed_step
@@ -189,31 +204,7 @@ def compute_next_bias(bias_history=None,
 
         else:
 
-            secant_slope = delta_baseline / delta_bias
-
-            if len(bias_history) >= 3:
-                fit = np.polyfit(
-                    np.asarray(bias_history, dtype=float),
-                    np.asarray(baseline_history, dtype=float),
-                    1
-                )
-                slope = float(fit[0])
-            else:
-                slope = secant_slope
-
-            if slope == 0:
-                step = fixed_step
-            elif (len(bias_history) >= 3
-                    and np.sign(slope) != np.sign(secant_slope)):
-                # the fit and the last pair disagree on the direction
-                # of the response: noise dominated, take a conservative
-                # fixed step toward the reference per the fit
-                direction = np.sign(
-                    (float(baseline_ref) - last_baseline) / slope
-                )
-                step = float(direction) * fixed_step
-            else:
-                step = (float(baseline_ref) - last_baseline) / slope
+            step = (float(baseline_ref) - last_baseline) / slope
 
             # halve the allowed step after overshooting the reference
             previous_side = (float(baseline_history[-2])
@@ -1054,9 +1045,12 @@ class GabSweep(Sequencer):
         """
         Adjust the heater TES bias (between bias_min and bias_max)
         until the thermometer TES baseline returns to the reference.
-        Convergence requires two consecutive in-tolerance readings at
-        an unchanged bias, so a single lucky reading in a drifting
-        environment is not accepted.
+        Convergence requires two consecutive readings at an unchanged
+        bias: both in tolerance, or a near miss on the second (within
+        2x tolerance) whose mean with the first is in tolerance. A
+        single lucky reading in a drifting environment is not
+        accepted, but a hair's-width confirmation miss does not
+        restart the feedback either.
 
         Parameters
         ----------
@@ -1103,13 +1097,19 @@ class GabSweep(Sequencer):
         # bias comparisons against the floor tolerate readback jitter
         floor_epsilon_ua = 1.0e-3
 
-        def is_converged(baseline):
+        def offset_from_ref_percent(baseline):
             if self._baseline_ref == 0:
                 # relative comparison is meaningless at zero
-                return False
+                return None
             offset = abs(baseline - self._baseline_ref)
             offset = offset / abs(self._baseline_ref)
-            return (offset * 100.0) <= self._baseline_tolerance_percent
+            return offset * 100.0
+
+        def is_converged(baseline):
+            offset = offset_from_ref_percent(baseline)
+            if offset is None:
+                return False
+            return offset <= self._baseline_tolerance_percent
 
         def print_reading(applied_bias, baseline, label):
             message = (f'INFO: {label}: bias = {applied_bias:.6g} uA, '
@@ -1145,17 +1145,38 @@ class GabSweep(Sequencer):
                 if not step_settled:
                     stability_ok = False
 
+                previous_baseline = baseline_history[-1]
                 baseline = self.measure_baseline()
                 bias_history.append(bias_history[-1])
                 baseline_history.append(baseline)
-                converged = is_converged(baseline)
 
-                if self._verbose:
-                    if converged:
-                        label = 'Confirmation reading, converged'
+                label = None
+                if is_converged(baseline):
+                    converged = True
+                    label = 'Confirmation reading, converged'
+                else:
+                    # drift can push a single confirmation reading
+                    # just outside tolerance; the mean of the two
+                    # readings is the better estimate, accept it when
+                    # the confirmation reading itself is not too far
+                    # out (within 2x tolerance)
+                    confirmation_offset = offset_from_ref_percent(
+                        baseline
+                    )
+                    mean_baseline = (previous_baseline + baseline) / 2.0
+                    mean_offset = offset_from_ref_percent(mean_baseline)
+                    tolerance = self._baseline_tolerance_percent
+                    if (confirmation_offset is not None
+                            and confirmation_offset <= (2.0 * tolerance)
+                            and mean_offset <= tolerance):
+                        converged = True
+                        label = ('Confirmation near miss, converged '
+                                 'on the mean of both readings')
                     else:
                         label = ('Confirmation reading failed, '
                                  'continuing feedback')
+
+                if self._verbose:
                     print_reading(bias_history[-1], baseline, label)
 
                 continue

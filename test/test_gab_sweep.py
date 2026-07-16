@@ -198,7 +198,8 @@ def test_compute_next_bias_field_regression_noise_secant_wrong_direction():
     # is +20 ADC/uA, but the last two baselines differ by only
     # 0.5 ADC (noise), giving the old two-point secant a slope of
     # -1.3 ADC/uA; it then stepped DOWN 2 uA to 40.36 instead of
-    # nudging the bias up. The noise guard must keep probing up.
+    # nudging the bias up. The fit over the full history must drive a
+    # small step up: slope 17.3 ADC/uA, 8 ADC below reference.
     result = compute_next_bias(
         bias_history=[40.9795, 41.9563, 42.3633],
         baseline_history=[316.569, 339.182, 338.655],
@@ -208,14 +209,12 @@ def test_compute_next_bias_field_regression_noise_secant_wrong_direction():
         noise_floor=4.4,
     )
     assert result > 42.3633
-    assert result == pytest.approx(43.3633)
+    assert result == pytest.approx(42.826, abs=0.01)
 
 
 def test_compute_next_bias_field_regression_holds_without_noise_floor():
     # same field case with the drift check disabled (noise floor 0):
-    # the sign guard catches it instead, because the least squares
-    # fit over the full history has a positive slope while the last
-    # pair secant is negative
+    # the full-history fit still overrides the misleading last pair
     result = compute_next_bias(
         bias_history=[40.9795, 41.9563, 42.3633],
         baseline_history=[316.569, 339.182, 338.655],
@@ -224,21 +223,40 @@ def test_compute_next_bias_field_regression_holds_without_noise_floor():
         bias_min=37.9678,
     )
     assert result > 42.3633
-    assert result == pytest.approx(43.3633)
+    assert result == pytest.approx(42.826, abs=0.01)
 
 
-def test_compute_next_bias_slope_sign_flip_falls_back_to_fixed_step():
-    # the last-pair secant slope disagrees in sign with the least
-    # squares fit over the full history: the response is noise
-    # dominated, so take a conservative fixed step toward the
-    # reference instead of a secant jump in the wrong direction
+def test_compute_next_bias_fit_wins_over_probe_when_history_has_signal():
+    # regression with the exact numbers from a run14 sweep with a
+    # large drift noise floor (21 ADC): the +3 uA first move gave a
+    # real 60 ADC response, but the old last-pair guard compared 60
+    # against 3x21 = 63 and doubled the probe to +6 uA from a
+    # baseline only 2 percent below target. The history plainly holds
+    # an 18 ADC/uA slope, so the fit must drive a small step up.
+    result = compute_next_bias(
+        bias_history=[43.5029, 46.5147, 46.5147],
+        baseline_history=[404.334, 464.365, 454.837],
+        baseline_ref=464.316,
+        bias_step_start=3.0,
+        bias_min=37.9678,
+        noise_floor=21.0,
+    )
+    assert 46.5147 < result < 48.0
+    assert result == pytest.approx(47.03, abs=0.01)
+
+
+def test_compute_next_bias_fit_overrides_misleading_last_pair():
+    # the last-pair secant slope is negative while the least squares
+    # fit over the full history is clearly positive: the fit wins and
+    # the step goes toward the reference per the fit
     result = compute_next_bias(
         bias_history=[0.0, 10.0, 20.0],
         baseline_history=[100.0, 120.0, 115.0],
         baseline_ref=130.0,
         bias_step_start=15.0,
     )
-    assert result == pytest.approx(35.0)
+    # fit slope 0.75 ADC/uA, 15 ADC below reference: step +20
+    assert result == pytest.approx(40.0)
 
 
 def _make_dry_sweep():
@@ -687,6 +705,90 @@ def test_run_feedback_confirmation_rejects_drifting_baseline():
     # the failed confirmation forced at least one real bias move
     assert len(result['bias_history']) > 2
     assert result['bias_history'][2] != result['bias_history'][0]
+
+
+def test_run_feedback_confirmation_near_miss_converges_on_mean():
+    # field case: first reading dead on the reference, confirmation
+    # reading a hair outside tolerance (drift); the mean of the two
+    # readings is well within tolerance, so the point is accepted
+    # instead of restarting the feedback from a good bias
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 100.0}
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    # reference 250, tolerance 2 percent (band 245 to 255):
+    # confirmation lands at 244.8 (-2.08 percent), mean 247.4
+    baseline_sequence = [250.0, 244.8]
+
+    def fake_baseline(nb_events=None):
+        if len(baseline_sequence) > 0:
+            return baseline_sequence.pop(0)
+        return 250.0
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._post_bias_wait = 0.0
+    sweep._baseline_ref = 250.0
+
+    result = sweep._run_feedback()
+
+    assert result['converged'] is True
+    # accepted at the confirmation, no further bias moves
+    assert len(result['bias_history']) == 2
+    assert result['bias_history'][0] == result['bias_history'][1]
+
+
+def test_run_feedback_confirmation_near_miss_rejected_when_mean_out():
+    # both readings lean the same way and their mean is outside
+    # tolerance: the near miss must not be accepted
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 100.0}
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    # reference 250, tolerance 2 percent: first reading in tolerance
+    # at -1.92 percent, confirmation at -3.8 percent, mean -2.86
+    # percent is out, feedback must continue
+    baseline_sequence = [245.2, 240.5]
+
+    def fake_baseline(nb_events=None):
+        if len(baseline_sequence) > 0:
+            return baseline_sequence.pop(0)
+        return 250.0
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._post_bias_wait = 0.0
+    sweep._baseline_ref = 250.0
+
+    result = sweep._run_feedback()
+
+    assert result['converged'] is True
+    # the near miss was rejected, at least one real bias move followed
+    assert len(result['bias_history']) > 2
 
 
 def test_run_feedback_detects_pinned_at_floor():
