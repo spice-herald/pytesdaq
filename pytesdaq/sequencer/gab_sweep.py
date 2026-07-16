@@ -103,12 +103,18 @@ def compute_next_bias(bias_history=None,
                       baseline_history=None,
                       baseline_ref=None,
                       bias_step_start=None,
-                      bias_min=0.0):
+                      bias_min=0.0,
+                      noise_floor=0.0):
     """
     Compute the next heater TES bias from the feedback history.
 
-    First move: fixed step up by bias_step_start. Later moves: secant
-    update toward baseline_ref, clamped to 2x bias_step_start.
+    First move: fixed step up by bias_step_start. Later moves: slope
+    update toward baseline_ref, clamped to 2x bias_step_start and
+    halved after overshooting the reference. The slope comes from a
+    least squares fit over the full history (3+ points) or the secant
+    of the last pair of distinct biases (2 points). When the measured
+    baseline response is buried in the noise floor, the probe step
+    doubles in the same direction instead, up to 4x bias_step_start.
 
     Parameters
     ----------
@@ -122,6 +128,10 @@ def compute_next_bias(bias_history=None,
         Initial and fallback bias step [uA].
     bias_min : float
         Minimum bias keeping the heater TES normal [uA].
+    noise_floor : float
+        Baseline repeatability scatter at fixed conditions
+        [ADC units]. A baseline response smaller than 3x this value
+        is treated as unmeasurable.
 
     Returns
     -------
@@ -138,22 +148,84 @@ def compute_next_bias(bias_history=None,
         )
 
     last_bias = float(bias_history[-1])
+    last_baseline = float(baseline_history[-1])
     fixed_step = float(bias_step_start)
     max_step = 2.0 * fixed_step
+    max_probe_step = 4.0 * fixed_step
     min_bias = float(bias_min)
 
-    if len(bias_history) < 2:
+    # most recent pair of consecutive points with distinct biases:
+    # repeated biases (confirmation readings, clamping at the floor)
+    # carry no slope information
+    pair_index = None
+    for index in range(len(bias_history) - 1, 0, -1):
+        if float(bias_history[index]) != float(bias_history[index - 1]):
+            pair_index = index
+            break
+
+    if pair_index is None:
+        # no distinct pair yet, probe up (the heater can only add
+        # power, and a colder bath always needs more of it)
         step = fixed_step
+
     else:
-        delta_bias = float(bias_history[-1]) - float(bias_history[-2])
-        delta_baseline = (float(baseline_history[-1])
-                          - float(baseline_history[-2]))
-        if delta_bias == 0 or delta_baseline == 0:
-            step = fixed_step
+
+        delta_bias = (float(bias_history[pair_index])
+                      - float(bias_history[pair_index - 1]))
+        delta_baseline = (float(baseline_history[pair_index])
+                          - float(baseline_history[pair_index - 1]))
+
+        if abs(delta_baseline) <= (3.0 * float(noise_floor)):
+
+            # response unmeasurable: no slope can be trusted, double
+            # the probe in the same direction until the baseline
+            # responds above the noise
+            step_magnitude = 2.0 * abs(delta_bias)
+            if step_magnitude < fixed_step:
+                step_magnitude = fixed_step
+            if step_magnitude > max_probe_step:
+                step_magnitude = max_probe_step
+            step = float(np.sign(delta_bias)) * step_magnitude
+
         else:
-            slope = delta_baseline / delta_bias
-            step = ((float(baseline_ref) - float(baseline_history[-1]))
-                    / slope)
+
+            secant_slope = delta_baseline / delta_bias
+
+            if len(bias_history) >= 3:
+                fit = np.polyfit(
+                    np.asarray(bias_history, dtype=float),
+                    np.asarray(baseline_history, dtype=float),
+                    1
+                )
+                slope = float(fit[0])
+            else:
+                slope = secant_slope
+
+            if slope == 0:
+                step = fixed_step
+            elif (len(bias_history) >= 3
+                    and np.sign(slope) != np.sign(secant_slope)):
+                # the fit and the last pair disagree on the direction
+                # of the response: noise dominated, take a conservative
+                # fixed step toward the reference per the fit
+                direction = np.sign(
+                    (float(baseline_ref) - last_baseline) / slope
+                )
+                step = float(direction) * fixed_step
+            else:
+                step = (float(baseline_ref) - last_baseline) / slope
+
+            # halve the allowed step after overshooting the reference
+            previous_side = (float(baseline_history[-2])
+                             - float(baseline_ref))
+            current_side = last_baseline - float(baseline_ref)
+            if (previous_side * current_side) < 0:
+                overshoot_cap = abs(delta_bias) / 2.0
+                if step > overshoot_cap:
+                    step = overshoot_cap
+                if step < -overshoot_cap:
+                    step = -overshoot_cap
+
             if step > max_step:
                 step = max_step
             if step < -max_step:
@@ -172,7 +244,8 @@ class GabSweep(Sequencer):
     CSV_COLUMNS = ['step', 'timestamp',
                    'temperature_setpoint_mk', 'mc_temperature_mk',
                    'heater_tes_bias_ua', 'thermometer_baseline',
-                   'baseline_offset_percent', 'converged', 'stability_ok']
+                   'baseline_offset_percent', 'converged',
+                   'pinned_at_floor', 'stability_ok']
 
     def __init__(self, sequencer_file=None, setup_file=None,
                  comment='No comment',
@@ -216,6 +289,7 @@ class GabSweep(Sequencer):
 
         # runtime state
         self._baseline_ref = None
+        self._baseline_noise_floor = 0.0
         self._heater_initial_bias_ua = None
         self._bias_min_actual = None
         self._csv_path = None
@@ -330,6 +404,30 @@ class GabSweep(Sequencer):
             self._stability_timeout = float(require('stability_timeout'))
         else:
             self._settle_wait_time = float(require('settle_wait_time'))
+
+        # baseline drift characterization at startup (optional keys):
+        # repeated baseline measurements at fixed conditions, their
+        # scatter is the noise floor the feedback has to beat
+        self._drift_check_nb_measurements = 5
+        if 'drift_check_nb_measurements' in config_dict:
+            self._drift_check_nb_measurements = int(
+                float(config_dict['drift_check_nb_measurements'])
+            )
+        self._drift_check_wait_time = 60.0
+        if 'drift_check_wait_time' in config_dict:
+            self._drift_check_wait_time = float(
+                config_dict['drift_check_wait_time']
+            )
+
+        if self._drift_check_nb_measurements < 0:
+            raise ValueError(
+                'GabSweep: "drift_check_nb_measurements" must not '
+                'be negative!'
+            )
+        if self._drift_check_wait_time < 0:
+            raise ValueError(
+                'GabSweep: "drift_check_wait_time" must not be negative!'
+            )
 
         # heater TES feedback
         self._bias_min = float(require('bias_min'))
@@ -637,6 +735,83 @@ class GabSweep(Sequencer):
 
             time.sleep(10)
 
+    def run_drift_check(self):
+        """
+        Characterize the baseline drift: repeat the baseline
+        measurement at fixed conditions, spaced drift_check_wait_time
+        apart, and keep the scatter as the feedback noise floor. Warns
+        when the scatter exceeds baseline_tolerance_percent, since the
+        feedback cannot reliably converge below the drift.
+
+        Returns
+        -------
+        drift : dict or None
+            Keys: baselines, mean, scatter, scatter_percent. None when
+            the check is disabled (drift_check_nb_measurements < 2).
+        """
+
+        if self._drift_check_nb_measurements < 2:
+            if self._verbose:
+                print('INFO: Baseline drift check disabled '
+                      '(drift_check_nb_measurements < 2)')
+            return None
+
+        if self._verbose:
+            print('INFO: Characterizing baseline drift with '
+                  f'{self._drift_check_nb_measurements} measurements, '
+                  f'{self._drift_check_wait_time:.6g} s apart')
+
+        baselines = list()
+        for index in range(self._drift_check_nb_measurements):
+
+            if index > 0 and self._drift_check_wait_time > 0:
+                time.sleep(self._drift_check_wait_time)
+
+            quality = self.measure_baseline_quality()
+            baselines.append(quality['baseline'])
+
+            if self._verbose:
+                self._print_baseline_quality(
+                    quality=quality,
+                    label=(f'Drift check {index + 1}/'
+                           f'{self._drift_check_nb_measurements}')
+                )
+
+        mean = float(np.mean(baselines))
+        scatter = float(np.std(baselines))
+        self._baseline_noise_floor = scatter
+
+        scatter_percent = None
+        if mean != 0:
+            scatter_percent = scatter / abs(mean) * 100.0
+
+        if self._verbose:
+            message = (f'INFO: Baseline drift: scatter = {scatter:.6g} '
+                       '[ADC units]')
+            if scatter_percent is not None:
+                message = message + f' ({scatter_percent:.3g} percent)'
+            print(message)
+
+        if (scatter_percent is not None
+                and scatter_percent > self._baseline_tolerance_percent):
+            print('WARNING: baseline drift '
+                  f'({scatter_percent:.3g} percent) exceeds '
+                  'baseline_tolerance_percent '
+                  f'({self._baseline_tolerance_percent:.6g} percent), '
+                  'the feedback cannot converge reliably! Consider a '
+                  'longer settle, more events per baseline, or a '
+                  'looser tolerance.')
+
+        drift = {
+            'baselines': baselines,
+            'mean': mean,
+            'scatter': scatter,
+            'scatter_percent': scatter_percent,
+        }
+        self._diagnostics['drift_check'] = drift
+
+        return drift
+
     def _print_dry_run(self):
         """
         Print the sweep plan without any hardware interaction.
@@ -750,6 +925,10 @@ class GabSweep(Sequencer):
                 quality=startup_quality,
                 label='Startup check'
             )
+
+            # measure the baseline repeatability the feedback is up
+            # against; also sets the noise floor for the bias probing
+            self.run_drift_check()
 
             for step_index, temperature_mk in (
                     enumerate(self._temperature_list_mk)):
@@ -871,16 +1050,25 @@ class GabSweep(Sequencer):
             writer = csv.DictWriter(f, fieldnames=self.CSV_COLUMNS)
             writer.writerow(row_dict)
 
-    def _run_feedback(self):
+    def _run_feedback(self, initial_baseline=None):
         """
         Adjust the heater TES bias (between bias_min and bias_max)
         until the thermometer TES baseline returns to the reference.
+        Convergence requires two consecutive in-tolerance readings at
+        an unchanged bias, so a single lucky reading in a drifting
+        environment is not accepted.
+
+        Parameters
+        ----------
+        initial_baseline : float or None
+            Settled baseline already measured at the current bias
+            [ADC units]. Measured here if None.
 
         Returns
         -------
         result : dict
             Keys: bias_history, baseline_history, converged,
-            cap_reached, stability_ok.
+            cap_reached, pinned_at_floor, stability_ok.
         """
 
         if self._baseline_ref is None:
@@ -901,11 +1089,19 @@ class GabSweep(Sequencer):
                   'keep the heater TES normal!')
             self._set_heater_bias_min()
             current_bias = self._get_bias_floor()
+            initial_baseline = None
+
+        if initial_baseline is None:
+            initial_baseline = self.measure_baseline()
 
         bias_history = [current_bias]
-        baseline_history = [self.measure_baseline()]
+        baseline_history = [float(initial_baseline)]
         stability_ok = True
         cap_reached = False
+        pinned_at_floor = False
+
+        # bias comparisons against the floor tolerate readback jitter
+        floor_epsilon_ua = 1.0e-3
 
         def is_converged(baseline):
             if self._baseline_ref == 0:
@@ -915,10 +1111,25 @@ class GabSweep(Sequencer):
             offset = offset / abs(self._baseline_ref)
             return (offset * 100.0) <= self._baseline_tolerance_percent
 
-        converged = is_converged(baseline_history[-1])
+        def print_reading(applied_bias, baseline, label):
+            message = (f'INFO: {label}: bias = {applied_bias:.6g} uA, '
+                       f'baseline = {baseline:.6g} [ADC units]')
+            if self._baseline_ref == 0:
+                message = message + (', reference is 0, offset '
+                                     'undefined')
+            else:
+                offset = (baseline - self._baseline_ref)
+                offset = offset / abs(self._baseline_ref) * 100.0
+                message = message + (
+                    f', reference = {self._baseline_ref:.6g}, '
+                    f'offset = {offset:+.3g} percent'
+                )
+            print(message)
+
+        converged = False
         start_time = time.time()
 
-        while not converged and not cap_reached:
+        while not converged and not cap_reached and not pinned_at_floor:
 
             if (time.time() - start_time) > self._feedback_timeout:
                 print('WARNING: Feedback timeout '
@@ -926,13 +1137,51 @@ class GabSweep(Sequencer):
                       'recording point as not converged!')
                 break
 
+            if is_converged(baseline_history[-1]):
+
+                # in-tolerance reading: confirm it with a second
+                # reading at the same bias before accepting it
+                step_settled, _ = self.wait_for_settled_baseline()
+                if not step_settled:
+                    stability_ok = False
+
+                baseline = self.measure_baseline()
+                bias_history.append(bias_history[-1])
+                baseline_history.append(baseline)
+                converged = is_converged(baseline)
+
+                if self._verbose:
+                    if converged:
+                        label = 'Confirmation reading, converged'
+                    else:
+                        label = ('Confirmation reading failed, '
+                                 'continuing feedback')
+                    print_reading(bias_history[-1], baseline, label)
+
+                continue
+
             next_bias = compute_next_bias(
                 bias_history=bias_history,
                 baseline_history=baseline_history,
                 baseline_ref=self._baseline_ref,
                 bias_step_start=self._bias_step_start,
-                bias_min=self._get_bias_floor()
+                bias_min=self._get_bias_floor(),
+                noise_floor=self._baseline_noise_floor
             )
+
+            if (next_bias <= (self._get_bias_floor() + floor_epsilon_ua)
+                    and bias_history[-1] <= (self._get_bias_floor()
+                                             + floor_epsilon_ua)):
+                # the feedback wants a bias below the floor while
+                # already sitting at it: the reference cannot be
+                # reached (the heater cannot remove power), most
+                # likely a drift artifact; flag it instead of looping
+                pinned_at_floor = True
+                print('WARNING: Feedback pinned at the bias floor '
+                      f'({self._get_bias_floor():.6g} uA), the '
+                      'reference baseline cannot be reached from '
+                      'here, recording point as not converged!')
+                break
 
             if next_bias >= self._bias_max:
                 next_bias = self._bias_max
@@ -955,7 +1204,7 @@ class GabSweep(Sequencer):
 
             # the controller cannot hold next_bias exactly, and the
             # baseline responds to the bias it actually applied, so the
-            # secant update must be fed the read back value: pairing a
+            # slope update must be fed the read back value: pairing a
             # requested bias with a measured baseline would skew the
             # slope
             applied_bias = float(self._instrument.get_tes_bias(
@@ -966,29 +1215,20 @@ class GabSweep(Sequencer):
             baseline = self.measure_baseline()
             bias_history.append(applied_bias)
             baseline_history.append(baseline)
-            converged = is_converged(baseline)
 
             if self._verbose:
-                message = (f'INFO: bias = {applied_bias:.6g} uA '
-                           f'(requested {next_bias:.6g}), '
-                           f'baseline = {baseline:.6g} [ADC units]')
-                if self._baseline_ref == 0:
-                    message = message + (', reference is 0, offset '
-                                         'undefined')
-                else:
-                    offset = (baseline - self._baseline_ref)
-                    offset = offset / abs(self._baseline_ref) * 100.0
-                    message = message + (
-                        f', reference = {self._baseline_ref:.6g}, '
-                        f'offset = {offset:+.3g} percent'
-                    )
-                print(message)
+                print_reading(
+                    applied_bias,
+                    baseline,
+                    f'Feedback (requested {next_bias:.6g} uA)'
+                )
 
         result = {
             'bias_history': bias_history,
             'baseline_history': baseline_history,
             'converged': converged,
             'cap_reached': cap_reached,
+            'pinned_at_floor': pinned_at_floor,
             'stability_ok': stability_ok,
         }
 
@@ -1061,6 +1301,7 @@ class GabSweep(Sequencer):
             baseline = settled_quality['baseline']
             self._baseline_ref = baseline
             converged = True
+            pinned_at_floor = False
             bias_history = list()
             baseline_history = [baseline]
 
@@ -1070,9 +1311,12 @@ class GabSweep(Sequencer):
 
         else:
 
-            result = self._run_feedback()
+            result = self._run_feedback(
+                initial_baseline=settled_quality['baseline']
+            )
             baseline = result['baseline_history'][-1]
             converged = result['converged']
+            pinned_at_floor = result['pinned_at_floor']
             if not result['stability_ok']:
                 stability_ok = False
             end_sweep = result['cap_reached']
@@ -1104,6 +1348,7 @@ class GabSweep(Sequencer):
             'thermometer_baseline': baseline,
             'baseline_offset_percent': offset_percent,
             'converged': converged,
+            'pinned_at_floor': pinned_at_floor,
             'stability_ok': stability_ok,
         }
         self._append_datapoint(row_dict=row_dict)
@@ -1120,6 +1365,7 @@ class GabSweep(Sequencer):
                   f'baseline = {baseline:.6g} [ADC units] '
                   f'({offset_percent:+.3g} percent from reference), '
                   f'converged = {converged}, '
+                  f'pinned_at_floor = {pinned_at_floor}, '
                   f'stability_ok = {stability_ok}')
 
         return end_sweep

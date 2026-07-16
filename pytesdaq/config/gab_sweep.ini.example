@@ -56,6 +56,15 @@ settle_wait_time = 60
 #nb_events_stability = 10
 #stability_timeout = 300
 
+# baseline drift check at startup (optional, defaults shown)
+# repeated baseline measurements at fixed conditions before the sweep;
+# their scatter is the noise floor the feedback has to beat, a warning
+# is printed if it exceeds baseline_tolerance_percent
+# drift_check_wait_time is in seconds; set
+# drift_check_nb_measurements = 0 to skip the check
+#drift_check_nb_measurements = 5
+#drift_check_wait_time = 60
+
 # heater TES feedback
 # bias_min, bias_step_start and bias_max are in uA
 # bias_min is the minimum current that keeps the heater TES normal

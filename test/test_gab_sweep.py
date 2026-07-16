@@ -150,6 +150,97 @@ def test_compute_next_bias_rejects_mismatched_history():
         )
 
 
+def test_compute_next_bias_repeated_bias_uses_last_distinct_pair():
+    # regression: after clamping at the floor the last two biases are
+    # equal; the slope must come from the last pair of distinct biases
+    # instead of falling back to a blind step up, which made the loop
+    # bounce between the floor and one step above it
+    result = compute_next_bias(
+        bias_history=[39.0, 38.0, 38.0],
+        baseline_history=[130.0, 129.0, 128.0],
+        baseline_ref=100.0,
+        bias_step_start=1.0,
+        bias_min=38.0,
+    )
+    assert result == 38.0
+
+
+def test_compute_next_bias_grows_probe_when_response_below_noise():
+    # the baseline moved less than the noise floor, so the slope is
+    # meaningless; the probe step doubles in the same direction until
+    # the response is measurable
+    result = compute_next_bias(
+        bias_history=[38.0, 39.0],
+        baseline_history=[250.0, 250.5],
+        baseline_ref=260.0,
+        bias_step_start=1.0,
+        noise_floor=2.0,
+    )
+    assert result == pytest.approx(41.0)
+
+
+def test_compute_next_bias_probe_growth_is_capped():
+    # probe growth doubles the last move but never exceeds
+    # 4x bias_step_start
+    result = compute_next_bias(
+        bias_history=[38.0, 42.0],
+        baseline_history=[250.0, 250.5],
+        baseline_ref=260.0,
+        bias_step_start=1.0,
+        noise_floor=2.0,
+    )
+    assert result == pytest.approx(46.0)
+
+
+def test_compute_next_bias_field_regression_noise_secant_wrong_direction():
+    # regression with the exact numbers from a run14 test sweep: the
+    # baseline is 8 ADC units below the reference and the true slope
+    # is +20 ADC/uA, but the last two baselines differ by only
+    # 0.5 ADC (noise), giving the old two-point secant a slope of
+    # -1.3 ADC/uA; it then stepped DOWN 2 uA to 40.36 instead of
+    # nudging the bias up. The noise guard must keep probing up.
+    result = compute_next_bias(
+        bias_history=[40.9795, 41.9563, 42.3633],
+        baseline_history=[316.569, 339.182, 338.655],
+        baseline_ref=346.651,
+        bias_step_start=1.0,
+        bias_min=37.9678,
+        noise_floor=4.4,
+    )
+    assert result > 42.3633
+    assert result == pytest.approx(43.3633)
+
+
+def test_compute_next_bias_field_regression_holds_without_noise_floor():
+    # same field case with the drift check disabled (noise floor 0):
+    # the sign guard catches it instead, because the least squares
+    # fit over the full history has a positive slope while the last
+    # pair secant is negative
+    result = compute_next_bias(
+        bias_history=[40.9795, 41.9563, 42.3633],
+        baseline_history=[316.569, 339.182, 338.655],
+        baseline_ref=346.651,
+        bias_step_start=1.0,
+        bias_min=37.9678,
+    )
+    assert result > 42.3633
+    assert result == pytest.approx(43.3633)
+
+
+def test_compute_next_bias_slope_sign_flip_falls_back_to_fixed_step():
+    # the last-pair secant slope disagrees in sign with the least
+    # squares fit over the full history: the response is noise
+    # dominated, so take a conservative fixed step toward the
+    # reference instead of a secant jump in the wrong direction
+    result = compute_next_bias(
+        bias_history=[0.0, 10.0, 20.0],
+        baseline_history=[100.0, 120.0, 115.0],
+        baseline_ref=130.0,
+        bias_step_start=15.0,
+    )
+    assert result == pytest.approx(35.0)
+
+
 def _make_dry_sweep():
     from pytesdaq.sequencer import GabSweep
     sweep = GabSweep(
@@ -487,6 +578,222 @@ def test_shutdown_restores_initial_heater_bias():
     sweep.shutdown()
 
     assert device['bias'] == 42.0
+
+
+def _make_linear_device_sweep(device=None, baseline_offset=100.0):
+    # fake linear device shared by the feedback tests: the baseline
+    # responds 1 ADC unit per uA of heater bias
+    sweep = _make_dry_sweep()
+
+    def fake_baseline(nb_events=None):
+        return baseline_offset + device['bias']
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._post_bias_wait = 0.0
+
+    return sweep
+
+
+def test_run_feedback_uses_provided_initial_baseline():
+    # run_single_step already measured the settled baseline, so the
+    # feedback must start from it instead of silently measuring a
+    # second one it never prints
+    device = {'bias': 100.0}
+    sweep = _make_linear_device_sweep(device=device)
+    sweep._baseline_ref = 250.0
+
+    nb_calls = {'count': 0}
+    original_measure = sweep.measure_baseline
+
+    def counting_measure(nb_events=None):
+        nb_calls['count'] = nb_calls['count'] + 1
+        return original_measure(nb_events=nb_events)
+
+    sweep.measure_baseline = counting_measure
+
+    result = sweep._run_feedback(initial_baseline=200.0)
+
+    assert result['baseline_history'][0] == 200.0
+    # one history entry per measurement plus the provided one
+    assert len(result['baseline_history']) == nb_calls['count'] + 1
+
+
+def test_run_feedback_requires_confirmation_reading():
+    # a single in-tolerance reading is not convergence: it must be
+    # confirmed by a second reading at the same bias
+    device = {'bias': 100.0}
+    sweep = _make_linear_device_sweep(device=device)
+    sweep._baseline_ref = 250.0
+
+    result = sweep._run_feedback()
+
+    assert result['converged'] is True
+    assert result['bias_history'][-1] == result['bias_history'][-2]
+
+    tolerance = sweep._baseline_tolerance_percent
+    for baseline in result['baseline_history'][-2:]:
+        offset = abs(baseline - 250.0) / 250.0 * 100.0
+        assert offset <= tolerance
+
+
+def test_run_feedback_confirmation_rejects_drifting_baseline():
+    # the first reading is in tolerance by luck, the confirmation
+    # reading drifts out: the feedback must keep going instead of
+    # accepting the lucky reading
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 100.0}
+
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    baseline_sequence = [250.0, 280.0, 250.0, 250.0]
+
+    def fake_baseline(nb_events=None):
+        if len(baseline_sequence) > 0:
+            return baseline_sequence.pop(0)
+        return 250.0
+
+    sweep._instrument = FakeInstrument()
+    sweep.measure_baseline = fake_baseline
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._post_bias_wait = 0.0
+    sweep._baseline_ref = 250.0
+
+    result = sweep._run_feedback()
+
+    assert result['converged'] is True
+    # the failed confirmation forced at least one real bias move
+    assert len(result['bias_history']) > 2
+    assert result['bias_history'][2] != result['bias_history'][0]
+
+
+def test_run_feedback_detects_pinned_at_floor():
+    # the baseline sits far above the reference and rises with bias:
+    # the target needs a bias below the floor, which is not allowed,
+    # so the feedback must flag the point instead of looping on it
+    device = {'bias': 100.0}
+    sweep = _make_linear_device_sweep(device=device, baseline_offset=300.0)
+    sweep._baseline_ref = 250.0
+
+    result = sweep._run_feedback()
+
+    assert result['pinned_at_floor'] is True
+    assert result['converged'] is False
+    assert result['bias_history'][-1] == pytest.approx(
+        sweep._get_bias_floor()
+    )
+
+
+def test_drift_check_parameters_have_defaults():
+    # the drift check keys are optional in the config
+    sweep = _make_dry_sweep()
+
+    assert sweep._drift_check_nb_measurements == 5
+    assert sweep._drift_check_wait_time == 60.0
+    assert sweep._baseline_noise_floor == 0.0
+
+
+def test_run_drift_check_measures_scatter(monkeypatch):
+    # the drift check repeats the baseline measurement at fixed
+    # conditions and stores the scatter as the feedback noise floor
+    sweep = _make_dry_sweep()
+
+    baselines = [250.0, 252.0, 248.0, 251.0, 249.0]
+    quality_sequence = list()
+    for value in baselines:
+        quality_sequence.append({
+            'baseline': value,
+            'spread': 1.0,
+            'nb_traces': 100,
+            'nb_traces_kept': 90,
+        })
+
+    def fake_quality(nb_events=None):
+        return quality_sequence.pop(0)
+
+    sweep.measure_baseline_quality = fake_quality
+
+    slept = list()
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', slept.append)
+
+    drift = sweep.run_drift_check()
+
+    assert drift['baselines'] == baselines
+    assert drift['mean'] == pytest.approx(np.mean(baselines))
+    assert drift['scatter'] == pytest.approx(np.std(baselines))
+    assert sweep._baseline_noise_floor == pytest.approx(np.std(baselines))
+    # one wait between consecutive measurements, none before the first
+    assert slept == [60.0, 60.0, 60.0, 60.0]
+    assert sweep._diagnostics['drift_check'] == drift
+
+
+def test_run_drift_check_warns_when_scatter_exceeds_tolerance(
+        monkeypatch, capsys):
+    # drift larger than the convergence tolerance means the feedback
+    # cannot work reliably, the user must be warned up front
+    sweep = _make_dry_sweep()
+
+    baselines = [250.0, 290.0, 210.0, 270.0, 230.0]
+    quality_sequence = list()
+    for value in baselines:
+        quality_sequence.append({
+            'baseline': value,
+            'spread': 1.0,
+            'nb_traces': 100,
+            'nb_traces_kept': 90,
+        })
+
+    def fake_quality(nb_events=None):
+        return quality_sequence.pop(0)
+
+    sweep.measure_baseline_quality = fake_quality
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda t: None)
+
+    sweep.run_drift_check()
+
+    output = capsys.readouterr().out
+    assert 'WARNING' in output
+    assert 'drift' in output
+
+
+def test_run_drift_check_disabled_returns_none():
+    # fewer than 2 measurements cannot give a scatter, the check is
+    # skipped and the noise floor stays at zero
+    sweep = _make_dry_sweep()
+    sweep._drift_check_nb_measurements = 0
+
+    result = sweep.run_drift_check()
+
+    assert result is None
+    assert sweep._baseline_noise_floor == 0.0
+
+
+def test_pinned_at_floor_recorded_in_csv():
+    from pytesdaq.sequencer import GabSweep
+
+    assert 'pinned_at_floor' in GabSweep.CSV_COLUMNS
 
 
 def test_shutdown_leaves_heater_bias_when_initial_unknown():
