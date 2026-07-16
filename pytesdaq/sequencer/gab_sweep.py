@@ -217,6 +217,7 @@ class GabSweep(Sequencer):
         # runtime state
         self._baseline_ref = None
         self._heater_initial_bias_ua = None
+        self._bias_min_actual = None
         self._csv_path = None
         self._output_path = None
         self._diagnostics = {'config': None, 'steps': list()}
@@ -488,6 +489,11 @@ class GabSweep(Sequencer):
         """
         Set the heater TES bias to bias_min, its lowest normal state,
         and wait post_bias_wait for it to settle.
+
+        The controller cannot hold the requested value exactly, so the
+        bias it lands on is read back and kept as the effective floor.
+        Comparing against the requested bias_min instead would fail
+        every time the controller rounds down.
         """
 
         if self._verbose:
@@ -502,6 +508,32 @@ class GabSweep(Sequencer):
 
         if self._post_bias_wait > 0:
             time.sleep(self._post_bias_wait)
+
+        self._bias_min_actual = float(self._instrument.get_tes_bias(
+            detector_channel=self._heater_tes_channel,
+            unit='uA'
+        ))
+
+        if self._verbose:
+            print('INFO: Heater TES bias read back at '
+                  f'{self._bias_min_actual:.6g} uA, using it as the '
+                  'effective bias floor')
+
+    def _get_bias_floor(self):
+        """
+        Lowest heater TES bias the sweep may apply.
+
+        Returns
+        -------
+        bias_floor : float
+            The bias read back after setting bias_min [uA], or the
+            requested bias_min if it has not been set yet.
+        """
+
+        if self._bias_min_actual is None:
+            return self._bias_min
+
+        return self._bias_min_actual
 
     def _print_baseline_quality(self, quality=None, label=None):
         """
@@ -862,18 +894,13 @@ class GabSweep(Sequencer):
             unit='uA'
         ))
 
-        if current_bias < self._bias_min:
-            print('WARNING: Heater TES bias below bias_min '
-                  f'({self._bias_min:.6g} uA), raising it to keep '
-                  'the heater TES normal!')
-            self._instrument.set_tes_bias(
-                self._bias_min,
-                unit='uA',
-                detector_channel=self._heater_tes_channel
-            )
-            if self._post_bias_wait > 0:
-                time.sleep(self._post_bias_wait)
-            current_bias = self._bias_min
+        if current_bias < self._get_bias_floor():
+            print(f'WARNING: Heater TES bias ({current_bias:.6g} uA) '
+                  'below the bias floor '
+                  f'({self._get_bias_floor():.6g} uA), raising it to '
+                  'keep the heater TES normal!')
+            self._set_heater_bias_min()
+            current_bias = self._get_bias_floor()
 
         bias_history = [current_bias]
         baseline_history = [self.measure_baseline()]
@@ -904,7 +931,7 @@ class GabSweep(Sequencer):
                 baseline_history=baseline_history,
                 baseline_ref=self._baseline_ref,
                 bias_step_start=self._bias_step_start,
-                bias_min=self._bias_min
+                bias_min=self._get_bias_floor()
             )
 
             if next_bias >= self._bias_max:
@@ -926,21 +953,36 @@ class GabSweep(Sequencer):
             if not step_settled:
                 stability_ok = False
 
+            # the controller cannot hold next_bias exactly, and the
+            # baseline responds to the bias it actually applied, so the
+            # secant update must be fed the read back value: pairing a
+            # requested bias with a measured baseline would skew the
+            # slope
+            applied_bias = float(self._instrument.get_tes_bias(
+                detector_channel=self._heater_tes_channel,
+                unit='uA'
+            ))
+
             baseline = self.measure_baseline()
-            bias_history.append(next_bias)
+            bias_history.append(applied_bias)
             baseline_history.append(baseline)
             converged = is_converged(baseline)
 
             if self._verbose:
+                message = (f'INFO: bias = {applied_bias:.6g} uA '
+                           f'(requested {next_bias:.6g}), '
+                           f'baseline = {baseline:.6g} [ADC units]')
                 if self._baseline_ref == 0:
-                    print(f'INFO: bias = {next_bias:.6g} uA, '
-                          f'baseline = {baseline:.6g} '
-                          '(reference is 0, offset undefined)')
+                    message = message + (', reference is 0, offset '
+                                         'undefined')
                 else:
                     offset = (baseline - self._baseline_ref)
                     offset = offset / abs(self._baseline_ref) * 100.0
-                    print(f'INFO: bias = {next_bias:.6g} uA, '
-                          f'baseline offset = {offset:.3g} percent')
+                    message = message + (
+                        f', reference = {self._baseline_ref:.6g}, '
+                        f'offset = {offset:+.3g} percent'
+                    )
+                print(message)
 
         result = {
             'bias_history': bias_history,

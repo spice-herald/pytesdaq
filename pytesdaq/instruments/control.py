@@ -2541,7 +2541,7 @@ class Control:
                         instrument_name=None):
         
         """
-        Get temperature from thermometer [mK]
+        Get temperature from thermometer [K]
         
         """
         

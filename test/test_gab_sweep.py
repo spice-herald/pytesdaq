@@ -276,6 +276,117 @@ def test_measure_baseline_quality_reports_metrics():
     )
 
 
+def _make_quantizing_instrument(device, quantum=0.001):
+    # controller that cannot hold the requested bias exactly and
+    # always lands just below it, like the real FEB
+    def fake_set_bias(bias, unit=None, detector_channel=None):
+        device['bias'] = float(bias) - quantum
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+
+    return FakeInstrument()
+
+
+def test_bias_floor_uses_read_back_value():
+    # the floor is what the controller landed on, not what we asked for
+    sweep = _make_dry_sweep()
+    device = {'bias': 0.0}
+    sweep._instrument = _make_quantizing_instrument(device)
+    sweep._post_bias_wait = 0.0
+
+    # before any set, the floor is the configured request
+    assert sweep._get_bias_floor() == sweep._bias_min
+
+    sweep._set_heater_bias_min()
+
+    assert sweep._bias_min_actual == pytest.approx(
+        sweep._bias_min - 0.001
+    )
+    assert sweep._get_bias_floor() == sweep._bias_min_actual
+    assert sweep._get_bias_floor() < sweep._bias_min
+
+
+def test_quantized_bias_does_not_retrigger_floor_warning(capsys):
+    # regression: setting bias_min then entering feedback must not warn
+    # just because the controller rounded the bias down
+    sweep = _make_dry_sweep()
+    device = {'bias': 0.0}
+    sweep._instrument = _make_quantizing_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep.measure_baseline = lambda nb_events=None: 250.0
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._baseline_ref = 250.0
+
+    sweep._set_heater_bias_min()
+    capsys.readouterr()
+
+    result = sweep._run_feedback()
+
+    output = capsys.readouterr().out
+    assert 'below the bias floor' not in output
+    assert result['bias_history'][0] == pytest.approx(
+        sweep._bias_min - 0.001
+    )
+
+
+def test_bias_genuinely_below_floor_still_warns(capsys):
+    # a real excursion below the floor must still be caught and fixed
+    sweep = _make_dry_sweep()
+    device = {'bias': 0.0}
+    sweep._instrument = _make_quantizing_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep.measure_baseline = lambda nb_events=None: 250.0
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+    sweep._baseline_ref = 250.0
+
+    sweep._set_heater_bias_min()
+
+    # heater drops far below the floor, e.g. set by hand
+    device['bias'] = 1.0
+    capsys.readouterr()
+
+    result = sweep._run_feedback()
+
+    output = capsys.readouterr().out
+    assert 'below the bias floor' in output
+    assert result['bias_history'][0] >= sweep._get_bias_floor()
+
+
+def test_bias_history_records_applied_not_requested_bias():
+    # the secant update must be fed the bias the controller actually
+    # applied, so bias_history holds read back values throughout
+    sweep = _make_dry_sweep()
+    device = {'bias': 0.0}
+    sweep._instrument = _make_quantizing_instrument(device, quantum=0.001)
+    sweep._post_bias_wait = 0.0
+    sweep.wait_for_settled_baseline = lambda: (True, [])
+
+    def fake_baseline(nb_events=None):
+        # baseline responds to the bias actually applied
+        return 100.0 + device['bias']
+
+    sweep.measure_baseline = fake_baseline
+    sweep._baseline_ref = 250.0
+
+    sweep._set_heater_bias_min()
+    result = sweep._run_feedback()
+
+    assert len(result['bias_history']) > 1
+
+    # each baseline must be consistent with the bias entry it is paired
+    # with: recording the requested bias instead would offset every
+    # pair by the quantum and skew the secant slope
+    for bias, baseline in zip(result['bias_history'],
+                              result['baseline_history']):
+        assert baseline == pytest.approx(100.0 + bias, abs=1e-9)
+
+
 def test_run_feedback_converges_with_fake_device():
     # fake linear device: baseline responds linearly to heater bias;
     # the device starts at bias_min (100 uA in the example config)
