@@ -34,15 +34,27 @@ temperature_max_wait_time = 300
 temperature_tolerance = 0.02
 
 # thermometer TES baseline measurement
-# stability_timeout is in seconds
 sample_rate = 1250000
 trace_length_ms = 8
 voltage_min = -10
 voltage_max = 10
 nb_events_baseline = 100
-nb_events_stability = 10
 baseline_tolerance_percent = 2
-stability_timeout = 300
+
+# how to let the thermometer TES baseline settle before measuring it
+# pick one method, only its own parameters are read:
+#
+#   use_stability_check = false -> wait a fixed settle_wait_time
+#   use_stability_check = true  -> repeat quick baseline measurements until
+#                                  the last 5 agree within
+#                                  baseline_tolerance_percent, giving up
+#                                  after stability_timeout
+#
+# settle_wait_time and stability_timeout are in seconds
+use_stability_check = false
+settle_wait_time = 60
+#nb_events_stability = 10
+#stability_timeout = 300
 
 # heater TES feedback
 # bias_min, bias_step_start and bias_max are in uA

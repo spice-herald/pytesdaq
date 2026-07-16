@@ -306,13 +306,29 @@ class GabSweep(Sequencer):
         self._sample_rate = int(float(require('sample_rate')))
         self._trace_length_ms = float(require('trace_length_ms'))
         self._nb_events_baseline = int(float(require('nb_events_baseline')))
-        self._nb_events_stability = int(
-            float(require('nb_events_stability'))
-        )
         self._baseline_tolerance_percent = float(
             require('baseline_tolerance_percent')
         )
-        self._stability_timeout = float(require('stability_timeout'))
+
+        # baseline settling: stability check or fixed timer, only the
+        # parameters of the selected method are required
+        self._use_stability_check = False
+        if 'use_stability_check' in config_dict:
+            self._use_stability_check = bool(
+                config_dict['use_stability_check']
+            )
+
+        self._nb_events_stability = None
+        self._stability_timeout = None
+        self._settle_wait_time = None
+
+        if self._use_stability_check:
+            self._nb_events_stability = int(
+                float(require('nb_events_stability'))
+            )
+            self._stability_timeout = float(require('stability_timeout'))
+        else:
+            self._settle_wait_time = float(require('settle_wait_time'))
 
         # heater TES feedback
         self._bias_min = float(require('bias_min'))
@@ -337,9 +353,13 @@ class GabSweep(Sequencer):
             raise ValueError(
                 'GabSweep: "nb_events_baseline" must be at least 1!'
             )
-        if self._nb_events_stability < 1:
+        if self._use_stability_check and self._nb_events_stability < 1:
             raise ValueError(
                 'GabSweep: "nb_events_stability" must be at least 1!'
+            )
+        if not self._use_stability_check and self._settle_wait_time < 0:
+            raise ValueError(
+                'GabSweep: "settle_wait_time" must not be negative!'
             )
 
     def _configure_adc(self):
@@ -464,6 +484,25 @@ class GabSweep(Sequencer):
 
         return quality['baseline']
 
+    def _set_heater_bias_min(self):
+        """
+        Set the heater TES bias to bias_min, its lowest normal state,
+        and wait post_bias_wait for it to settle.
+        """
+
+        if self._verbose:
+            print('INFO: Setting heater TES bias to bias_min = '
+                  f'{self._bias_min:.6g} uA')
+
+        self._instrument.set_tes_bias(
+            self._bias_min,
+            unit='uA',
+            detector_channel=self._heater_tes_channel
+        )
+
+        if self._post_bias_wait > 0:
+            time.sleep(self._post_bias_wait)
+
     def _print_baseline_quality(self, quality=None, label=None):
         """
         Print one baseline measurement with its quality metrics.
@@ -489,6 +528,33 @@ class GabSweep(Sequencer):
                                  'reference')
 
         print(message)
+
+    def wait_for_settled_baseline(self):
+        """
+        Wait for the thermometer TES baseline to settle, by the method
+        selected with use_stability_check.
+
+        Returns
+        -------
+        settle_ok : bool
+            True if the baseline settled, False on a stability check
+            timeout. Always True for the fixed timer.
+        history : list of float
+            Quick baseline measurements taken [ADC units], empty for
+            the fixed timer.
+        """
+
+        if self._use_stability_check:
+            return self.wait_for_stable_baseline()
+
+        if self._verbose:
+            print(f'INFO: Waiting {self._settle_wait_time:.6g} s for '
+                  'the thermometer TES baseline to settle')
+
+        if self._settle_wait_time > 0:
+            time.sleep(self._settle_wait_time)
+
+        return True, list()
 
     def wait_for_stable_baseline(self):
         """
@@ -563,11 +629,19 @@ class GabSweep(Sequencer):
             print(f'  Step {idx + 1:>{len(str(nb_points))}}/{nb_points}: '
                   f'{temperature_mk:.6g} mK')
 
+        if self._use_stability_check:
+            settle_s = self._stability_timeout / 3.0
+            print(f'\nBaseline settling: stability check, up to '
+                  f'{self._stability_timeout:.6g} s per measurement')
+        else:
+            settle_s = self._settle_wait_time
+            print(f'\nBaseline settling: fixed timer, '
+                  f'{self._settle_wait_time:.6g} s per measurement')
+
         # rough duration estimate: temperature settling plus a few
         # feedback iterations per point
         per_point_s = (self._temperature_wait_stable_time * 60.0
-                       + 3.0 * (self._post_bias_wait
-                                + self._stability_timeout / 3.0))
+                       + 3.0 * (self._post_bias_wait + settle_s))
         total_min = nb_points * per_point_s / 60.0
         print(f'\nRough estimated duration: {total_min:.4g} min '
               f'(temperature settling dominates)')
@@ -630,9 +704,14 @@ class GabSweep(Sequencer):
                       'uA (must keep it normal) and set back to its '
                       'original value at shutdown.')
 
+            # the heater TES goes to its lowest normal state before any
+            # baseline is measured, so the startup check is taken with
+            # the same heater state as every sweep datapoint and cannot
+            # bias them
+            self._set_heater_bias_min()
+
             # sanity check the thermometer TES readout before
-            # committing to the sweep: taken as found, at the current
-            # MC temperature and heater TES bias
+            # committing to the sweep
             startup_quality = self.measure_baseline_quality()
             self._diagnostics['startup_baseline'] = startup_quality
             self._print_baseline_quality(
@@ -843,8 +922,8 @@ class GabSweep(Sequencer):
             if self._post_bias_wait > 0:
                 time.sleep(self._post_bias_wait)
 
-            step_stable, _ = self.wait_for_stable_baseline()
-            if not step_stable:
+            step_settled, _ = self.wait_for_settled_baseline()
+            if not step_settled:
                 stability_ok = False
 
             baseline = self.measure_baseline()
@@ -914,24 +993,16 @@ class GabSweep(Sequencer):
 
         if step_index == 0:
 
-            # the reference baseline must be measured with the heater
-            # TES normal, so raise its bias to bias_min first
-            if self._verbose:
-                print('INFO: Setting heater TES bias to bias_min = '
-                      f'{self._bias_min:.6g} uA')
-            self._instrument.set_tes_bias(
-                self._bias_min,
-                unit='uA',
-                detector_channel=self._heater_tes_channel
-            )
-            if self._post_bias_wait > 0:
-                time.sleep(self._post_bias_wait)
+            # re-assert the lowest normal state: run() already did this
+            # before the startup check, but the step must not depend on
+            # that when it is driven directly from a notebook
+            self._set_heater_bias_min()
 
         # settled baseline at this temperature, before any feedback:
         # on later steps its offset from the reference is the bias
         # point shift the feedback has to undo
         stability_ok, stability_history = (
-            self.wait_for_stable_baseline()
+            self.wait_for_settled_baseline()
         )
         settled_quality = self.measure_baseline_quality()
         step_diagnostics['stability_history'] = stability_history

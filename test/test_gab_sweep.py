@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from pytesdaq.sequencer import gab_sweep as gab_sweep_module
 from pytesdaq.sequencer.gab_sweep import (
     build_temperature_list,
     compute_next_bias,
@@ -181,6 +182,72 @@ def test_rejects_same_thermometer_and_heater_channel(tmp_path):
         )
 
 
+def test_wait_for_settled_baseline_timer_mode(monkeypatch):
+    # timer mode sleeps settle_wait_time and never runs the check
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = False
+    sweep._settle_wait_time = 42.0
+
+    slept = list()
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', slept.append)
+
+    def fail_stability():
+        raise AssertionError('stability check must not run in timer mode')
+
+    sweep.wait_for_stable_baseline = fail_stability
+
+    settle_ok, history = sweep.wait_for_settled_baseline()
+
+    assert settle_ok is True
+    assert history == []
+    assert slept == [42.0]
+
+
+def test_wait_for_settled_baseline_stability_mode():
+    # stability mode delegates, passing its result through unchanged
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = True
+    sweep.wait_for_stable_baseline = lambda: (False, [1.0, 2.0])
+
+    settle_ok, history = sweep.wait_for_settled_baseline()
+
+    assert settle_ok is False
+    assert history == [1.0, 2.0]
+
+
+def test_timer_mode_does_not_require_stability_parameters():
+    # the example config is timer mode and omits the stability
+    # parameters, so constructing it must not raise
+    sweep = _make_dry_sweep()
+
+    assert sweep._use_stability_check is False
+    assert sweep._settle_wait_time == 60.0
+    assert sweep._stability_timeout is None
+    assert sweep._nb_events_stability is None
+
+
+def test_stability_mode_requires_its_parameters(tmp_path):
+    # switching the method on without its parameters must be caught
+    from pytesdaq.sequencer import GabSweep
+
+    with open('pytesdaq/config/gab_sweep.ini.example', 'r') as f:
+        config_text = f.read()
+
+    config_text = config_text.replace(
+        'use_stability_check = false',
+        'use_stability_check = true'
+    )
+    config_file = tmp_path / 'gab_sweep_stability.ini'
+    config_file.write_text(config_text)
+
+    with pytest.raises(ValueError, match='nb_events_stability'):
+        GabSweep(
+            sequencer_file=str(config_file),
+            setup_file='pytesdaq/config/setup.ini',
+            dry_run=True,
+        )
+
+
 def test_measure_baseline_quality_reports_metrics():
     # fake DAQ returning flat noisy traces around a known level
     sweep = _make_dry_sweep()
@@ -234,7 +301,7 @@ def test_run_feedback_converges_with_fake_device():
 
     sweep._instrument = FakeInstrument()
     sweep.measure_baseline = fake_baseline
-    sweep.wait_for_stable_baseline = lambda: (True, [])
+    sweep.wait_for_settled_baseline = lambda: (True, [])
     sweep._baseline_ref = baseline_ref
     sweep._post_bias_wait = 0.0
 
@@ -271,7 +338,7 @@ def test_run_feedback_stops_at_bias_cap():
 
     sweep._instrument = FakeInstrument()
     sweep.measure_baseline = fake_baseline
-    sweep.wait_for_stable_baseline = lambda: (True, [])
+    sweep.wait_for_settled_baseline = lambda: (True, [])
     sweep._baseline_ref = 150.0
     sweep._post_bias_wait = 0.0
 
