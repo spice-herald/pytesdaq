@@ -5,7 +5,7 @@ Automates the thermal conductance (Gab) measurement: sweep the MC stage
 temperature downward while adjusting the heater TES bias so that the
 thermometer TES stays at a fixed bias point. The bias point is measured
 as the thermometer TES resistance R0, extracted online from a square
-wave dIdV fit (2-pole fit, infinite loop gain approximation). The
+wave dIdV fit (3-pole fit, infinite loop gain approximation). The
 heater TES bias is never taken below bias_min so it stays normal. No
 raw TES data is saved. See Gab_planning/Gab_sweep_design.md for the
 full design.
@@ -28,10 +28,55 @@ from pytesdaq.utils import arg_utils
 from pytesdaq.utils import connection_utils
 
 
+def config_has(config_dict, key):
+    """
+    Check whether a config key is present.
+
+    configparser lowercases every option name, so a key written with
+    its proper unit capitalization (bias_min_uA, sample_rate_Hz)
+    arrives lowercased. Lookups use the lowercase form while messages
+    keep the canonical spelling the user wrote in the file.
+
+    Parameters
+    ----------
+    config_dict : dict
+        Measurement configuration dictionary.
+    key : str
+        Config key in its canonical capitalization.
+
+    Returns
+    -------
+    present : bool
+        True if the key is in the config.
+    """
+
+    return key.lower() in config_dict
+
+
+def config_get(config_dict, key):
+    """
+    Read a config key, ignoring the case of its unit suffix.
+
+    Parameters
+    ----------
+    config_dict : dict
+        Measurement configuration dictionary.
+    key : str
+        Config key in its canonical capitalization.
+
+    Returns
+    -------
+    value : object
+        The raw config value.
+    """
+
+    return config_dict[key.lower()]
+
+
 def build_temperature_list(config_dict=None):
     """
     Build the MC temperature setpoint list in mK from the config,
-    using "temperature_vect_mk" or start/stop/step.
+    using "temperature_vect_mK" or start/stop/step.
 
     Parameters
     ----------
@@ -45,20 +90,20 @@ def build_temperature_list(config_dict=None):
     """
 
     use_vect = False
-    if 'use_temperature_vect' in config_dict:
-        use_vect = bool(config_dict['use_temperature_vect'])
+    if config_has(config_dict, 'use_temperature_vect'):
+        use_vect = bool(config_get(config_dict, 'use_temperature_vect'))
 
     temperature_list = list()
 
     if use_vect:
 
-        if 'temperature_vect_mk' not in config_dict:
+        if not config_has(config_dict, 'temperature_vect_mK'):
             raise ValueError(
-                'GabSweep: "temperature_vect_mk" required when '
+                'GabSweep: "temperature_vect_mK" required when '
                 '"use_temperature_vect" is true!'
             )
 
-        vect = config_dict['temperature_vect_mk']
+        vect = config_get(config_dict, 'temperature_vect_mK')
         if not isinstance(vect, (list, tuple)):
             vect = [vect]
         for value in vect:
@@ -66,28 +111,28 @@ def build_temperature_list(config_dict=None):
 
     else:
 
-        required_keys = ['temperature_start_mk',
-                         'temperature_stop_mk',
-                         'temperature_step_mk']
+        required_keys = ['temperature_start_mK',
+                         'temperature_stop_mK',
+                         'temperature_step_mK']
         for key in required_keys:
-            if key not in config_dict:
+            if not config_has(config_dict, key):
                 raise ValueError(
                     f'GabSweep: "{key}" required when '
                     '"use_temperature_vect" is false!'
                 )
 
-        start = float(config_dict['temperature_start_mk'])
-        stop = float(config_dict['temperature_stop_mk'])
-        step = abs(float(config_dict['temperature_step_mk']))
+        start = float(config_get(config_dict, 'temperature_start_mK'))
+        stop = float(config_get(config_dict, 'temperature_stop_mK'))
+        step = abs(float(config_get(config_dict, 'temperature_step_mK')))
 
         if step == 0:
             raise ValueError(
-                'GabSweep: "temperature_step_mk" must be nonzero!'
+                'GabSweep: "temperature_step_mK" must be nonzero!'
             )
         if stop >= start:
             raise ValueError(
-                'GabSweep: "temperature_stop_mk" must be below '
-                '"temperature_start_mk" (descending sweep)!'
+                'GabSweep: "temperature_stop_mK" must be below '
+                '"temperature_start_mK" (descending sweep)!'
             )
 
         nb_steps = int(np.floor((start - stop) / step + 1e-9))
@@ -326,7 +371,7 @@ def fit_didv_r0(traces=None, sample_rate=None,
     Fit square wave dIdV traces and extract the TES bias point R0
     using the infinite loop gain approximation.
 
-    The traces are averaged and fit with the qetpy 2-pole dIdV model
+    The traces are averaged and fit with the qetpy 3-pole dIdV model
     (frequencies above fcutoff are excluded from the fit, acting as a
     lowpass filter), then R0 is computed from the zero frequency dVdI
     with the known shunt and parasitic resistances.
@@ -370,8 +415,8 @@ def fit_didv_r0(traces=None, sample_rate=None,
         rp=rp,
     )
 
-    didv.dofit(poles=2, fcutoff=fcutoff)
-    fit = didv.fitresult(poles=2)
+    didv.dofit(poles=3, fcutoff=fcutoff)
+    fit = didv.fitresult(poles=3)
 
     biasparams = get_biasparams_ilg(
         fit['params'],
@@ -521,8 +566,8 @@ class GabSweep(Sequencer):
         )
 
         config_dict = self._measurement_config[self._measurement_name]
-        if 'daq_driver' in config_dict:
-            self._daq_driver = config_dict['daq_driver']
+        if config_has(config_dict, 'daq_driver'):
+            self._daq_driver = config_get(config_dict, 'daq_driver')
 
         self._facility = self._config.get_facility_num()
 
@@ -547,9 +592,9 @@ class GabSweep(Sequencer):
         config_dict = self._measurement_config[self._measurement_name]
 
         def require(key):
-            if key not in config_dict:
+            if not config_has(config_dict, key):
                 raise ValueError(f'GabSweep: "{key}" required in config!')
-            return config_dict[key]
+            return config_get(config_dict, key)
 
         # thermometry
         self._thermometer_name = str(require('thermometer_name'))
@@ -576,27 +621,50 @@ class GabSweep(Sequencer):
             config_dict=config_dict
         )
 
-        # set_temperature wait parameters
-        self._temperature_wait_cycle_time = float(
-            require('temperature_wait_cycle_time_minutes')
+        # MC temperature settling: the sweep polls the thermometer
+        # itself rather than trusting the controller driver, which
+        # gives no way to tell a reached setpoint from a timeout
+        self._temperature_poll_interval_s = float(
+            require('temperature_poll_interval_s')
         )
-        self._temperature_wait_stable_time = float(
-            require('temperature_wait_stable_time_minutes')
+        self._temperature_stable_time_s = float(
+            require('temperature_stable_time_s')
         )
-        self._temperature_max_wait_time = float(
-            require('temperature_max_wait_time_minutes')
+        self._temperature_max_wait_time_s = float(
+            require('temperature_max_wait_time_s')
         )
         self._temperature_tolerance = float(
             require('temperature_tolerance_frac')
         )
 
+        if self._temperature_poll_interval_s <= 0:
+            raise ValueError(
+                'GabSweep: "temperature_poll_interval_s" must be '
+                'positive!'
+            )
+        if self._temperature_stable_time_s < 0:
+            raise ValueError(
+                'GabSweep: "temperature_stable_time_s" must not be '
+                'negative!'
+            )
+        if self._temperature_max_wait_time_s <= 0:
+            raise ValueError(
+                'GabSweep: "temperature_max_wait_time_s" must be '
+                'positive!'
+            )
+        if self._temperature_tolerance <= 0:
+            raise ValueError(
+                'GabSweep: "temperature_tolerance_frac" must be '
+                'positive!'
+            )
+
         # MC temperature sampling window per datapoint: repeated
         # readings whose Gaussian histogram fit gives the recorded
         # temperature and its uncertainty (optional key)
         self._temperature_sampling_time_s = 5.0
-        if 'temperature_sampling_time_s' in config_dict:
+        if config_has(config_dict, 'temperature_sampling_time_s'):
             self._temperature_sampling_time_s = float(
-                config_dict['temperature_sampling_time_s']
+                config_get(config_dict, 'temperature_sampling_time_s')
             )
 
         if self._temperature_sampling_time_s < 0:
@@ -606,15 +674,15 @@ class GabSweep(Sequencer):
             )
 
         # dIdV based R0 measurement of the thermometer TES
-        self._sample_rate = int(float(require('sample_rate_hz')))
+        self._sample_rate = int(float(require('sample_rate_Hz')))
 
         self._trace_length_ms = 50.0
-        if 'trace_length_ms' in config_dict:
-            self._trace_length_ms = float(config_dict['trace_length_ms'])
+        if config_has(config_dict, 'trace_length_ms'):
+            self._trace_length_ms = float(config_get(config_dict, 'trace_length_ms'))
 
         self._nb_events_didv = 50
-        if 'nb_events_didv' in config_dict:
-            self._nb_events_didv = int(float(config_dict['nb_events_didv']))
+        if config_has(config_dict, 'nb_events_didv'):
+            self._nb_events_didv = int(float(config_get(config_dict, 'nb_events_didv')))
 
         self._r0_tolerance_percent = float(
             require('r0_tolerance_percent')
@@ -622,73 +690,73 @@ class GabSweep(Sequencer):
 
         # TES circuit resistances, required for the dIdV fit
         # (config in mOhms, kept in Ohms internally)
-        self._rshunt = float(require('rshunt_mohm')) / 1000.0
-        self._rparasitic = float(require('rparasitic_mohm')) / 1000.0
+        self._rshunt = float(require('rshunt_mOhm')) / 1000.0
+        self._rparasitic = float(require('rparasitic_mOhm')) / 1000.0
 
         if self._rshunt <= 0:
-            raise ValueError('GabSweep: "rshunt_mohm" must be positive!')
+            raise ValueError('GabSweep: "rshunt_mOhm" must be positive!')
         if self._rparasitic < 0:
             raise ValueError(
-                'GabSweep: "rparasitic_mohm" must not be negative!'
+                'GabSweep: "rparasitic_mOhm" must not be negative!'
             )
 
         # signal generator square wave settings (optional keys)
         self._signal_gen_frequency = 50.0
-        if 'signal_gen_frequency_hz' in config_dict:
+        if config_has(config_dict, 'signal_gen_frequency_Hz'):
             self._signal_gen_frequency = float(
-                config_dict['signal_gen_frequency_hz']
+                config_get(config_dict, 'signal_gen_frequency_Hz')
             )
 
         # amplitude: voltage [mVpp] for an external signal generator,
         # current [uApp] for magnicon, only one may be set
         self._signal_gen_voltage = None
         self._signal_gen_current = None
-        if ('signal_gen_voltage_mvpp' in config_dict
-                and 'signal_gen_current_uapp' in config_dict):
+        if (config_has(config_dict, 'signal_gen_voltage_mVpp')
+                and config_has(config_dict, 'signal_gen_current_uApp')):
             raise ValueError(
                 'GabSweep: set the signal generator amplitude with '
-                'either "signal_gen_voltage_mvpp" or '
-                '"signal_gen_current_uapp", not both!'
+                'either "signal_gen_voltage_mVpp" or '
+                '"signal_gen_current_uApp", not both!'
             )
-        if 'signal_gen_current_uapp' in config_dict:
+        if config_has(config_dict, 'signal_gen_current_uApp'):
             self._signal_gen_current = float(
-                config_dict['signal_gen_current_uapp']
+                config_get(config_dict, 'signal_gen_current_uApp')
             )
         else:
             self._signal_gen_voltage = 20.0
-            if 'signal_gen_voltage_mvpp' in config_dict:
+            if config_has(config_dict, 'signal_gen_voltage_mVpp'):
                 self._signal_gen_voltage = float(
-                    config_dict['signal_gen_voltage_mvpp']
+                    config_get(config_dict, 'signal_gen_voltage_mVpp')
                 )
 
         self._signal_gen_offset = 0.0
-        if 'signal_gen_offset_mv' in config_dict:
+        if config_has(config_dict, 'signal_gen_offset_mV'):
             self._signal_gen_offset = float(
-                config_dict['signal_gen_offset_mv']
+                config_get(config_dict, 'signal_gen_offset_mV')
             )
 
         self._signal_gen_phase = 0.0
-        if 'signal_gen_phase_deg' in config_dict:
+        if config_has(config_dict, 'signal_gen_phase_deg'):
             self._signal_gen_phase = float(
-                config_dict['signal_gen_phase_deg']
+                config_get(config_dict, 'signal_gen_phase_deg')
             )
 
         # dIdV fit parameters (optional keys)
         self._didv_fcutoff = 50000.0
-        if 'didv_fcutoff_hz' in config_dict:
-            self._didv_fcutoff = float(config_dict['didv_fcutoff_hz'])
+        if config_has(config_dict, 'didv_fcutoff_Hz'):
+            self._didv_fcutoff = float(config_get(config_dict, 'didv_fcutoff_Hz'))
 
         self._r0_guess = 0.15
-        if 'r0_guess_mohm' in config_dict:
-            self._r0_guess = float(config_dict['r0_guess_mohm']) / 1000.0
+        if config_has(config_dict, 'r0_guess_mOhm'):
+            self._r0_guess = float(config_get(config_dict, 'r0_guess_mOhm')) / 1000.0
 
         if self._signal_gen_frequency <= 0:
             raise ValueError(
-                'GabSweep: "signal_gen_frequency_hz" must be positive!'
+                'GabSweep: "signal_gen_frequency_Hz" must be positive!'
             )
         if self._didv_fcutoff <= 0:
             raise ValueError(
-                'GabSweep: "didv_fcutoff_hz" must be positive!'
+                'GabSweep: "didv_fcutoff_Hz" must be positive!'
             )
         if self._trace_length_ms <= 0:
             raise ValueError(
@@ -698,9 +766,9 @@ class GabSweep(Sequencer):
         # R0 settling: stability check or fixed timer, only the
         # parameters of the selected method are required
         self._use_stability_check = False
-        if 'use_stability_check' in config_dict:
+        if config_has(config_dict, 'use_stability_check'):
             self._use_stability_check = bool(
-                config_dict['use_stability_check']
+                config_get(config_dict, 'use_stability_check')
             )
 
         self._nb_events_stability = None
@@ -719,14 +787,14 @@ class GabSweep(Sequencer):
         # repeated R0 measurements at fixed conditions, their scatter
         # is the noise floor the feedback has to beat
         self._drift_check_nb_measurements = 5
-        if 'drift_check_nb_measurements' in config_dict:
+        if config_has(config_dict, 'drift_check_nb_measurements'):
             self._drift_check_nb_measurements = int(
-                float(config_dict['drift_check_nb_measurements'])
+                float(config_get(config_dict, 'drift_check_nb_measurements'))
             )
         self._drift_check_wait_time = 60.0
-        if 'drift_check_wait_time_s' in config_dict:
+        if config_has(config_dict, 'drift_check_wait_time_s'):
             self._drift_check_wait_time = float(
-                config_dict['drift_check_wait_time_s']
+                config_get(config_dict, 'drift_check_wait_time_s')
             )
 
         if self._drift_check_nb_measurements < 0:
@@ -741,24 +809,24 @@ class GabSweep(Sequencer):
             )
 
         # heater TES feedback
-        self._bias_min = float(require('bias_min_ua'))
-        self._bias_step_start = float(require('bias_step_start_ua'))
-        self._bias_max = float(require('bias_max_ua'))
+        self._bias_min = float(require('bias_min_uA'))
+        self._bias_step_start = float(require('bias_step_start_uA'))
+        self._bias_max = float(require('bias_max_uA'))
         self._feedback_timeout = float(require('feedback_timeout_s'))
         self._post_bias_wait = float(require('post_bias_wait_s'))
 
         if self._bias_step_start <= 0:
             raise ValueError(
-                'GabSweep: "bias_step_start_ua" must be positive!'
+                'GabSweep: "bias_step_start_uA" must be positive!'
             )
         if self._bias_min < 0:
             raise ValueError(
-                'GabSweep: "bias_min_ua" must not be negative!'
+                'GabSweep: "bias_min_uA" must not be negative!'
             )
         if self._bias_min >= self._bias_max:
             raise ValueError(
-                'GabSweep: "bias_min_ua" must be less than '
-                '"bias_max_ua"!'
+                'GabSweep: "bias_min_uA" must be less than '
+                '"bias_max_uA"!'
             )
         if self._nb_events_didv < 1:
             raise ValueError(
@@ -850,10 +918,10 @@ class GabSweep(Sequencer):
         adc_setup['trigger_channel'] = trigger_channel
 
         config_dict = self._measurement_config[self._measurement_name]
-        if 'voltage_min_v' in config_dict:
-            adc_setup['voltage_min'] = float(config_dict['voltage_min_v'])
-        if 'voltage_max_v' in config_dict:
-            adc_setup['voltage_max'] = float(config_dict['voltage_max_v'])
+        if config_has(config_dict, 'voltage_min_V'):
+            adc_setup['voltage_min'] = float(config_get(config_dict, 'voltage_min_V'))
+        if config_has(config_dict, 'voltage_max_V'):
+            adc_setup['voltage_max'] = float(config_get(config_dict, 'voltage_max_V'))
 
         self._adc_config = {adc_id: adc_setup}
 
@@ -1051,7 +1119,7 @@ class GabSweep(Sequencer):
         """
         Measure the thermometer TES bias point R0: read signal
         generator triggered dIdV traces, apply qetpy dIdV autocuts,
-        fit the average with the 2-pole model, and extract R0 with
+        fit the average with the 3-pole model, and extract R0 with
         the infinite loop gain approximation.
 
         Parameters
@@ -1150,7 +1218,7 @@ class GabSweep(Sequencer):
         """
 
         if self._verbose:
-            print('INFO: Setting heater TES bias to bias_min_ua = '
+            print('INFO: Setting heater TES bias to bias_min_uA = '
                   f'{self._bias_min:.6g} uA')
 
         self._instrument.set_tes_bias(
@@ -1213,6 +1281,83 @@ class GabSweep(Sequencer):
                                  'reference')
 
         print(message)
+
+    def wait_for_temperature(self, temperature_mk=None):
+        """
+        Wait until the MC temperature reaches a setpoint and holds it.
+
+        The thermometer is polled every temperature_poll_interval_s
+        and the reading must stay within temperature_tolerance_frac
+        of the setpoint for temperature_stable_time_s before the
+        setpoint counts as reached. How fast the fridge cools is set
+        by its cooling power and the thermal conductance, so a large
+        temperature step can take much longer than a small one and a
+        fixed wait cannot cover both.
+
+        Parameters
+        ----------
+        temperature_mk : float
+            MC temperature setpoint [mK].
+
+        Returns
+        -------
+        temperature_ok : bool
+            True if the setpoint was reached and held, False on
+            timeout.
+        history : list of float
+            All temperature readings taken [mK].
+        """
+
+        target_mk = float(temperature_mk)
+        history = list()
+        start_time = time.time()
+        time_in_tolerance = None
+
+        if self._verbose:
+            print(f'INFO: Waiting for MC temperature to reach '
+                  f'{target_mk:.6g} mK (within '
+                  f'{self._temperature_tolerance * 100.0:.3g} percent '
+                  f'for {self._temperature_stable_time_s:.6g} s)')
+
+        while True:
+
+            reading_mk = 1000.0 * float(self._instrument.get_temperature(
+                channel_name=self._thermometer_name,
+                instrument_name=self._thermometer_instrument
+            ))
+            history.append(reading_mk)
+
+            offset = abs(reading_mk - target_mk) / abs(target_mk)
+            now = time.time()
+
+            if offset <= self._temperature_tolerance:
+                if time_in_tolerance is None:
+                    time_in_tolerance = now
+                    if self._verbose:
+                        print(f'INFO: MC temperature within tolerance '
+                              f'at {reading_mk:.6g} mK, holding for '
+                              f'{self._temperature_stable_time_s:.6g} s')
+                if ((now - time_in_tolerance)
+                        >= self._temperature_stable_time_s):
+                    if self._verbose:
+                        print(f'INFO: MC temperature {reading_mk:.6g} '
+                              f'mK reached after {now - start_time:.6g} '
+                              's')
+                    return True, history
+            else:
+                # drifted back out, the hold time restarts
+                time_in_tolerance = None
+
+            if (now - start_time) > self._temperature_max_wait_time_s:
+                print('WARNING: MC temperature timeout '
+                      f'({self._temperature_max_wait_time_s:.6g} s), '
+                      f'setpoint {target_mk:.6g} mK not reached, last '
+                      f'reading {reading_mk:.6g} mK '
+                      f'({offset * 100.0:+.3g} percent off), recording '
+                      'the point as temperature not reached!')
+                return False, history
+
+            time.sleep(self._temperature_poll_interval_s)
 
     def wait_for_settled_r0(self):
         """
@@ -1380,8 +1525,8 @@ class GabSweep(Sequencer):
               f'{self._thermometer_tes_channel}')
         print(f'Heater TES channel: {self._heater_tes_channel}')
         print(f'Heater TES bias range: {self._bias_min:.6g} uA '
-              f'(bias_min_ua, keeps the heater normal) to '
-              f'{self._bias_max:.6g} uA (bias_max_ua)')
+              f'(bias_min_uA, keeps the heater normal) to '
+              f'{self._bias_max:.6g} uA (bias_max_uA)')
         print(f'MC thermometer: {self._thermometer_name} '
               f'({self._thermometer_instrument}), '
               f'heater: {self._heater_name}')
@@ -1413,6 +1558,12 @@ class GabSweep(Sequencer):
               f'{self._temperature_sampling_time_s:.6g} s window per '
               'datapoint (Gaussian histogram fit for the uncertainty)')
 
+        print(f'\nMC temperature settling: polled every '
+              f'{self._temperature_poll_interval_s:.6g} s, must hold '
+              f'within {self._temperature_tolerance * 100.0:.3g} '
+              f'percent for {self._temperature_stable_time_s:.6g} s, '
+              f'up to {self._temperature_max_wait_time_s:.6g} s')
+
         if self._use_stability_check:
             settle_s = self._stability_timeout / 3.0
             print(f'\nR0 settling: stability check, up to '
@@ -1423,8 +1574,10 @@ class GabSweep(Sequencer):
                   f'{self._settle_wait_time:.6g} s per measurement')
 
         # rough duration estimate: temperature settling plus a few
-        # feedback iterations per point
-        per_point_s = (self._temperature_wait_stable_time * 60.0
+        # feedback iterations per point. How long the fridge takes to
+        # reach a setpoint is not knowable in advance, so this assumes
+        # the hold time alone and will underestimate large steps.
+        per_point_s = (self._temperature_stable_time_s
                        + 3.0 * (self._post_bias_wait + settle_s))
         total_min = nb_points * per_point_s / 60.0
         print(f'\nRough estimated duration: {total_min:.4g} min '
@@ -1484,7 +1637,7 @@ class GabSweep(Sequencer):
                 print('=====================================')
                 print('REMINDER: thermometer TES must be biased in '
                       'transition, PID pre-set. The heater TES bias '
-                      f'will be set to bias_min_ua = {self._bias_min:.6g} '
+                      f'will be set to bias_min_uA = {self._bias_min:.6g} '
                       'uA (must keep it normal) and set back to its '
                       'original value at shutdown.')
 
@@ -1872,21 +2025,26 @@ class GabSweep(Sequencer):
             print(f'\nINFO: Step {step_index}: setting MC temperature '
                   f'to {temperature_mk:.6g} mK')
 
+        # the setpoint is only applied here; the driver's own wait is
+        # not used because it cannot report whether it reached the
+        # setpoint or simply ran out of time
         self._instrument.set_temperature(
             temperature_mk / 1000.0,
             channel_name=self._thermometer_name,
             heater_channel_name=self._heater_name,
             instrument_name=self._thermometer_instrument,
-            wait_temperature_reached=True,
-            wait_cycle_time=self._temperature_wait_cycle_time,
-            wait_stable_time=self._temperature_wait_stable_time,
-            max_wait_time=self._temperature_max_wait_time,
-            tolerance=self._temperature_tolerance
+            wait_temperature_reached=False
+        )
+
+        temperature_ok, temperature_history = self.wait_for_temperature(
+            temperature_mk=temperature_mk
         )
 
         end_sweep = False
         step_diagnostics = {'step': step_index,
-                            'temperature_setpoint_mk': temperature_mk}
+                            'temperature_setpoint_mk': temperature_mk,
+                            'temperature_ok': temperature_ok,
+                            'temperature_history': temperature_history}
 
         if step_index == 0:
 
@@ -1992,6 +2150,7 @@ class GabSweep(Sequencer):
             'converged': converged,
             'pinned_at_floor': pinned_at_floor,
             'stability_ok': stability_ok,
+            'temperature_ok': temperature_ok,
         }
         self._append_datapoint(row_dict=row_dict)
 
@@ -2012,7 +2171,8 @@ class GabSweep(Sequencer):
                   f'({offset_percent:+.3g} percent from reference), '
                   f'converged = {converged}, '
                   f'pinned_at_floor = {pinned_at_floor}, '
-                  f'stability_ok = {stability_ok}')
+                  f'stability_ok = {stability_ok}, '
+                  f'temperature_ok = {temperature_ok}')
 
         return end_sweep
 

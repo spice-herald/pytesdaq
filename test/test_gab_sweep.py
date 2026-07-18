@@ -283,7 +283,7 @@ def test_rejects_same_thermometer_and_heater_channel(tmp_path):
 
     config_text = config_text.replace(
         'heater_tes_channel = C',
-        'heater_tes_channel = B'
+        'heater_tes_channel = D'
     )
     config_file = tmp_path / 'gab_sweep_same_channel.ini'
     config_file.write_text(config_text)
@@ -335,7 +335,7 @@ def test_timer_mode_does_not_require_stability_parameters():
     sweep = _make_dry_sweep()
 
     assert sweep._use_stability_check is False
-    assert sweep._settle_wait_time == 60.0
+    assert sweep._settle_wait_time == 5.0
     assert sweep._stability_timeout is None
     assert sweep._nb_events_stability is None
 
@@ -362,8 +362,10 @@ def test_stability_mode_requires_its_parameters(tmp_path):
         )
 
 
-def test_didv_config_defaults():
-    # the signal generator and fit keys are optional in the config
+def test_didv_config_parses_from_example():
+    # the signal generator and fit keys parse into the expected
+    # attributes; these keys are optional and fall back to the same
+    # defaults when omitted
     sweep = _make_dry_sweep()
 
     assert sweep._signal_gen_frequency == 50.0
@@ -373,7 +375,7 @@ def test_didv_config_defaults():
     assert sweep._signal_gen_phase == 0.0
     assert sweep._didv_fcutoff == 50000.0
     assert sweep._rshunt == 0.005
-    assert sweep._rparasitic == 0.005
+    assert sweep._rparasitic == 0.00176
 
     # 50 ms at 50 Hz rounds to an integer number of periods
     assert sweep._nb_cycles == round(0.050 * 50.0)
@@ -390,12 +392,12 @@ def test_rejects_both_signal_gen_voltage_and_current(tmp_path):
         config_text = f.read()
 
     config_text = config_text.replace(
-        '#signal_gen_voltage_mvpp = 20',
-        'signal_gen_voltage_mvpp = 20'
+        '#signal_gen_voltage_mVpp = 20',
+        'signal_gen_voltage_mVpp = 20'
     )
     config_text = config_text.replace(
-        '#signal_gen_current_uapp = 5',
-        'signal_gen_current_uapp = 5'
+        '#signal_gen_current_uApp = 5',
+        'signal_gen_current_uApp = 5'
     )
     config_file = tmp_path / 'gab_sweep_both_amplitudes.ini'
     config_file.write_text(config_text)
@@ -1047,6 +1049,7 @@ def test_run_feedback_confirmation_near_miss_converges_on_mean():
     sweep.wait_for_settled_r0 = lambda: (True, [])
     sweep._post_bias_wait = 0.0
     sweep._r0_ref = 250.0
+    sweep._r0_tolerance_percent = 2.0
 
     result = sweep._run_feedback()
 
@@ -1114,12 +1117,12 @@ def test_run_feedback_detects_pinned_at_floor():
     )
 
 
-def test_drift_check_parameters_have_defaults():
+def test_drift_check_parameters_parse_from_example():
     # the drift check keys are optional in the config
     sweep = _make_dry_sweep()
 
-    assert sweep._drift_check_nb_measurements == 5
-    assert sweep._drift_check_wait_time == 60.0
+    assert sweep._drift_check_nb_measurements == 3
+    assert sweep._drift_check_wait_time == 5.0
     assert sweep._r0_noise_floor == 0.0
 
 
@@ -1145,6 +1148,8 @@ def test_run_drift_check_measures_scatter(monkeypatch):
         return quality_sequence.pop(0)
 
     sweep.measure_r0_quality = fake_quality
+    sweep._drift_check_nb_measurements = len(r0_values)
+    sweep._drift_check_wait_time = 60.0
 
     slept = list()
     monkeypatch.setattr(gab_sweep_module.time, 'sleep', slept.append)
@@ -1246,3 +1251,98 @@ def test_shutdown_leaves_heater_bias_when_initial_unknown():
     sweep.shutdown()
 
     assert device['bias'] == 500.0
+
+
+def _make_temperature_sweep(readings, monkeypatch):
+    # dry-run sweep whose thermometer returns the given readings [K],
+    # with sleep disabled and a fake clock advancing 1 s per reading
+    sweep = _make_dry_sweep()
+    sweep._temperature_poll_interval_s = 1.0
+    sweep._temperature_stable_time_s = 3.0
+    sweep._temperature_max_wait_time_s = 100.0
+    sweep._temperature_tolerance = 0.02
+
+    values = list(readings)
+
+    class FakeInstrument:
+        @staticmethod
+        def get_temperature(channel_name=None, instrument_name=None):
+            if len(values) > 1:
+                return values.pop(0)
+            return values[0]
+
+    sweep._instrument = FakeInstrument()
+
+    clock = {'now': 0.0}
+
+    def fake_time():
+        return clock['now']
+
+    def fake_sleep(seconds):
+        clock['now'] = clock['now'] + seconds
+
+    monkeypatch.setattr(gab_sweep_module.time, 'time', fake_time)
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', fake_sleep)
+
+    return sweep
+
+
+def test_wait_for_temperature_waits_out_a_slow_approach(monkeypatch):
+    # the fridge coasts down for several polls before arriving; the
+    # wait must not return until the setpoint is reached and held
+    readings = [0.060, 0.055, 0.050, 0.045, 0.0401]
+    sweep = _make_temperature_sweep(readings, monkeypatch)
+
+    temperature_ok, history = sweep.wait_for_temperature(
+        temperature_mk=40.0
+    )
+
+    assert temperature_ok is True
+
+    # the four out-of-tolerance readings, then the hold window
+    assert history[:4] == pytest.approx([60.0, 55.0, 50.0, 45.0])
+    assert history[-1] == pytest.approx(40.1)
+
+
+def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
+    # a reading that drifts back out of tolerance restarts the hold,
+    # so a brief touch of the setpoint is not enough
+    readings = [0.0401, 0.050, 0.0401]
+    sweep = _make_temperature_sweep(readings, monkeypatch)
+
+    temperature_ok, history = sweep.wait_for_temperature(
+        temperature_mk=40.0
+    )
+
+    assert temperature_ok is True
+
+    # the excursion at 50 mK must appear before the accepted hold
+    assert pytest.approx(50.0) in history
+    assert history.index(pytest.approx(50.0)) < len(history) - 1
+
+
+def test_wait_for_temperature_times_out_when_setpoint_unreachable(
+        monkeypatch):
+    # a fridge that never gets there must time out and report failure
+    # rather than silently letting the sweep measure
+    readings = [0.060]
+    sweep = _make_temperature_sweep(readings, monkeypatch)
+
+    temperature_ok, history = sweep.wait_for_temperature(
+        temperature_mk=40.0
+    )
+
+    assert temperature_ok is False
+    assert len(history) > 1
+
+
+def test_config_lookup_ignores_unit_suffix_case():
+    # configparser lowercases option names, so the canonical
+    # capitalization used in the code must still find the value
+    config_dict = {'bias_min_ua': '100', 'sample_rate_hz': '1250000'}
+
+    assert gab_sweep_module.config_has(config_dict, 'bias_min_uA')
+    assert gab_sweep_module.config_get(
+        config_dict, 'sample_rate_Hz'
+    ) == '1250000'
+    assert not gab_sweep_module.config_has(config_dict, 'missing_key_uA')
