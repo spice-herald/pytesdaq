@@ -1346,3 +1346,69 @@ def test_config_lookup_ignores_unit_suffix_case():
         config_dict, 'sample_rate_Hz'
     ) == '1250000'
     assert not gab_sweep_module.config_has(config_dict, 'missing_key_uA')
+
+
+def test_run_single_step_writes_every_row_key_to_csv(tmp_path,
+                                                     monkeypatch):
+    # the recorded row must be writable through csv.DictWriter, which
+    # rejects any key missing from CSV_COLUMNS; running a real step
+    # catches a row key added without updating the column list
+    import csv as csv_module
+    from pytesdaq.sequencer import GabSweep
+
+    sweep = _make_dry_sweep()
+
+    device = {'bias': 38.0}
+
+    class FakeInstrument:
+        @staticmethod
+        def set_temperature(temperature, **kwargs):
+            return True
+
+        @staticmethod
+        def get_temperature(channel_name=None, instrument_name=None):
+            return 0.042
+
+        @staticmethod
+        def set_tes_bias(bias, unit=None, detector_channel=None):
+            device['bias'] = float(bias)
+            return True
+
+        @staticmethod
+        def get_tes_bias(detector_channel=None, unit=None):
+            return device['bias']
+
+    sweep._instrument = FakeInstrument()
+    sweep._post_bias_wait = 0.0
+    sweep._temperature_sampling_time_s = 0.0
+    sweep._temperature_stable_time_s = 0.0
+    sweep._temperature_poll_interval_s = 0.0
+    sweep.wait_for_settled_r0 = lambda: (True, [])
+    sweep.measure_r0_quality = lambda nb_events=None: {
+        'r0': 0.150,
+        'r0_err': 0.001,
+        'i0': 1.0e-6,
+        'p0': 1.0e-13,
+        'fit_cost': 1.0,
+        'nb_traces': 200,
+        'nb_traces_kept': 180,
+    }
+
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
+
+    csv_path = tmp_path / 'gab_sweep_data.csv'
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv_module.DictWriter(f, fieldnames=GabSweep.CSV_COLUMNS)
+        writer.writeheader()
+    sweep._csv_path = str(csv_path)
+
+    sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    with open(csv_path, 'r', newline='') as f:
+        rows = list(csv_module.DictReader(f))
+
+    assert len(rows) == 1
+    assert rows[0]['temperature_ok'] == 'True'
+    assert rows[0]['step'] == '0'
+    # no column left unwritten
+    assert all(value != '' for value in rows[0].values())

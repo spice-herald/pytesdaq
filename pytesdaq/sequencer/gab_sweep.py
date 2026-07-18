@@ -500,7 +500,8 @@ class GabSweep(Sequencer):
                    'heater_tes_bias_ua', 'heater_tes_bias_err_ua',
                    'thermometer_r0_ohms', 'thermometer_r0_err_ohms',
                    'r0_offset_percent', 'converged',
-                   'pinned_at_floor', 'stability_ok']
+                   'pinned_at_floor', 'stability_ok',
+                   'temperature_ok']
 
     def __init__(self, sequencer_file=None, setup_file=None,
                  comment='No comment',
