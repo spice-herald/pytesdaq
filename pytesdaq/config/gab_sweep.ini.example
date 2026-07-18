@@ -13,66 +13,88 @@ heater_name = heaterMC
 # the two channels must be different: one TES cannot be both devices
 # thermometer TES: biased in transition manually by the user before the run
 # heater TES: controlled by this script; it can be left at its usual
-# operating bias, the script raises it to bias_min at the start of the
+# operating bias, the script raises it to bias_min_ua at the start of the
 # sweep and restores the pre-run bias at shutdown
 thermometer_tes_channel = B
 heater_tes_channel = C
 
-# temperature sweep [mK]: explicit vector OR start/stop/step
+# temperature sweep: explicit vector OR start/stop/step
 use_temperature_vect = true
-temperature_vect = 42, 41, 40, 38, 36, 34, 30, 26, 22, 16, 10
-#temperature_start = 42
-#temperature_stop = 10
-#temperature_step = 1
+temperature_vect_mk = 42, 41, 40, 38, 36, 34, 30, 26, 22, 16, 10
+#temperature_start_mk = 42
+#temperature_stop_mk = 10
+#temperature_step_mk = 1
 
 # set_temperature wait parameters (values validated in Gab_planning/test.py)
-# wait_cycle_time, wait_stable_time, max_wait_time are in minutes
-# tolerance is fractional (0.02 means 2 percent)
-temperature_wait_cycle_time = 5
-temperature_wait_stable_time = 35
-temperature_max_wait_time = 300
-temperature_tolerance = 0.02
+# temperature_tolerance_frac is fractional (0.02 means 2 percent)
+temperature_wait_cycle_time_minutes = 5
+temperature_wait_stable_time_minutes = 35
+temperature_max_wait_time_minutes = 300
+temperature_tolerance_frac = 0.02
 
-# thermometer TES baseline measurement
-sample_rate = 1250000
-trace_length_ms = 8
-voltage_min = -10
-voltage_max = 10
-nb_events_baseline = 100
-baseline_tolerance_percent = 2
+# MC temperature per datapoint: sampled repeatedly over this window,
+# then a Gaussian is fit to the histogram of samples; the fit mean is
+# the recorded temperature and its sigma the uncertainty (optional,
+# default shown)
+#temperature_sampling_time_s = 5
 
-# how to let the thermometer TES baseline settle before measuring it
+# thermometer TES bias point measurement: R0 from a square wave dIdV
+# fit (2-pole fit, infinite loop gain approximation)
+# the trace length is rounded to an integer number of signal generator
+# periods; nb_events_didv traces are averaged per measurement
+sample_rate_hz = 1250000
+trace_length_ms = 50
+voltage_min_v = -10
+voltage_max_v = 10
+nb_events_didv = 50
+r0_tolerance_percent = 2
+
+# TES circuit resistances, required for the dIdV fit
+rshunt_mohm = 5
+rparasitic_mohm = 5
+
+# dIdV square wave on the thermometer TES (defaults shown)
+# signal_gen_voltage_mvpp is for an external signal generator; for
+# magnicon use signal_gen_current_uapp instead (only one of the two
+# may be set)
+#signal_gen_frequency_hz = 50
+#signal_gen_voltage_mvpp = 20
+#signal_gen_current_uapp = 5
+#signal_gen_offset_mv = 0
+#signal_gen_phase_deg = 0
+
+# dIdV fit parameters (optional, defaults shown)
+# didv_fcutoff_hz is the fit lowpass cutoff
+#didv_fcutoff_hz = 50000
+#r0_guess_mohm = 150
+
+# how to let the thermometer TES R0 settle before measuring it
 # pick one method, only its own parameters are read:
 #
-#   use_stability_check = false -> wait a fixed settle_wait_time
-#   use_stability_check = true  -> repeat quick baseline measurements until
+#   use_stability_check = false -> wait a fixed settle_wait_time_s
+#   use_stability_check = true  -> repeat quick R0 measurements until
 #                                  the last 5 agree within
-#                                  baseline_tolerance_percent, giving up
-#                                  after stability_timeout
-#
-# settle_wait_time and stability_timeout are in seconds
+#                                  r0_tolerance_percent, giving up
+#                                  after stability_timeout_s
 use_stability_check = false
-settle_wait_time = 60
+settle_wait_time_s = 60
 #nb_events_stability = 10
-#stability_timeout = 300
+#stability_timeout_s = 300
 
-# baseline drift check at startup (optional, defaults shown)
-# repeated baseline measurements at fixed conditions before the sweep;
+# R0 drift check at startup (optional, defaults shown)
+# repeated R0 measurements at fixed conditions before the sweep;
 # their scatter is the noise floor the feedback has to beat, a warning
-# is printed if it exceeds baseline_tolerance_percent
-# drift_check_wait_time is in seconds; set
+# is printed if it exceeds r0_tolerance_percent; set
 # drift_check_nb_measurements = 0 to skip the check
 #drift_check_nb_measurements = 5
-#drift_check_wait_time = 60
+#drift_check_wait_time_s = 60
 
 # heater TES feedback
-# bias_min, bias_step_start and bias_max are in uA
-# bias_min is the minimum current that keeps the heater TES normal
+# bias_min_ua is the minimum current that keeps the heater TES normal
 # (above its critical current); test it manually for the configured
 # heater_tes_channel, it is different for each channel
-# feedback_timeout and post_bias_wait are in seconds
-bias_min = 100
-bias_step_start = 15
-bias_max = 500
-feedback_timeout = 600
-post_bias_wait = 60
+bias_min_ua = 100
+bias_step_start_ua = 15
+bias_max_ua = 500
+feedback_timeout_s = 600
+post_bias_wait_s = 60
