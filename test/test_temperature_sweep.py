@@ -12,8 +12,21 @@ from pytesdaq.sequencer.temperature_sweep import (
 
 
 def _make_config(**overrides):
-    # minimal config accepted by TemperatureSweep, keys lowercased the
-    # way configparser delivers them
+    """
+    Build a minimal config accepted by TemperatureSweep, keys
+    lowercased the way configparser delivers them.
+
+    Parameters
+    ----------
+    overrides : dict
+        Keyword arguments overriding individual default config values.
+
+    Returns
+    -------
+    config_dict : dict
+        Config dictionary with the defaults merged with overrides.
+    """
+
     config_dict = {
         'thermometer_name': 'CP',
         'thermometer_instrument': 'macrt',
@@ -31,8 +44,28 @@ def _make_config(**overrides):
 
 
 def _make_sweep(readings, monkeypatch, **overrides):
-    # sweep whose thermometer returns the given readings [K], with a
-    # fake clock advancing only when sleep is called
+    """
+    Build a sweep whose thermometer returns the given readings [K],
+    with a fake clock advancing only when sleep is called.
+
+    Parameters
+    ----------
+    readings : list of float
+        Thermometer readings [K] returned in order by the fake
+        instrument; the last value repeats once exhausted.
+    monkeypatch : pytest fixture
+        Used to patch temperature_sweep_module.time.time and
+        temperature_sweep_module.time.sleep with a fake clock.
+    overrides : dict
+        Keyword arguments overriding individual default config values,
+        forwarded to _make_config.
+
+    Returns
+    -------
+    sweep : TemperatureSweep
+        Sweep configured with a fake instrument and a fake clock.
+    """
+
     sweep = TemperatureSweep(config_dict=_make_config(**overrides),
                              verbose=False)
 
@@ -62,6 +95,19 @@ def _make_sweep(readings, monkeypatch, **overrides):
 
 
 def test_build_temperature_list_from_vect():
+    """
+    Build the temperature list from a vector of mixed str/float
+    values.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {
         'use_temperature_vect': True,
         'temperature_vect_mk': ['42', 41.0, '40.5', '38'],
@@ -71,7 +117,20 @@ def test_build_temperature_list_from_vect():
 
 
 def test_build_temperature_list_from_single_value_vect():
-    # get_sequencer_setup collapses single-element lists to a scalar
+    """
+    Build the temperature list from a single-value vect; the config
+    parser (get_sequencer_setup) collapses single-element lists to a
+    scalar, so this scalar form must still be accepted.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {
         'use_temperature_vect': True,
         'temperature_vect_mk': 42.0,
@@ -81,6 +140,18 @@ def test_build_temperature_list_from_single_value_vect():
 
 
 def test_build_temperature_list_from_start_stop_step():
+    """
+    Build the temperature list from start/stop/step config values.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {
         'use_temperature_vect': False,
         'temperature_start_mk': '42',
@@ -92,6 +163,19 @@ def test_build_temperature_list_from_start_stop_step():
 
 
 def test_build_temperature_list_rejects_ascending_vect():
+    """
+    Reject an ascending temperature vect, since the sweep must be
+    strictly decreasing.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {
         'use_temperature_vect': True,
         'temperature_vect_mk': [38, 40, 42],
@@ -101,6 +185,19 @@ def test_build_temperature_list_rejects_ascending_vect():
 
 
 def test_build_temperature_list_rejects_zero_step():
+    """
+    Reject a zero temperature_step_mk, since it would never advance
+    the sweep.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {
         'use_temperature_vect': False,
         'temperature_start_mk': 42,
@@ -112,6 +209,19 @@ def test_build_temperature_list_rejects_zero_step():
 
 
 def test_fit_temperature_gaussian_recovers_mean_and_sigma():
+    """
+    Recover the true mean and sigma of a Gaussian-distributed sample
+    set from fit_temperature_gaussian.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     rng = np.random.default_rng(seed=7)
     samples = rng.normal(0.040, 0.0002, size=500)
     result = fit_temperature_gaussian(samples=samples)
@@ -122,7 +232,21 @@ def test_fit_temperature_gaussian_recovers_mean_and_sigma():
 
 
 def test_fit_temperature_gaussian_falls_back_on_identical_samples():
-    # a quantizing controller can return the same reading every time
+    """
+    Fall back to the sample mean and zero sigma when all samples are
+    identical, since a quantizing controller can return the same
+    reading every time and the histogram fit cannot run on zero
+    spread.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     result = fit_temperature_gaussian(samples=[0.040] * 50)
     assert result['fit_ok'] is False
     assert result['mean'] == pytest.approx(0.040)
@@ -130,13 +254,38 @@ def test_fit_temperature_gaussian_falls_back_on_identical_samples():
 
 
 def test_fit_temperature_gaussian_rejects_empty_samples():
+    """
+    Reject an empty sample list, since no temperature can be
+    estimated from zero readings.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     with pytest.raises(ValueError):
         fit_temperature_gaussian(samples=[])
 
 
 def test_config_lookup_ignores_unit_suffix_case():
-    # configparser lowercases option names, so the canonical
-    # capitalization must still resolve
+    """
+    Resolve a config key by its canonical capitalization even though
+    configparser lowercases every option name, so the canonical
+    capitalization written in a config file must still resolve.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = {'temperature_start_mk': 42.0}
     assert config_has(config_dict, 'temperature_start_mK')
     assert config_get(config_dict, 'temperature_start_mK') == 42.0
@@ -144,8 +293,22 @@ def test_config_lookup_ignores_unit_suffix_case():
 
 
 def test_wait_for_temperature_waits_out_a_slow_approach(monkeypatch):
-    # the fridge coasts down for several polls before arriving; the
-    # wait must not return until the setpoint is reached and held
+    """
+    Wait out a slow temperature approach: the fridge coasts down for
+    several polls before arriving, and the wait must not return until
+    the setpoint is reached and held.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used indirectly, through _make_sweep, to patch time.time and
+        time.sleep with a fake clock.
+
+    Returns
+    -------
+    None
+    """
+
     readings = [0.060, 0.055, 0.050, 0.045, 0.0401]
     sweep = _make_sweep(readings, monkeypatch)
 
@@ -159,8 +322,22 @@ def test_wait_for_temperature_waits_out_a_slow_approach(monkeypatch):
 
 
 def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
-    # a reading that drifts back out of tolerance restarts the hold,
-    # so a brief touch of the setpoint is not enough
+    """
+    Restart the hold timer on a temperature excursion: a reading that
+    drifts back out of tolerance restarts the hold, so a brief touch
+    of the setpoint is not enough.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used indirectly, through _make_sweep, to patch time.time and
+        time.sleep with a fake clock.
+
+    Returns
+    -------
+    None
+    """
+
     readings = [0.0401, 0.050, 0.0401]
     sweep = _make_sweep(readings, monkeypatch)
 
@@ -175,8 +352,22 @@ def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
 
 def test_wait_for_temperature_times_out_when_setpoint_unreachable(
         monkeypatch):
-    # a fridge that never gets there must time out and report failure
-    # rather than silently letting the sweep measure
+    """
+    Time out when the setpoint is unreachable: a fridge that never
+    gets there must time out and report failure rather than silently
+    letting the sweep measure.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used indirectly, through _make_sweep, to patch time.time and
+        time.sleep with a fake clock.
+
+    Returns
+    -------
+    None
+    """
+
     readings = [0.060]
     sweep = _make_sweep(readings, monkeypatch)
 
@@ -189,8 +380,22 @@ def test_wait_for_temperature_times_out_when_setpoint_unreachable(
 
 
 def test_measure_temperature_samples_over_window(monkeypatch):
-    # the measurement keeps sampling until the window closes and
-    # reports the Gaussian mean and sigma of the readings
+    """
+    Sample the temperature over a window: the measurement keeps
+    sampling until the window closes and reports the Gaussian mean and
+    sigma of the readings.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used to patch temperature_sweep_module.time.time with a fake
+        clock that advances 10 ms per call.
+
+    Returns
+    -------
+    None
+    """
+
     sweep = TemperatureSweep(
         config_dict=_make_config(temperature_sampling_time_s=1.0),
         verbose=False
@@ -224,8 +429,19 @@ def test_measure_temperature_samples_over_window(monkeypatch):
 
 
 def test_measure_temperature_zero_window_takes_one_sample():
-    # a zero sampling window still returns a single reading with the
-    # fallback statistics
+    """
+    Take exactly one sample on a zero sampling window: a zero window
+    still returns a single reading with the fallback statistics.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     sweep = TemperatureSweep(
         config_dict=_make_config(temperature_sampling_time_s=0.0),
         verbose=False
@@ -246,8 +462,20 @@ def test_measure_temperature_zero_window_takes_one_sample():
 
 
 def test_set_setpoint_does_not_use_the_driver_blocking_wait():
-    # the driver's own wait cannot report whether it reached the
-    # setpoint or ran out of time, so this sweep polls instead
+    """
+    Apply a setpoint without using the driver's own blocking wait: the
+    driver's own wait cannot report whether it reached the setpoint or
+    ran out of time, so this sweep polls instead.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     calls = list()
 
     class FakeInstrument:
@@ -275,6 +503,18 @@ def test_set_setpoint_does_not_use_the_driver_blocking_wait():
 
 
 def test_heater_to_zero_sets_setpoint_zero():
+    """
+    Set the heater setpoint to zero through heater_to_zero.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     calls = list()
 
     class FakeInstrument:
@@ -294,6 +534,18 @@ def test_heater_to_zero_sets_setpoint_zero():
 
 
 def test_missing_required_key_is_rejected():
+    """
+    Reject construction when a required config key is missing.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config_dict = _make_config()
     del config_dict['temperature_tolerance_frac']
     with pytest.raises(ValueError, match='temperature_tolerance_frac'):
@@ -301,6 +553,19 @@ def test_missing_required_key_is_rejected():
 
 
 def test_temperature_list_is_exposed():
+    """
+    Expose the parsed temperature list and thermometer/heater names
+    through TemperatureSweep's read-only properties.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     sweep = TemperatureSweep(config_dict=_make_config(), verbose=False)
     assert sweep.temperature_list_mk == [42.0, 41.0, 40.0]
     assert sweep.thermometer_name == 'CP'

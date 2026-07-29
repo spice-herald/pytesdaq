@@ -3,7 +3,20 @@ import pytesdaq.config.settings as settings
 
 
 def test_explicit_tes_field_marks_a_real_tes_channel():
-    # a connection line that declares "tes:" is a front end board TES
+    """
+    Mark a connection line as a real TES channel when it declares a
+    "tes:" field, since a connection line that declares "tes:" is a
+    front end board TES.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     name_val_list, name_list, val_list = (
         connection_utils.extract_adc_connection(
             'detector:GaAs_800x200, tes:A, controller:feb1_A'
@@ -15,7 +28,20 @@ def test_explicit_tes_field_marks_a_real_tes_channel():
 
 
 def test_missing_tes_field_is_not_a_tes_channel():
-    # the TTL input has no "tes:" field, so it must never be biased
+    """
+    Mark a connection line without a "tes:" field as not a TES
+    channel, since the TTL input has no "tes:" field and must never be
+    biased.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     name_val_list, name_list, val_list = (
         connection_utils.extract_adc_connection(
             'detector:rigolTTL, controller:ttl_ttl'
@@ -26,8 +52,21 @@ def test_missing_tes_field_is_not_a_tes_channel():
 
 
 def test_missing_tes_field_still_falls_back_to_controller_channel():
-    # the synthesized tes_channel is unchanged, so existing callers
-    # that index on tes_channel keep working
+    """
+    Fall back to the controller channel for tes_channel when no
+    "tes:" field is present, since the synthesized tes_channel is
+    unchanged and existing callers that index on tes_channel keep
+    working.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     name_val_list, name_list, val_list = (
         connection_utils.extract_adc_connection(
             'detector:AccelerometerX, controller:accelerometer_X'
@@ -39,6 +78,20 @@ def test_missing_tes_field_still_falls_back_to_controller_channel():
 
 
 def test_connection_table_from_setup_file_has_the_column():
+    """
+    Verify that the connection table built from the setup file
+    includes the is_tes_channel column, with at least one TES channel
+    marked True.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     config = settings.Config(setup_file='pytesdaq/config/setup.ini')
     connection_table = config.get_adc_connections()
 
