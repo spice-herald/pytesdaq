@@ -531,3 +531,59 @@ def test_capture_is_not_repeated_on_a_second_call():
     recaptured = sweep.capture_initial_biases()
 
     assert recaptured == initial
+
+
+def test_capture_initial_biases_leaves_no_partial_state_on_failure():
+    """
+    A capture where get_tes_bias raises partway through must leave
+    self._initial_biases_ua empty and the completeness flag False, so
+    a later successful capture records the real pre-run values rather
+    than inheriting a partial dict.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    failing_channel = sweep._zero_channels[0]
+    original_get = instrument.get_tes_bias
+
+    def flaky_get(detector_channel=None, unit=None):
+        """
+        Raise for one channel and delegate to the real fake read for
+        every other channel, to simulate an instrument that stops
+        responding partway through a capture.
+
+        Parameters
+        ----------
+        detector_channel : str or None
+            Detector channel name to read.
+        unit : str or None
+            Unit of the returned bias, unused by this fake.
+
+        Returns
+        -------
+        bias : float
+            The bias currently recorded for the channel, for every
+            channel other than the failing one.
+        """
+        if detector_channel == failing_channel:
+            raise RuntimeError('instrument not responding')
+        return original_get(detector_channel=detector_channel, unit=unit)
+
+    instrument.get_tes_bias = flaky_get
+
+    with pytest.raises(RuntimeError):
+        sweep.capture_initial_biases()
+
+    assert sweep._initial_biases_ua == dict()
+    assert sweep._biases_captured is False
+
+    instrument.get_tes_bias = original_get
+    captured = sweep.capture_initial_biases()
+
+    assert captured == instrument.biases

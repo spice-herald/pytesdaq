@@ -91,6 +91,7 @@ class GtaSweep(Sequencer):
         # runtime state
         self._iv_sequencer = None
         self._initial_biases_ua = dict()
+        self._biases_captured = False
         self._csv_path = None
         self._output_path = None
         self._diagnostics = {'config': None, 'steps': list()}
@@ -237,7 +238,18 @@ class GtaSweep(Sequencer):
 
         Calling this again after the biases have been changed would
         record the changed values, silently discarding the user's
-        bias points, so the first capture wins.
+        bias points, so the first capture wins. Completeness is
+        tracked with a dedicated flag rather than inferred from the
+        dict being non-empty, because a read failure partway through
+        would otherwise leave a partial dict that looks "captured"
+        and can never be corrected by a retry. A capture that raises
+        partway through leaves no partial state behind: it reads into
+        a local dict first and only commits it, and sets the flag,
+        once every channel has been read successfully.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -245,17 +257,21 @@ class GtaSweep(Sequencer):
             Detector channel name to TES bias [uA].
         """
 
-        if len(self._initial_biases_ua) > 0:
+        if self._biases_captured:
             return self._initial_biases_ua
 
         channels = [self._tes_channel] + self._zero_channels
 
+        captured_biases_ua = dict()
         for channel in channels:
             bias_ua = float(self._instrument.get_tes_bias(
                 detector_channel=channel,
                 unit='uA'
             ))
-            self._initial_biases_ua[channel] = bias_ua
+            captured_biases_ua[channel] = bias_ua
+
+        self._initial_biases_ua = captured_biases_ua
+        self._biases_captured = True
 
         if self._verbose:
             print('INFO: Pre-run TES biases [uA]: '
@@ -273,6 +289,10 @@ class GtaSweep(Sequencer):
 
         Channels that are not TESs are never written to.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         None
@@ -289,7 +309,7 @@ class GtaSweep(Sequencer):
 
         for channel in self._zero_channels:
             self._instrument.set_tes_bias(
-                0,
+                bias=0,
                 unit='uA',
                 detector_channel=channel
             )
@@ -301,6 +321,10 @@ class GtaSweep(Sequencer):
         A channel that fails to restore is reported and the rest are
         still attempted, because a channel left biased keeps heating
         the absorber.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -315,7 +339,7 @@ class GtaSweep(Sequencer):
         for channel, bias_ua in self._initial_biases_ua.items():
             try:
                 self._instrument.set_tes_bias(
-                    bias_ua,
+                    bias=bias_ua,
                     unit='uA',
                     detector_channel=channel
                 )
