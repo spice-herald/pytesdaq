@@ -477,11 +477,13 @@ class GtaSweep(Sequencer):
                 if self._comment and self._comment != 'No comment':
                     print(f'  ({self._comment})')
                 print('=====================================')
-                print('REMINDER: the TES must be biased in transition '
-                      'and stay in transition across the whole '
-                      'temperature range, and the PID must be pre-set. '
-                      'Every other TES channel is set to 0 uA now and '
-                      'restored at shutdown.')
+                print('REMINDER: the configured tes_bias_vect must '
+                      'bracket the target R0 at every bath temperature '
+                      'in the sweep, otherwise the offline '
+                      'interpolation has nothing to interpolate '
+                      'between at the cold end. Every other TES '
+                      'channel is set to 0 uA now and restored at '
+                      'shutdown.')
 
             self.zero_other_channels()
 
@@ -570,6 +572,10 @@ class GtaSweep(Sequencer):
         if iv_success is None:
             iv_success = True
 
+        if not iv_success:
+            print(f'WARNING: Step {step_index}: IV sweep reported a '
+                  'data-taking failure')
+
         after = self._temperature_sweep.measure_temperature()
         after_mk = after['temperature_k'] * 1000.0
         after_err_mk = after['temperature_err_k'] * 1000.0
@@ -606,7 +612,8 @@ class GtaSweep(Sequencer):
             print(f'INFO: Step {step_index} recorded: MC = '
                   f'{before_mk:.6g} mK before, {after_mk:.6g} mK after '
                   f'({after_mk - before_mk:+.3g} mK drift), '
-                  f'temperature_ok = {temperature_ok}, IV series = '
+                  f'temperature_ok = {temperature_ok}, iv_success = '
+                  f'{bool(iv_success)}, IV series = '
                   f'{self._iv_sequencer.group_name}')
 
         return row_dict

@@ -1,4 +1,5 @@
 import csv
+import os
 
 import pytest
 
@@ -597,14 +598,19 @@ class _FakeIvSequencer:
     the data would have landed.
     """
 
-    def __init__(self):
+    def __init__(self, run_result=None):
         """
         Set up a fake IV sequencer with a fixed group name and raw
         data path, and an empty log of run comment suffixes.
 
         Parameters
         ----------
-        None
+        run_result : bool or None
+            Value that _run_iv_didv returns. Defaults to None, which
+            is what the real IV_dIdV._run_iv_didv returns on its
+            success path (it falls off the end of the function rather
+            than returning True), so the default here is honest to
+            the case run_single_step's None-guard exists to handle.
 
         Returns
         -------
@@ -615,10 +621,12 @@ class _FakeIvSequencer:
         self.runs = list()
         self.group_name = 'iv_I1_D20260728_T160000'
         self.raw_data_path = '/data/run74/raw/iv_I1_D20260728_T160000'
+        self.run_result = run_result
 
     def _run_iv_didv(self):
         """
-        Record the current run comment suffix and report success.
+        Record the current run comment suffix and report the
+        configured result.
 
         Parameters
         ----------
@@ -626,17 +634,24 @@ class _FakeIvSequencer:
 
         Returns
         -------
-        success : bool
-            Always True, mimicking a successful IV sweep.
+        success : bool or None
+            The run_result this fake was constructed with.
         """
         self.runs.append(self.run_comment_suffix)
-        return True
+        return self.run_result
 
 
 def test_run_single_step_writes_every_row_key_to_csv(tmp_path):
     """
     Test that run_single_step returns a row with exactly the declared
-    CSV columns, correctly populated.
+    CSV columns, correctly populated, and that the CSV on disk gains
+    one row per call rather than being overwritten.
+
+    Reading the CSV back (rather than only asserting on the returned
+    dict) is what catches a regression such as _append_datapoint
+    opening the file in write mode instead of append mode: that bug
+    would silently discard every earlier step's row while every
+    in-memory assertion on the latest row still passed.
 
     Parameters
     ----------
@@ -647,13 +662,11 @@ def test_run_single_step_writes_every_row_key_to_csv(tmp_path):
     -------
     None
     """
-    from pytesdaq.sequencer import GtaSweep
-
     sweep, instrument = _sweep_with_fake_instrument()
     sweep._dry_run = False
     sweep.capture_initial_biases()
 
-    temperatures = [0.0402, 0.0399]
+    temperatures = [0.0402, 0.0399, 0.0399, 0.0396]
 
     def fake_measure():
         """
@@ -686,19 +699,76 @@ def test_run_single_step_writes_every_row_key_to_csv(tmp_path):
         writer = csv.DictWriter(f, fieldnames=GtaSweep.CSV_COLUMNS)
         writer.writeheader()
 
-    row = sweep.run_single_step(temperature_mk=40.0, step_index=0)
+    row_0 = sweep.run_single_step(temperature_mk=40.0, step_index=0)
+    row_1 = sweep.run_single_step(temperature_mk=39.0, step_index=1)
 
     # every declared column is present, none extra
-    assert set(row.keys()) == set(GtaSweep.CSV_COLUMNS)
+    assert set(row_0.keys()) == set(GtaSweep.CSV_COLUMNS)
 
-    assert row['temperature_setpoint_mk'] == pytest.approx(40.0)
-    assert row['mc_temperature_before_mk'] == pytest.approx(40.2)
-    assert row['mc_temperature_after_mk'] == pytest.approx(39.9)
-    assert row['temperature_drift_mk'] == pytest.approx(-0.3)
-    assert row['temperature_ok'] is True
-    assert row['tes_channel'] == sweep._tes_channel
-    assert row['iv_group_name'] == 'iv_I1_D20260728_T160000'
-    assert row['iv_success'] is True
+    assert row_0['temperature_setpoint_mk'] == pytest.approx(40.0)
+    assert row_0['mc_temperature_before_mk'] == pytest.approx(40.2)
+    assert row_0['mc_temperature_after_mk'] == pytest.approx(39.9)
+    assert row_0['temperature_drift_mk'] == pytest.approx(-0.3)
+    assert row_0['temperature_ok'] is True
+    assert row_0['tes_channel'] == sweep._tes_channel
+    assert row_0['iv_group_name'] == 'iv_I1_D20260728_T160000'
+    assert row_0['iv_success'] is True
+
+    with open(sweep._csv_path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == GtaSweep.CSV_COLUMNS
+        written_rows = list(reader)
+
+    assert len(written_rows) == 2
+    assert written_rows[0]['step'] == str(row_0['step'])
+    assert written_rows[1]['step'] == str(row_1['step'])
+
+
+def test_run_single_step_records_a_genuine_iv_failure(capsys):
+    """
+    Test that a data-taking failure reported by _run_iv_didv is
+    recorded as iv_success = False and announced with a WARNING, not
+    silently swallowed by the None-guard.
+
+    _run_iv_didv returns False (not None) on a real data-taking
+    error, so this pins the guard from the opposite side of
+    test_run_single_step_writes_every_row_key_to_csv: that test's
+    fake returns None (the real success path) and expects True here,
+    this one returns False (the real failure path) and expects False.
+    Together they mean deleting the guard, or inverting it, breaks
+    one test or the other.
+
+    Parameters
+    ----------
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._dry_run = False
+    sweep.capture_initial_biases()
+
+    sweep._temperature_sweep.measure_temperature = lambda: {
+        'temperature_k': 0.040, 'temperature_err_k': 0.0001,
+        'fit_ok': True, 'nb_samples': 10, 'samples': [0.040]}
+    sweep._temperature_sweep.set_setpoint = lambda temperature_mk=None: None
+    sweep._temperature_sweep.wait_for_temperature = (
+        lambda temperature_mk=None: (True, [40.0])
+    )
+
+    sweep._iv_sequencer = _FakeIvSequencer(run_result=False)
+    sweep._csv_path = None
+
+    row = sweep.run_single_step(temperature_mk=40.0, step_index=0)
+
+    assert row['iv_success'] is False
+
+    printed = capsys.readouterr().out
+    assert 'WARNING' in printed
+    assert 'IV sweep' in printed
 
 
 def test_run_single_step_tags_the_iv_run_comment_with_temperature():
@@ -736,7 +806,7 @@ def test_run_single_step_tags_the_iv_run_comment_with_temperature():
     assert '40' in iv_sequencer.runs[0]
 
 
-def test_run_single_step_records_a_timed_out_setpoint(tmp_path):
+def test_run_single_step_records_a_timed_out_setpoint():
     """
     Test that a temperature timeout flags the row but still takes the
     IV sweep, since the recorded temperature is the measured one, not
@@ -744,10 +814,7 @@ def test_run_single_step_records_a_timed_out_setpoint(tmp_path):
 
     Parameters
     ----------
-    tmp_path : pathlib.Path
-        Pytest fixture directory, unused since this test disables the
-        CSV write, kept for parity with the other run_single_step
-        tests.
+    None
 
     Returns
     -------
@@ -852,3 +919,39 @@ def test_shutdown_runs_even_when_a_step_raises():
 
     for channel, bias in initial.items():
         assert instrument.biases[channel] == pytest.approx(bias)
+
+
+def test_create_output_directory_writes_csv_header_and_config_copy(
+        tmp_path):
+    """
+    Test that _create_output_directory writes an empty CSV with the
+    declared header and copies the sequencer config file into the
+    timestamped output directory.
+
+    Nothing else covers the artifact this feature exists to produce:
+    the join table between raw IV series and bath temperature. This
+    exercises the method directly rather than through the full run(),
+    against a real (dry-run) sweep and the example config file.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation data root.
+
+    Returns
+    -------
+    None
+    """
+    sweep = _make_dry_sweep()
+    sweep._base_automation_data_path = str(tmp_path)
+    sweep._sequencer_file = 'pytesdaq/config/gta_sweep.ini.example'
+
+    sweep._create_output_directory()
+
+    with open(sweep._csv_path, 'r', newline='') as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == GtaSweep.CSV_COLUMNS
+        assert list(reader) == []
+
+    config_copy_path = sweep._output_path + '/gta_sweep.ini'
+    assert os.path.isfile(config_copy_path)
