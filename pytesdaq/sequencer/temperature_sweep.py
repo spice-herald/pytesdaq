@@ -322,6 +322,14 @@ class TemperatureSweep:
         self._instrument = value
 
     @property
+    def verbose(self):
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value):
+        self._verbose = value
+
+    @property
     def thermometer_name(self):
         return self._thermometer_name
 

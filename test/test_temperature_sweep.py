@@ -253,6 +253,27 @@ def test_fit_temperature_gaussian_falls_back_on_identical_samples():
     assert result['sigma'] == pytest.approx(0.0)
 
 
+def test_fit_temperature_gaussian_falls_back_on_few_samples():
+    """
+    Fall back to the sample mean and standard deviation when too few
+    samples are available for a histogram fit.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    samples = [0.040, 0.041, 0.039]
+    result = fit_temperature_gaussian(samples=samples)
+    assert result['fit_ok'] is False
+    assert result['mean'] == pytest.approx(np.mean(samples))
+    assert result['sigma'] == pytest.approx(np.std(samples))
+
+
 def test_fit_temperature_gaussian_rejects_empty_samples():
     """
     Reject an empty sample list, since no temperature can be

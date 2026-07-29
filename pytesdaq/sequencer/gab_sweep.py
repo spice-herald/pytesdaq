@@ -677,18 +677,24 @@ class GabSweep(Sequencer):
 
         self._adc_config = {adc_id: adc_setup}
 
-    def _instantiate_drivers(self):
+    def _synced_temperature_sweep(self):
         """
-        Instantiate drivers and hand the instrument control object to
-        the shared temperature sweep.
+        The shared temperature sweep, with its instrument and verbose
+        flag refreshed from this object.
+
+        Both can be reassigned after the drivers are instantiated, so
+        they are refreshed before every use rather than captured once.
 
         Returns
         -------
-        None
+        temperature_sweep : TemperatureSweep
+            The shared temperature sweep, ready to use.
         """
 
-        super()._instantiate_drivers()
         self._temperature_sweep.instrument = self._instrument
+        self._temperature_sweep.verbose = self._verbose
+
+        return self._temperature_sweep
 
     def setup_signal_generator(self):
         """
@@ -847,12 +853,7 @@ class GabSweep(Sequencer):
             nb_samples, samples (list of all readings [Kelvin]).
         """
 
-        # keep the shared sweep's instrument current: self._instrument
-        # can be reassigned after _instantiate_drivers() ran (as in
-        # tests that inject a fake instrument directly)
-        self._temperature_sweep.instrument = self._instrument
-
-        return self._temperature_sweep.measure_temperature()
+        return self._synced_temperature_sweep().measure_temperature()
 
     def measure_r0_quality(self, nb_events=None):
         """
@@ -1039,12 +1040,7 @@ class GabSweep(Sequencer):
             All temperature readings taken [mK].
         """
 
-        # keep the shared sweep's instrument current: self._instrument
-        # can be reassigned after _instantiate_drivers() ran (as in
-        # tests that inject a fake instrument directly)
-        self._temperature_sweep.instrument = self._instrument
-
-        return self._temperature_sweep.wait_for_temperature(
+        return self._synced_temperature_sweep().wait_for_temperature(
             temperature_mk=temperature_mk
         )
 
@@ -1400,12 +1396,7 @@ class GabSweep(Sequencer):
         if self._instrument is not None:
 
             try:
-                # keep the shared sweep's instrument current:
-                # self._instrument can be reassigned after
-                # _instantiate_drivers() ran (as in tests that inject
-                # a fake instrument directly)
-                self._temperature_sweep.instrument = self._instrument
-                self._temperature_sweep.heater_to_zero()
+                self._synced_temperature_sweep().heater_to_zero()
             except Exception as err:
                 print(f'ERROR setting heater setpoint to 0: {err}')
 
@@ -1716,15 +1707,12 @@ class GabSweep(Sequencer):
             print(f'\nINFO: Step {step_index}: setting MC temperature '
                   f'to {temperature_mk:.6g} mK')
 
-        # keep the shared sweep's instrument current: self._instrument
-        # can be reassigned after _instantiate_drivers() ran (as in
-        # tests that inject a fake instrument directly)
-        self._temperature_sweep.instrument = self._instrument
-
         # the setpoint is only applied here; the driver's own wait is
         # not used because it cannot report whether it reached the
         # setpoint or simply ran out of time
-        self._temperature_sweep.set_setpoint(temperature_mk=temperature_mk)
+        self._synced_temperature_sweep().set_setpoint(
+            temperature_mk=temperature_mk
+        )
 
         temperature_ok, temperature_history = self.wait_for_temperature(
             temperature_mk=temperature_mk
