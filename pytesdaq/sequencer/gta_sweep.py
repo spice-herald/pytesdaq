@@ -405,9 +405,54 @@ class GtaSweep(Sequencer):
               'gta_sweep_data.csv pairs each series with its '
               'temperature.')
 
+    def _build_iv_sequencer(self):
+        """
+        Build the IV_dIdV sequencer that performs the IV sweep at each
+        temperature.
+
+        It reads the [iv_didv] and [iv] sections of the same config
+        file. Its own temperature sweep is disabled: this class owns
+        temperature. Its instrument control object is supplied here so
+        that only one is built for the whole sweep.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        iv_sequencer : IV_dIdV
+            Configured IV sequencer.
+        """
+
+        iv_sequencer = IV_dIdV(
+            iv=True,
+            didv=False,
+            rp=False,
+            rn=False,
+            temperature_sweep=False,
+            tes_bias_sweep=True,
+            online_iv=True,
+            comment=self._comment,
+            sweep_channels=[self._tes_channel],
+            saved_channels=None,
+            sequencer_file=self._sequencer_file,
+            setup_file=self._setup_file,
+            dummy_mode=self._dummy_mode,
+            verbose=self._verbose
+        )
+
+        iv_sequencer.instrument_control = self._instrument
+
+        return iv_sequencer
+
     def run(self):
         """
-        Run the full Gta sweep.
+        Run the full Gta sweep. All exit paths funnel to shutdown().
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -417,3 +462,260 @@ class GtaSweep(Sequencer):
         if self._dry_run:
             self._print_dry_run()
             return
+
+        try:
+
+            self._instantiate_drivers()
+            self._temperature_sweep.instrument = self._instrument
+
+            # every bias is remembered before anything is changed
+            self.capture_initial_biases()
+
+            if self._verbose:
+                print('\n=====================================')
+                print('INFO: Starting Gta sweep')
+                if self._comment and self._comment != 'No comment':
+                    print(f'  ({self._comment})')
+                print('=====================================')
+                print('REMINDER: the TES must be biased in transition '
+                      'and stay in transition across the whole '
+                      'temperature range, and the PID must be pre-set. '
+                      'Every other TES channel is set to 0 uA now and '
+                      'restored at shutdown.')
+
+            self.zero_other_channels()
+
+            self._iv_sequencer = self._build_iv_sequencer()
+
+            self._create_output_directory()
+            self._diagnostics['config'] = copy.deepcopy(
+                self._measurement_config[self._measurement_name]
+            )
+
+            temperatures = self._temperature_sweep.temperature_list_mk
+            for step_index, temperature_mk in enumerate(temperatures):
+                self.run_single_step(
+                    temperature_mk=temperature_mk,
+                    step_index=step_index
+                )
+
+            if self._verbose:
+                print('\nINFO: Gta sweep complete!')
+
+        except KeyboardInterrupt:
+            print('\nWARNING: Sweep interrupted by user!')
+
+        except Exception as err:
+            print(f'\nERROR during sweep: {err}')
+            raise
+
+        finally:
+            self.shutdown()
+
+    def run_single_step(self, temperature_mk=None, step_index=None):
+        """
+        Run one temperature point: set the MC temperature, wait for it,
+        measure it, take a full IV sweep, measure the temperature
+        again, and record the datapoint.
+
+        The temperature is measured on both sides of the IV sweep
+        because an IV sweep is long enough that the bath can drift over
+        its duration.
+
+        Parameters
+        ----------
+        temperature_mk : float
+            MC temperature setpoint [mK].
+        step_index : int
+            Zero-based index of this point in the sweep.
+
+        Returns
+        -------
+        row_dict : dict
+            The recorded datapoint, keyed by CSV_COLUMNS.
+        """
+
+        if self._verbose:
+            print(f'\nINFO: Step {step_index}: setting MC temperature '
+                  f'to {temperature_mk:.6g} mK')
+
+        timestamp_start = datetime.now().isoformat()
+
+        self._temperature_sweep.set_setpoint(
+            temperature_mk=temperature_mk
+        )
+        temperature_ok, temperature_history = (
+            self._temperature_sweep.wait_for_temperature(
+                temperature_mk=temperature_mk
+            )
+        )
+
+        if self._post_settle_wait_s > 0:
+            time.sleep(self._post_settle_wait_s)
+
+        before = self._temperature_sweep.measure_temperature()
+        before_mk = before['temperature_k'] * 1000.0
+        before_err_mk = before['temperature_err_k'] * 1000.0
+
+        if self._verbose:
+            print(f'INFO: Step {step_index}: MC = {before_mk:.6g} '
+                  f'+- {before_err_mk:.3g} mK, starting IV sweep')
+
+        # tag the IV series with the condition it was taken at
+        self._iv_sequencer.run_comment_suffix = (
+            f', Gta step {step_index}, T_set = {temperature_mk:.6g} mK'
+        )
+
+        iv_success = self._iv_sequencer._run_iv_didv()
+        if iv_success is None:
+            iv_success = True
+
+        after = self._temperature_sweep.measure_temperature()
+        after_mk = after['temperature_k'] * 1000.0
+        after_err_mk = after['temperature_err_k'] * 1000.0
+
+        row_dict = {
+            'step': step_index,
+            'timestamp_start': timestamp_start,
+            'timestamp_end': datetime.now().isoformat(),
+            'temperature_setpoint_mk': temperature_mk,
+            'mc_temperature_before_mk': before_mk,
+            'mc_temperature_before_err_mk': before_err_mk,
+            'mc_temperature_after_mk': after_mk,
+            'mc_temperature_after_err_mk': after_err_mk,
+            'temperature_drift_mk': after_mk - before_mk,
+            'temperature_ok': temperature_ok,
+            'tes_channel': self._tes_channel,
+            'iv_group_name': self._iv_sequencer.group_name,
+            'iv_raw_data_path': self._iv_sequencer.raw_data_path,
+            'iv_success': bool(iv_success),
+        }
+
+        self._append_datapoint(row_dict=row_dict)
+
+        step_diagnostics = {
+            'step': step_index,
+            'temperature_history': temperature_history,
+            'temperature_before': before,
+            'temperature_after': after,
+            'row': row_dict,
+        }
+        self._diagnostics['steps'].append(step_diagnostics)
+
+        if self._verbose:
+            print(f'INFO: Step {step_index} recorded: MC = '
+                  f'{before_mk:.6g} mK before, {after_mk:.6g} mK after '
+                  f'({after_mk - before_mk:+.3g} mK drift), '
+                  f'temperature_ok = {temperature_ok}, IV series = '
+                  f'{self._iv_sequencer.group_name}')
+
+        return row_dict
+
+    def shutdown(self):
+        """
+        Safe shutdown: MC heater setpoint to 0, every TES bias restored
+        to its pre-run value, diagnostics flushed.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        print('INFO: Safe shutdown, setting the heater setpoint to 0 '
+              'and restoring the TES biases')
+
+        if self._instrument is not None:
+
+            try:
+                self._temperature_sweep.heater_to_zero()
+            except Exception as err:
+                print(f'ERROR setting heater setpoint to 0: {err}')
+
+            self.restore_initial_biases()
+
+        try:
+            self._save_diagnostics()
+        except Exception as err:
+            print(f'ERROR saving diagnostics: {err}')
+
+    def _create_output_directory(self):
+        """
+        Create the timestamped output directory, copy the config file
+        into it, and write the CSV header.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        now = datetime.now()
+        timestamp = now.strftime('%Y%m%d_%H%M%S')
+        self._output_path = (self._base_automation_data_path
+                             + '/gta_sweep_' + timestamp)
+        arg_utils.make_directories(self._output_path)
+
+        # copy config for reproducibility
+        shutil.copy(self._sequencer_file,
+                    self._output_path + '/gta_sweep.ini')
+
+        if self._comment and self._comment != 'No comment':
+            with open(self._output_path + '/comment.txt', 'w') as f:
+                f.write(self._comment + '\n')
+
+        # science dataset CSV with header
+        self._csv_path = self._output_path + '/gta_sweep_data.csv'
+        with open(self._csv_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=self.CSV_COLUMNS)
+            writer.writeheader()
+
+        if self._verbose:
+            print(f'INFO: Output directory: {self._output_path}')
+
+    def _append_datapoint(self, row_dict=None):
+        """
+        Append one datapoint to the science dataset CSV.
+
+        Parameters
+        ----------
+        row_dict : dict
+            One row keyed by CSV_COLUMNS.
+
+        Returns
+        -------
+        None
+        """
+
+        if self._csv_path is None:
+            return
+
+        with open(self._csv_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=self.CSV_COLUMNS)
+            writer.writerow(row_dict)
+
+    def _save_diagnostics(self):
+        """
+        Save the diagnostics dictionary as a pickle.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        if self._output_path is None:
+            return
+
+        diagnostics_path = self._output_path + '/gta_sweep_diagnostics.p'
+        with open(diagnostics_path, 'wb') as f:
+            pickle.dump(self._diagnostics, f)

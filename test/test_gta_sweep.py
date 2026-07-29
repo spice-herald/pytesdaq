@@ -1,3 +1,5 @@
+import csv
+
 import pytest
 
 from pytesdaq.sequencer.iv_didv import IV_dIdV
@@ -587,3 +589,266 @@ def test_capture_initial_biases_leaves_no_partial_state_on_failure():
     captured = sweep.capture_initial_biases()
 
     assert captured == instrument.biases
+
+
+class _FakeIvSequencer:
+    """
+    Stand-in for IV_dIdV: records that a sweep ran and reports where
+    the data would have landed.
+    """
+
+    def __init__(self):
+        """
+        Set up a fake IV sequencer with a fixed group name and raw
+        data path, and an empty log of run comment suffixes.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+        self.instrument_control = None
+        self.run_comment_suffix = ''
+        self.runs = list()
+        self.group_name = 'iv_I1_D20260728_T160000'
+        self.raw_data_path = '/data/run74/raw/iv_I1_D20260728_T160000'
+
+    def _run_iv_didv(self):
+        """
+        Record the current run comment suffix and report success.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        success : bool
+            Always True, mimicking a successful IV sweep.
+        """
+        self.runs.append(self.run_comment_suffix)
+        return True
+
+
+def test_run_single_step_writes_every_row_key_to_csv(tmp_path):
+    """
+    Test that run_single_step returns a row with exactly the declared
+    CSV columns, correctly populated.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory for writing the CSV file.
+
+    Returns
+    -------
+    None
+    """
+    from pytesdaq.sequencer import GtaSweep
+
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._dry_run = False
+    sweep.capture_initial_biases()
+
+    temperatures = [0.0402, 0.0399]
+
+    def fake_measure():
+        """
+        Pop and return the next fake temperature measurement.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        measurement : dict
+            Fake temperature measurement with keys temperature_k,
+            temperature_err_k, fit_ok, nb_samples and samples.
+        """
+        value = temperatures.pop(0)
+        return {'temperature_k': value, 'temperature_err_k': 0.0001,
+                'fit_ok': True, 'nb_samples': 100, 'samples': [value]}
+
+    sweep._temperature_sweep.measure_temperature = fake_measure
+    sweep._temperature_sweep.set_setpoint = lambda temperature_mk=None: None
+    sweep._temperature_sweep.wait_for_temperature = (
+        lambda temperature_mk=None: (True, [40.0])
+    )
+
+    sweep._iv_sequencer = _FakeIvSequencer()
+
+    sweep._csv_path = str(tmp_path / 'gta_sweep_data.csv')
+    with open(sweep._csv_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=GtaSweep.CSV_COLUMNS)
+        writer.writeheader()
+
+    row = sweep.run_single_step(temperature_mk=40.0, step_index=0)
+
+    # every declared column is present, none extra
+    assert set(row.keys()) == set(GtaSweep.CSV_COLUMNS)
+
+    assert row['temperature_setpoint_mk'] == pytest.approx(40.0)
+    assert row['mc_temperature_before_mk'] == pytest.approx(40.2)
+    assert row['mc_temperature_after_mk'] == pytest.approx(39.9)
+    assert row['temperature_drift_mk'] == pytest.approx(-0.3)
+    assert row['temperature_ok'] is True
+    assert row['tes_channel'] == sweep._tes_channel
+    assert row['iv_group_name'] == 'iv_I1_D20260728_T160000'
+    assert row['iv_success'] is True
+
+
+def test_run_single_step_tags_the_iv_run_comment_with_temperature():
+    """
+    Test that run_single_step tags the IV sequencer's run comment
+    suffix with the step index and setpoint temperature.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._dry_run = False
+    sweep.capture_initial_biases()
+
+    sweep._temperature_sweep.measure_temperature = lambda: {
+        'temperature_k': 0.040, 'temperature_err_k': 0.0001,
+        'fit_ok': True, 'nb_samples': 10, 'samples': [0.040]}
+    sweep._temperature_sweep.set_setpoint = lambda temperature_mk=None: None
+    sweep._temperature_sweep.wait_for_temperature = (
+        lambda temperature_mk=None: (True, [40.0])
+    )
+
+    iv_sequencer = _FakeIvSequencer()
+    sweep._iv_sequencer = iv_sequencer
+    sweep._csv_path = None
+
+    sweep.run_single_step(temperature_mk=40.0, step_index=0)
+
+    assert len(iv_sequencer.runs) == 1
+    assert '40' in iv_sequencer.runs[0]
+
+
+def test_run_single_step_records_a_timed_out_setpoint(tmp_path):
+    """
+    Test that a temperature timeout flags the row but still takes the
+    IV sweep, since the recorded temperature is the measured one, not
+    the setpoint.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory, unused since this test disables the
+        CSV write, kept for parity with the other run_single_step
+        tests.
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._dry_run = False
+    sweep.capture_initial_biases()
+
+    sweep._temperature_sweep.measure_temperature = lambda: {
+        'temperature_k': 0.045, 'temperature_err_k': 0.0001,
+        'fit_ok': True, 'nb_samples': 10, 'samples': [0.045]}
+    sweep._temperature_sweep.set_setpoint = lambda temperature_mk=None: None
+    sweep._temperature_sweep.wait_for_temperature = (
+        lambda temperature_mk=None: (False, [45.0])
+    )
+
+    iv_sequencer = _FakeIvSequencer()
+    sweep._iv_sequencer = iv_sequencer
+    sweep._csv_path = None
+
+    row = sweep.run_single_step(temperature_mk=40.0, step_index=0)
+
+    assert row['temperature_ok'] is False
+    assert len(iv_sequencer.runs) == 1
+
+
+def test_shutdown_restores_biases_and_zeroes_the_heater():
+    """
+    Test that shutdown zeroes the MC heater setpoint and restores
+    every TES channel to its pre-run bias.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    initial = dict(sweep.capture_initial_biases())
+    sweep.zero_other_channels()
+
+    heater_calls = list()
+    sweep._temperature_sweep.heater_to_zero = (
+        lambda: heater_calls.append(True)
+    )
+
+    sweep.shutdown()
+
+    assert heater_calls == [True]
+    for channel, bias in initial.items():
+        assert instrument.biases[channel] == pytest.approx(bias)
+
+
+def test_shutdown_runs_even_when_a_step_raises():
+    """
+    Test that an exception mid sweep still restores the biases,
+    because run()'s finally block must always reach shutdown().
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._dry_run = False
+    initial = dict(sweep.capture_initial_biases())
+
+    sweep._temperature_sweep.heater_to_zero = lambda: None
+    sweep._instantiate_drivers = lambda: None
+    sweep._build_iv_sequencer = lambda: _FakeIvSequencer()
+    sweep._create_output_directory = lambda: None
+    sweep._save_diagnostics = lambda: None
+
+    def exploding_step(temperature_mk=None, step_index=None):
+        """
+        Raise unconditionally, standing in for an instrument failure
+        partway through the sweep.
+
+        Parameters
+        ----------
+        temperature_mk : float or None
+            MC temperature setpoint in mK, unused.
+        step_index : int or None
+            Zero-based index of this point in the sweep, unused.
+
+        Returns
+        -------
+        None
+        """
+        raise RuntimeError('instrument fell over')
+
+    sweep.run_single_step = exploding_step
+
+    with pytest.raises(RuntimeError):
+        sweep.run()
+
+    for channel, bias in initial.items():
+        assert instrument.biases[channel] == pytest.approx(bias)
