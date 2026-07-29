@@ -21,134 +21,17 @@ from datetime import datetime
 import numpy as np
 import qetpy as qp
 from qetpy.core._biasparams import get_biasparams_ilg
-from scipy.optimize import curve_fit
 
 from pytesdaq.sequencer.sequencer import Sequencer
+from pytesdaq.sequencer.temperature_sweep import (
+    TemperatureSweep,
+    build_temperature_list,
+    config_get,
+    config_has,
+    fit_temperature_gaussian,
+)
 from pytesdaq.utils import arg_utils
 from pytesdaq.utils import connection_utils
-
-
-def config_has(config_dict, key):
-    """
-    Check whether a config key is present.
-
-    configparser lowercases every option name, so a key written with
-    its proper unit capitalization (bias_min_uA, sample_rate_Hz)
-    arrives lowercased. Lookups use the lowercase form while messages
-    keep the canonical spelling the user wrote in the file.
-
-    Parameters
-    ----------
-    config_dict : dict
-        Measurement configuration dictionary.
-    key : str
-        Config key in its canonical capitalization.
-
-    Returns
-    -------
-    present : bool
-        True if the key is in the config.
-    """
-
-    return key.lower() in config_dict
-
-
-def config_get(config_dict, key):
-    """
-    Read a config key, ignoring the case of its unit suffix.
-
-    Parameters
-    ----------
-    config_dict : dict
-        Measurement configuration dictionary.
-    key : str
-        Config key in its canonical capitalization.
-
-    Returns
-    -------
-    value : object
-        The raw config value.
-    """
-
-    return config_dict[key.lower()]
-
-
-def build_temperature_list(config_dict=None):
-    """
-    Build the MC temperature setpoint list in mK from the config,
-    using "temperature_vect_mK" or start/stop/step.
-
-    Parameters
-    ----------
-    config_dict : dict
-        Measurement configuration dictionary.
-
-    Returns
-    -------
-    temperature_list : list of float
-        Strictly decreasing MC temperature setpoints in mK.
-    """
-
-    use_vect = False
-    if config_has(config_dict, 'use_temperature_vect'):
-        use_vect = bool(config_get(config_dict, 'use_temperature_vect'))
-
-    temperature_list = list()
-
-    if use_vect:
-
-        if not config_has(config_dict, 'temperature_vect_mK'):
-            raise ValueError(
-                'GabSweep: "temperature_vect_mK" required when '
-                '"use_temperature_vect" is true!'
-            )
-
-        vect = config_get(config_dict, 'temperature_vect_mK')
-        if not isinstance(vect, (list, tuple)):
-            vect = [vect]
-        for value in vect:
-            temperature_list.append(float(value))
-
-    else:
-
-        required_keys = ['temperature_start_mK',
-                         'temperature_stop_mK',
-                         'temperature_step_mK']
-        for key in required_keys:
-            if not config_has(config_dict, key):
-                raise ValueError(
-                    f'GabSweep: "{key}" required when '
-                    '"use_temperature_vect" is false!'
-                )
-
-        start = float(config_get(config_dict, 'temperature_start_mK'))
-        stop = float(config_get(config_dict, 'temperature_stop_mK'))
-        step = abs(float(config_get(config_dict, 'temperature_step_mK')))
-
-        if step == 0:
-            raise ValueError(
-                'GabSweep: "temperature_step_mK" must be nonzero!'
-            )
-        if stop >= start:
-            raise ValueError(
-                'GabSweep: "temperature_stop_mK" must be below '
-                '"temperature_start_mK" (descending sweep)!'
-            )
-
-        nb_steps = int(np.floor((start - stop) / step + 1e-9))
-        for idx in range(nb_steps + 1):
-            temperature_list.append(start - (idx * step))
-
-    if len(temperature_list) == 0:
-        raise ValueError('GabSweep: empty temperature list!')
-
-    for idx in range(1, len(temperature_list)):
-        if temperature_list[idx] >= temperature_list[idx - 1]:
-            raise ValueError(
-                'GabSweep: temperature list must be strictly decreasing!'
-            )
-
-    return temperature_list
 
 
 def compute_next_bias(bias_history=None,
@@ -277,90 +160,6 @@ def compute_next_bias(bias_history=None,
         next_bias = min_bias
 
     return next_bias
-
-
-def fit_temperature_gaussian(samples=None):
-    """
-    Estimate a temperature and its uncertainty from repeated samples
-    by fitting a Gaussian to their histogram.
-
-    The Gaussian mean is the temperature estimate and its sigma the
-    uncertainty. When the fit is not possible (too few samples, zero
-    spread, or a failed fit) the sample mean and standard deviation
-    are returned instead, flagged with fit_ok = False.
-
-    Parameters
-    ----------
-    samples : array-like
-        Temperature samples, any unit (output is in the same unit).
-
-    Returns
-    -------
-    result : dict
-        Keys: mean, sigma [same unit as samples], fit_ok, nb_samples.
-    """
-
-    samples = np.asarray(samples, dtype=float)
-    nb_samples = int(samples.size)
-
-    if nb_samples == 0:
-        raise ValueError(
-            'GabSweep: at least one temperature sample required!'
-        )
-
-    sample_mean = float(np.mean(samples))
-    sample_std = float(np.std(samples))
-
-    result = {
-        'mean': sample_mean,
-        'sigma': sample_std,
-        'fit_ok': False,
-        'nb_samples': nb_samples,
-    }
-
-    # a histogram fit needs enough samples and a nonzero spread
-    # (controllers can quantize and return identical readings)
-    if nb_samples < 10 or sample_std == 0:
-        return result
-
-    nb_bins = int(round(np.sqrt(nb_samples)))
-    if nb_bins < 5:
-        nb_bins = 5
-
-    counts, edges = np.histogram(samples, bins=nb_bins)
-    centers = (edges[:-1] + edges[1:]) / 2.0
-
-    def gaussian(x, amplitude, mu, sigma):
-        return amplitude * np.exp(-((x - mu) ** 2) / (2.0 * sigma ** 2))
-
-    try:
-        popt, pcov = curve_fit(
-            gaussian,
-            centers,
-            counts,
-            p0=[float(np.max(counts)), sample_mean, sample_std]
-        )
-    except (RuntimeError, ValueError):
-        return result
-
-    fit_mean = float(popt[1])
-    fit_sigma = float(abs(popt[2]))
-
-    # reject a fit that ran away from the data
-    sample_span = float(np.max(samples) - np.min(samples))
-    if (not np.isfinite(fit_mean)
-            or not np.isfinite(fit_sigma)
-            or fit_sigma == 0
-            or fit_sigma > sample_span
-            or fit_mean < float(np.min(samples))
-            or fit_mean > float(np.max(samples))):
-        return result
-
-    result['mean'] = fit_mean
-    result['sigma'] = fit_sigma
-    result['fit_ok'] = True
-
-    return result
 
 
 def fit_didv_r0(traces=None, sample_rate=None,
@@ -597,12 +396,21 @@ class GabSweep(Sequencer):
                 raise ValueError(f'GabSweep: "{key}" required in config!')
             return config_get(config_dict, key)
 
-        # thermometry
-        self._thermometer_name = str(require('thermometer_name'))
-        self._thermometer_instrument = str(
-            require('thermometer_instrument')
+        # MC temperature sweep, shared with the Gta measurement
+        self._temperature_sweep = TemperatureSweep(
+            config_dict=config_dict,
+            verbose=self._verbose
         )
-        self._heater_name = str(require('heater_name'))
+
+        # aliases, so the rest of this class reads unchanged
+        self._thermometer_name = self._temperature_sweep.thermometer_name
+        self._thermometer_instrument = (
+            self._temperature_sweep.thermometer_instrument
+        )
+        self._heater_name = self._temperature_sweep.heater_name
+        self._temperature_list_mk = (
+            self._temperature_sweep.temperature_list_mk
+        )
 
         # TES channels
         self._thermometer_tes_channel = str(
@@ -615,63 +423,6 @@ class GabSweep(Sequencer):
                 'GabSweep: "thermometer_tes_channel" and '
                 '"heater_tes_channel" must be different channels, '
                 f'both are "{self._heater_tes_channel}"!'
-            )
-
-        # temperature setpoints [mK]
-        self._temperature_list_mk = build_temperature_list(
-            config_dict=config_dict
-        )
-
-        # MC temperature settling: the sweep polls the thermometer
-        # itself rather than trusting the controller driver, which
-        # gives no way to tell a reached setpoint from a timeout
-        self._temperature_poll_interval_s = float(
-            require('temperature_poll_interval_s')
-        )
-        self._temperature_stable_time_s = float(
-            require('temperature_stable_time_s')
-        )
-        self._temperature_max_wait_time_s = float(
-            require('temperature_max_wait_time_s')
-        )
-        self._temperature_tolerance = float(
-            require('temperature_tolerance_frac')
-        )
-
-        if self._temperature_poll_interval_s <= 0:
-            raise ValueError(
-                'GabSweep: "temperature_poll_interval_s" must be '
-                'positive!'
-            )
-        if self._temperature_stable_time_s < 0:
-            raise ValueError(
-                'GabSweep: "temperature_stable_time_s" must not be '
-                'negative!'
-            )
-        if self._temperature_max_wait_time_s <= 0:
-            raise ValueError(
-                'GabSweep: "temperature_max_wait_time_s" must be '
-                'positive!'
-            )
-        if self._temperature_tolerance <= 0:
-            raise ValueError(
-                'GabSweep: "temperature_tolerance_frac" must be '
-                'positive!'
-            )
-
-        # MC temperature sampling window per datapoint: repeated
-        # readings whose Gaussian histogram fit gives the recorded
-        # temperature and its uncertainty (optional key)
-        self._temperature_sampling_time_s = 5.0
-        if config_has(config_dict, 'temperature_sampling_time_s'):
-            self._temperature_sampling_time_s = float(
-                config_get(config_dict, 'temperature_sampling_time_s')
-            )
-
-        if self._temperature_sampling_time_s < 0:
-            raise ValueError(
-                'GabSweep: "temperature_sampling_time_s" must not '
-                'be negative!'
             )
 
         # dIdV based R0 measurement of the thermometer TES
@@ -926,6 +677,19 @@ class GabSweep(Sequencer):
 
         self._adc_config = {adc_id: adc_setup}
 
+    def _instantiate_drivers(self):
+        """
+        Instantiate drivers and hand the instrument control object to
+        the shared temperature sweep.
+
+        Returns
+        -------
+        None
+        """
+
+        super()._instantiate_drivers()
+        self._temperature_sweep.instrument = self._instrument
+
     def setup_signal_generator(self):
         """
         Turn on the signal generator on the thermometer TES channel,
@@ -1074,11 +838,7 @@ class GabSweep(Sequencer):
 
     def measure_mc_temperature(self):
         """
-        Measure the MC temperature with its uncertainty: sample the
-        thermometer repeatedly for temperature_sampling_time_s, then
-        fit a Gaussian to the histogram of samples. The Gaussian mean
-        is the temperature, its sigma the uncertainty (sample mean
-        and standard deviation when the fit is not possible).
+        Measure the MC temperature with its uncertainty.
 
         Returns
         -------
@@ -1087,34 +847,12 @@ class GabSweep(Sequencer):
             nb_samples, samples (list of all readings [Kelvin]).
         """
 
-        samples = list()
-        start_time = time.time()
+        # keep the shared sweep's instrument current: self._instrument
+        # can be reassigned after _instantiate_drivers() ran (as in
+        # tests that inject a fake instrument directly)
+        self._temperature_sweep.instrument = self._instrument
 
-        # always at least one sample, then keep reading as fast as
-        # the instrument responds until the window closes
-        while True:
-
-            value = float(self._instrument.get_temperature(
-                channel_name=self._thermometer_name,
-                instrument_name=self._thermometer_instrument
-            ))
-            samples.append(value)
-
-            elapsed = time.time() - start_time
-            if elapsed >= self._temperature_sampling_time_s:
-                break
-
-        fit = fit_temperature_gaussian(samples=samples)
-
-        measurement = {
-            'temperature_k': fit['mean'],
-            'temperature_err_k': fit['sigma'],
-            'fit_ok': fit['fit_ok'],
-            'nb_samples': fit['nb_samples'],
-            'samples': samples,
-        }
-
-        return measurement
+        return self._temperature_sweep.measure_temperature()
 
     def measure_r0_quality(self, nb_events=None):
         """
@@ -1287,14 +1025,6 @@ class GabSweep(Sequencer):
         """
         Wait until the MC temperature reaches a setpoint and holds it.
 
-        The thermometer is polled every temperature_poll_interval_s
-        and the reading must stay within temperature_tolerance_frac
-        of the setpoint for temperature_stable_time_s before the
-        setpoint counts as reached. How fast the fridge cools is set
-        by its cooling power and the thermal conductance, so a large
-        temperature step can take much longer than a small one and a
-        fixed wait cannot cover both.
-
         Parameters
         ----------
         temperature_mk : float
@@ -1309,56 +1039,14 @@ class GabSweep(Sequencer):
             All temperature readings taken [mK].
         """
 
-        target_mk = float(temperature_mk)
-        history = list()
-        start_time = time.time()
-        time_in_tolerance = None
+        # keep the shared sweep's instrument current: self._instrument
+        # can be reassigned after _instantiate_drivers() ran (as in
+        # tests that inject a fake instrument directly)
+        self._temperature_sweep.instrument = self._instrument
 
-        if self._verbose:
-            print(f'INFO: Waiting for MC temperature to reach '
-                  f'{target_mk:.6g} mK (within '
-                  f'{self._temperature_tolerance * 100.0:.3g} percent '
-                  f'for {self._temperature_stable_time_s:.6g} s)')
-
-        while True:
-
-            reading_mk = 1000.0 * float(self._instrument.get_temperature(
-                channel_name=self._thermometer_name,
-                instrument_name=self._thermometer_instrument
-            ))
-            history.append(reading_mk)
-
-            offset = abs(reading_mk - target_mk) / abs(target_mk)
-            now = time.time()
-
-            if offset <= self._temperature_tolerance:
-                if time_in_tolerance is None:
-                    time_in_tolerance = now
-                    if self._verbose:
-                        print(f'INFO: MC temperature within tolerance '
-                              f'at {reading_mk:.6g} mK, holding for '
-                              f'{self._temperature_stable_time_s:.6g} s')
-                if ((now - time_in_tolerance)
-                        >= self._temperature_stable_time_s):
-                    if self._verbose:
-                        print(f'INFO: MC temperature {reading_mk:.6g} '
-                              f'mK reached after {now - start_time:.6g} '
-                              's')
-                    return True, history
-            else:
-                # drifted back out, the hold time restarts
-                time_in_tolerance = None
-
-            if (now - start_time) > self._temperature_max_wait_time_s:
-                print('WARNING: MC temperature timeout '
-                      f'({self._temperature_max_wait_time_s:.6g} s), '
-                      f'setpoint {target_mk:.6g} mK not reached, last '
-                      f'reading {reading_mk:.6g} mK '
-                      f'({offset * 100.0:+.3g} percent off), recording '
-                      'the point as temperature not reached!')
-                return False, history
-
-            time.sleep(self._temperature_poll_interval_s)
+        return self._temperature_sweep.wait_for_temperature(
+            temperature_mk=temperature_mk
+        )
 
     def wait_for_settled_r0(self):
         """
@@ -1556,14 +1244,17 @@ class GabSweep(Sequencer):
                   f'{temperature_mk:.6g} mK')
 
         print(f'\nMC temperature sampling: '
-              f'{self._temperature_sampling_time_s:.6g} s window per '
-              'datapoint (Gaussian histogram fit for the uncertainty)')
+              f'{self._temperature_sweep.sampling_time_s:.6g} s window '
+              'per datapoint (Gaussian histogram fit for the '
+              'uncertainty)')
 
         print(f'\nMC temperature settling: polled every '
-              f'{self._temperature_poll_interval_s:.6g} s, must hold '
-              f'within {self._temperature_tolerance * 100.0:.3g} '
-              f'percent for {self._temperature_stable_time_s:.6g} s, '
-              f'up to {self._temperature_max_wait_time_s:.6g} s')
+              f'{self._temperature_sweep.poll_interval_s:.6g} s, must '
+              f'hold within '
+              f'{self._temperature_sweep.tolerance_frac * 100.0:.3g} '
+              f'percent for '
+              f'{self._temperature_sweep.stable_time_s:.6g} s, up to '
+              f'{self._temperature_sweep.max_wait_time_s:.6g} s')
 
         if self._use_stability_check:
             settle_s = self._stability_timeout / 3.0
@@ -1578,7 +1269,7 @@ class GabSweep(Sequencer):
         # feedback iterations per point. How long the fridge takes to
         # reach a setpoint is not knowable in advance, so this assumes
         # the hold time alone and will underestimate large steps.
-        per_point_s = (self._temperature_stable_time_s
+        per_point_s = (self._temperature_sweep.stable_time_s
                        + 3.0 * (self._post_bias_wait + settle_s))
         total_min = nb_points * per_point_s / 60.0
         print(f'\nRough estimated duration: {total_min:.4g} min '
@@ -1709,13 +1400,12 @@ class GabSweep(Sequencer):
         if self._instrument is not None:
 
             try:
-                self._instrument.set_temperature(
-                    0,
-                    channel_name=self._thermometer_name,
-                    heater_channel_name=self._heater_name,
-                    instrument_name=self._thermometer_instrument,
-                    wait_temperature_reached=False
-                )
+                # keep the shared sweep's instrument current:
+                # self._instrument can be reassigned after
+                # _instantiate_drivers() ran (as in tests that inject
+                # a fake instrument directly)
+                self._temperature_sweep.instrument = self._instrument
+                self._temperature_sweep.heater_to_zero()
             except Exception as err:
                 print(f'ERROR setting heater setpoint to 0: {err}')
 
@@ -2026,16 +1716,15 @@ class GabSweep(Sequencer):
             print(f'\nINFO: Step {step_index}: setting MC temperature '
                   f'to {temperature_mk:.6g} mK')
 
+        # keep the shared sweep's instrument current: self._instrument
+        # can be reassigned after _instantiate_drivers() ran (as in
+        # tests that inject a fake instrument directly)
+        self._temperature_sweep.instrument = self._instrument
+
         # the setpoint is only applied here; the driver's own wait is
         # not used because it cannot report whether it reached the
         # setpoint or simply ran out of time
-        self._instrument.set_temperature(
-            temperature_mk / 1000.0,
-            channel_name=self._thermometer_name,
-            heater_channel_name=self._heater_name,
-            instrument_name=self._thermometer_instrument,
-            wait_temperature_reached=False
-        )
+        self._temperature_sweep.set_setpoint(temperature_mk=temperature_mk)
 
         temperature_ok, temperature_history = self.wait_for_temperature(
             temperature_mk=temperature_mk

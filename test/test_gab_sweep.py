@@ -4,62 +4,10 @@ import qetpy as qp
 
 from pytesdaq.sequencer import gab_sweep as gab_sweep_module
 from pytesdaq.sequencer.gab_sweep import (
-    build_temperature_list,
     compute_next_bias,
     fit_didv_r0,
-    fit_temperature_gaussian,
     propagate_r0_error_to_bias,
 )
-
-
-def test_build_temperature_list_from_vect():
-    config_dict = {
-        'use_temperature_vect': True,
-        'temperature_vect_mk': ['42', 41.0, '40.5', '38'],
-    }
-    result = build_temperature_list(config_dict=config_dict)
-    assert result == [42.0, 41.0, 40.5, 38.0]
-
-
-def test_build_temperature_list_from_single_value_vect():
-    # get_sequencer_setup collapses single-element lists to a scalar
-    config_dict = {
-        'use_temperature_vect': True,
-        'temperature_vect_mk': 42.0,
-    }
-    result = build_temperature_list(config_dict=config_dict)
-    assert result == [42.0]
-
-
-def test_build_temperature_list_from_start_stop_step():
-    config_dict = {
-        'use_temperature_vect': False,
-        'temperature_start_mk': '42',
-        'temperature_stop_mk': '38',
-        'temperature_step_mk': '1',
-    }
-    result = build_temperature_list(config_dict=config_dict)
-    assert result == [42.0, 41.0, 40.0, 39.0, 38.0]
-
-
-def test_build_temperature_list_rejects_ascending_vect():
-    config_dict = {
-        'use_temperature_vect': True,
-        'temperature_vect_mk': [38, 40, 42],
-    }
-    with pytest.raises(ValueError):
-        build_temperature_list(config_dict=config_dict)
-
-
-def test_build_temperature_list_rejects_zero_step():
-    config_dict = {
-        'use_temperature_vect': False,
-        'temperature_start_mk': 42,
-        'temperature_stop_mk': 38,
-        'temperature_step_mk': 0,
-    }
-    with pytest.raises(ValueError):
-        build_temperature_list(config_dict=config_dict)
 
 
 def test_compute_next_bias_first_move_is_fixed_step_up():
@@ -512,50 +460,6 @@ def test_measure_r0_requires_signal_generator_setup():
         sweep.measure_r0_quality()
 
 
-def test_fit_temperature_gaussian_recovers_mean_and_sigma():
-    # a Gaussian histogram fit on normal samples must recover the
-    # distribution mean and sigma
-    rng = np.random.default_rng(seed=7)
-    true_mean = 0.040
-    true_sigma = 0.0002
-    samples = rng.normal(true_mean, true_sigma, size=500)
-
-    result = fit_temperature_gaussian(samples=samples)
-
-    assert result['fit_ok'] is True
-    assert result['nb_samples'] == 500
-    assert result['mean'] == pytest.approx(true_mean, abs=true_sigma / 4)
-    assert result['sigma'] == pytest.approx(true_sigma, rel=0.3)
-
-
-def test_fit_temperature_gaussian_falls_back_on_identical_samples():
-    # a quantizing controller can return the same reading every time:
-    # no histogram fit is possible, sample statistics are used
-    samples = [0.040] * 50
-
-    result = fit_temperature_gaussian(samples=samples)
-
-    assert result['fit_ok'] is False
-    assert result['mean'] == pytest.approx(0.040)
-    assert result['sigma'] == 0.0
-
-
-def test_fit_temperature_gaussian_falls_back_on_few_samples():
-    # too few samples for a histogram: sample statistics are used
-    samples = [0.040, 0.041, 0.039]
-
-    result = fit_temperature_gaussian(samples=samples)
-
-    assert result['fit_ok'] is False
-    assert result['mean'] == pytest.approx(np.mean(samples))
-    assert result['sigma'] == pytest.approx(np.std(samples))
-
-
-def test_fit_temperature_gaussian_rejects_empty_samples():
-    with pytest.raises(ValueError):
-        fit_temperature_gaussian(samples=[])
-
-
 def test_propagate_r0_error_to_bias_linear():
     # linear model: a 10 percent R0 uncertainty is a 10 percent bias
     # uncertainty, so 0.015 on 0.15 R0 gives 20 uA on a 200 uA bias
@@ -596,63 +500,6 @@ def test_propagate_r0_error_to_bias_uses_magnitudes():
         heater_bias=-200.0,
     )
     assert result == pytest.approx(20.0)
-
-
-def test_measure_mc_temperature_samples_over_window(monkeypatch):
-    # the measurement keeps sampling until the window closes and
-    # reports the Gaussian mean and sigma of the readings
-    sweep = _make_dry_sweep()
-    sweep._temperature_sampling_time_s = 1.0
-
-    rng = np.random.default_rng(seed=11)
-    readings = list(rng.normal(0.040, 0.0002, size=200))
-
-    class FakeInstrument:
-        @staticmethod
-        def get_temperature(channel_name=None, instrument_name=None):
-            return readings.pop(0)
-
-    sweep._instrument = FakeInstrument()
-
-    # fake clock: each call advances 10 ms, so a 1 s window takes
-    # 100 samples deterministically
-    clock = {'now': 0.0}
-
-    def fake_time():
-        clock['now'] = clock['now'] + 0.010
-        return clock['now']
-
-    monkeypatch.setattr(gab_sweep_module.time, 'time', fake_time)
-
-    measurement = sweep.measure_mc_temperature()
-
-    assert measurement['nb_samples'] == pytest.approx(100, abs=1)
-    assert measurement['temperature_k'] == pytest.approx(0.040, abs=0.0001)
-    assert measurement['temperature_err_k'] == pytest.approx(
-        0.0002, rel=0.5
-    )
-    assert len(measurement['samples']) == measurement['nb_samples']
-
-
-def test_measure_mc_temperature_zero_window_takes_one_sample(monkeypatch):
-    # a zero sampling window still returns a single reading with the
-    # fallback statistics
-    sweep = _make_dry_sweep()
-    sweep._temperature_sampling_time_s = 0.0
-
-    class FakeInstrument:
-        @staticmethod
-        def get_temperature(channel_name=None, instrument_name=None):
-            return 0.040
-
-    sweep._instrument = FakeInstrument()
-
-    measurement = sweep.measure_mc_temperature()
-
-    assert measurement['nb_samples'] == 1
-    assert measurement['temperature_k'] == pytest.approx(0.040)
-    assert measurement['temperature_err_k'] == 0.0
-    assert measurement['fit_ok'] is False
 
 
 def _make_quantizing_instrument(device, quantum=0.001):
@@ -1253,87 +1100,68 @@ def test_shutdown_leaves_heater_bias_when_initial_unknown():
     assert device['bias'] == 500.0
 
 
-def _make_temperature_sweep(readings, monkeypatch):
-    # dry-run sweep whose thermometer returns the given readings [K],
-    # with sleep disabled and a fake clock advancing 1 s per reading
+def test_gab_delegates_wait_for_temperature_to_shared_sweep():
+    """
+    Confirm wait_for_temperature stays a public GabSweep method that
+    forwards to the shared TemperatureSweep, rather than re-testing
+    the wait logic itself (that logic now lives in
+    test_temperature_sweep.py against TemperatureSweep directly).
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
     sweep = _make_dry_sweep()
-    sweep._temperature_poll_interval_s = 1.0
-    sweep._temperature_stable_time_s = 3.0
-    sweep._temperature_max_wait_time_s = 100.0
-    sweep._temperature_tolerance = 0.02
+    calls = list()
 
-    values = list(readings)
+    def fake_wait(temperature_mk=None):
+        calls.append(temperature_mk)
+        return True, [40.0]
 
-    class FakeInstrument:
-        @staticmethod
-        def get_temperature(channel_name=None, instrument_name=None):
-            if len(values) > 1:
-                return values.pop(0)
-            return values[0]
-
-    sweep._instrument = FakeInstrument()
-
-    clock = {'now': 0.0}
-
-    def fake_time():
-        return clock['now']
-
-    def fake_sleep(seconds):
-        clock['now'] = clock['now'] + seconds
-
-    monkeypatch.setattr(gab_sweep_module.time, 'time', fake_time)
-    monkeypatch.setattr(gab_sweep_module.time, 'sleep', fake_sleep)
-
-    return sweep
-
-
-def test_wait_for_temperature_waits_out_a_slow_approach(monkeypatch):
-    # the fridge coasts down for several polls before arriving; the
-    # wait must not return until the setpoint is reached and held
-    readings = [0.060, 0.055, 0.050, 0.045, 0.0401]
-    sweep = _make_temperature_sweep(readings, monkeypatch)
+    sweep._temperature_sweep.wait_for_temperature = fake_wait
 
     temperature_ok, history = sweep.wait_for_temperature(
         temperature_mk=40.0
     )
 
+    assert calls == [40.0]
     assert temperature_ok is True
-
-    # the four out-of-tolerance readings, then the hold window
-    assert history[:4] == pytest.approx([60.0, 55.0, 50.0, 45.0])
-    assert history[-1] == pytest.approx(40.1)
+    assert history == [40.0]
 
 
-def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
-    # a reading that drifts back out of tolerance restarts the hold,
-    # so a brief touch of the setpoint is not enough
-    readings = [0.0401, 0.050, 0.0401]
-    sweep = _make_temperature_sweep(readings, monkeypatch)
+def test_gab_delegates_measure_mc_temperature_to_shared_sweep():
+    """
+    Confirm measure_mc_temperature stays a public GabSweep method that
+    forwards to the shared TemperatureSweep's measure_temperature,
+    rather than re-testing the sampling and fit logic itself (that
+    logic now lives in test_temperature_sweep.py against
+    TemperatureSweep directly).
 
-    temperature_ok, history = sweep.wait_for_temperature(
-        temperature_mk=40.0
-    )
+    Parameters
+    ----------
+    None
 
-    assert temperature_ok is True
+    Returns
+    -------
+    None
+    """
 
-    # the excursion at 50 mK must appear before the accepted hold
-    assert pytest.approx(50.0) in history
-    assert history.index(pytest.approx(50.0)) < len(history) - 1
+    sweep = _make_dry_sweep()
 
+    def fake_measure():
+        return {'temperature_k': 0.040, 'temperature_err_k': 0.0001,
+                'fit_ok': True, 'nb_samples': 100, 'samples': [0.040]}
 
-def test_wait_for_temperature_times_out_when_setpoint_unreachable(
-        monkeypatch):
-    # a fridge that never gets there must time out and report failure
-    # rather than silently letting the sweep measure
-    readings = [0.060]
-    sweep = _make_temperature_sweep(readings, monkeypatch)
+    sweep._temperature_sweep.measure_temperature = fake_measure
 
-    temperature_ok, history = sweep.wait_for_temperature(
-        temperature_mk=40.0
-    )
+    measurement = sweep.measure_mc_temperature()
 
-    assert temperature_ok is False
-    assert len(history) > 1
+    assert measurement['temperature_k'] == pytest.approx(0.040)
 
 
 def test_config_lookup_ignores_unit_suffix_case():
@@ -1380,9 +1208,11 @@ def test_run_single_step_writes_every_row_key_to_csv(tmp_path,
 
     sweep._instrument = FakeInstrument()
     sweep._post_bias_wait = 0.0
-    sweep._temperature_sampling_time_s = 0.0
-    sweep._temperature_stable_time_s = 0.0
-    sweep._temperature_poll_interval_s = 0.0
+    # timing now lives on the shared temperature sweep, not on
+    # GabSweep itself
+    sweep._temperature_sweep._sampling_time_s = 0.0
+    sweep._temperature_sweep._stable_time_s = 0.0
+    sweep._temperature_sweep._poll_interval_s = 0.0
     sweep.wait_for_settled_r0 = lambda: (True, [])
     sweep.measure_r0_quality = lambda nb_events=None: {
         'r0': 0.150,
