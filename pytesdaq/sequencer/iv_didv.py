@@ -66,7 +66,95 @@ class IV_dIdV(Sequencer):
         
         # configure measurements
         self._configure()
-  
+
+        # instrument control object, normally built by run(). A caller
+        # driving several IV sweeps in a row, such as the Gta sweep,
+        # supplies one instead so it is built only once
+        self._instruments_inst = None
+
+        # appended to the IV run comment, so a caller can tag each
+        # series with the condition it was taken at
+        self._run_comment_suffix = ''
+
+    @property
+    def instrument_control(self):
+        """
+        Instrument control object for external drivers.
+
+        Returns
+        -------
+        instrument.Control or None
+            The instrument control instance, normally built by run().
+        """
+        return self._instruments_inst
+
+    @instrument_control.setter
+    def instrument_control(self, value):
+        """
+        Set the instrument control object.
+
+        Parameters
+        ----------
+        value : instrument.Control
+            The instrument control instance.
+
+        Returns
+        -------
+        None
+        """
+        self._instruments_inst = value
+
+    @property
+    def group_name(self):
+        """
+        Group name for the measurement data.
+
+        Returns
+        -------
+        str
+            The group name where the data landed.
+        """
+        return self._group_name
+
+    @property
+    def raw_data_path(self):
+        """
+        Raw data path for the measurement.
+
+        Returns
+        -------
+        str
+            The path where raw data is stored.
+        """
+        return self._raw_data_path
+
+    @property
+    def run_comment_suffix(self):
+        """
+        Suffix to append to the IV run comment.
+
+        Returns
+        -------
+        str
+            The suffix string, defaults to empty string.
+        """
+        return self._run_comment_suffix
+
+    @run_comment_suffix.setter
+    def run_comment_suffix(self, value):
+        """
+        Set the run comment suffix.
+
+        Parameters
+        ----------
+        value : str
+            The suffix to append to the IV run comment.
+
+        Returns
+        -------
+        None
+        """
+        self._run_comment_suffix = str(value)
 
     def run(self):
 
@@ -74,11 +162,13 @@ class IV_dIdV(Sequencer):
         Run IV / dIdV sequencer
         """
 
-        # Instantiate instrumment controller
-        self._instruments_inst = instrument.Control(
-            setup_file=self._setup_file,
-            dummy_mode=self._dummy_mode
-        )
+        # Instantiate instrumment controller, unless a caller already
+        # supplied one through instrument_control
+        if self._instruments_inst is None:
+            self._instruments_inst = instrument.Control(
+                setup_file=self._setup_file,
+                dummy_mode=self._dummy_mode
+            )
         
         # ------------
         # Rp/Rn
@@ -737,7 +827,9 @@ class IV_dIdV(Sequencer):
                     if self._enable_temperature_sweep:
                         run_comment = (run_comment + ', T = '
                                        + str(temperature) + 'mK')
-                        
+
+                    run_comment = run_comment + self._run_comment_suffix
+
                     success = self._daq.run(run_time=int(iv_config['run_time']),
                                             run_type=102,
                                             run_comment=run_comment,
