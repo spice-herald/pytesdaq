@@ -255,3 +255,279 @@ def test_dry_run_prints_the_plan_without_hardware(capsys):
     assert 'DRY RUN' in printed
     assert 'Temperature setpoints' in printed
     assert 'zeroed' in printed.lower()
+
+
+class _FakeBiasInstrument:
+    """
+    Fake instrument control that records every bias write.
+
+    This lets a test check what the sweep did to each channel and in
+    what order, without touching real hardware.
+    """
+
+    def __init__(self, biases):
+        """
+        Store the starting per-channel biases and an empty write log.
+
+        Parameters
+        ----------
+        biases : dict
+            Detector channel name to starting TES bias [uA].
+
+        Returns
+        -------
+        None
+        """
+        self.biases = dict(biases)
+        self.writes = list()
+
+    def get_tes_bias(self, detector_channel=None, unit=None):
+        """
+        Return the bias currently recorded for a channel.
+
+        Parameters
+        ----------
+        detector_channel : str or None
+            Detector channel name to read.
+        unit : str or None
+            Unit of the returned bias, unused by this fake.
+
+        Returns
+        -------
+        bias : float
+            The bias currently recorded for the channel.
+        """
+        return self.biases[detector_channel]
+
+    def set_tes_bias(self, bias, unit=None, detector_channel=None):
+        """
+        Record a bias write for a channel.
+
+        Parameters
+        ----------
+        bias : float
+            The bias value to write.
+        unit : str or None
+            Unit of the bias, unused by this fake.
+        detector_channel : str or None
+            Detector channel name to write to.
+
+        Returns
+        -------
+        success : bool
+            Always True, mimicking a successful hardware write.
+        """
+        self.biases[detector_channel] = bias
+        self.writes.append((detector_channel, bias))
+        return True
+
+
+def _sweep_with_fake_instrument():
+    """
+    Build a dry-run GtaSweep wired to a fake bias instrument.
+
+    Each TES channel, the swept channel and the zero channels alike,
+    is given a distinct starting bias, so a test can verify that
+    captured, zeroed, and restored values line up with the right
+    channel.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    sweep : GtaSweep
+        A GtaSweep instance with its instrument replaced by the fake.
+    instrument : _FakeBiasInstrument
+        The fake instrument, for inspecting recorded writes.
+    """
+    sweep = _make_dry_sweep()
+    channels = [sweep._tes_channel] + sweep._zero_channels
+    biases = dict()
+    for index, channel in enumerate(channels):
+        biases[channel] = 10.0 + index
+    instrument = _FakeBiasInstrument(biases)
+    sweep._instrument = instrument
+    sweep._temperature_sweep.instrument = instrument
+    return sweep, instrument
+
+
+def test_capture_initial_biases_records_every_tes_channel():
+    """
+    Test that capture_initial_biases records every real TES channel.
+
+    Reading the pre-run biases must not itself write anything to the
+    instrument.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+
+    captured = sweep.capture_initial_biases()
+
+    assert sweep._tes_channel in captured
+    for channel in sweep._zero_channels:
+        assert channel in captured
+    # nothing was written while only reading
+    assert instrument.writes == []
+
+
+def test_zero_other_channels_leaves_the_swept_channel_alone():
+    """
+    Test that zero_other_channels zeroes every channel except the one
+    being swept.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep.capture_initial_biases()
+
+    sweep.zero_other_channels()
+
+    for channel in sweep._zero_channels:
+        assert instrument.biases[channel] == 0
+    assert instrument.biases[sweep._tes_channel] != 0
+
+    written_channels = [channel for channel, bias in instrument.writes]
+    assert sweep._tes_channel not in written_channels
+
+
+def test_zero_other_channels_never_touches_a_non_tes_channel():
+    """
+    Test that zero_other_channels never writes to a channel that is
+    not a TES.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep.capture_initial_biases()
+
+    sweep.zero_other_channels()
+
+    written_channels = [channel for channel, bias in instrument.writes]
+    for channel in sweep._non_tes_channels:
+        assert channel not in written_channels
+
+
+def test_restore_initial_biases_puts_every_channel_back():
+    """
+    Test that restore_initial_biases puts every captured channel back
+    to its pre-run bias, including the swept channel wherever the IV
+    sweep left it.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    initial = dict(sweep.capture_initial_biases())
+
+    sweep.zero_other_channels()
+    # the IV sweep leaves the swept channel wherever it ended
+    instrument.biases[sweep._tes_channel] = 0.5
+
+    sweep.restore_initial_biases()
+
+    for channel, bias in initial.items():
+        assert instrument.biases[channel] == pytest.approx(bias)
+
+
+def test_restore_initial_biases_continues_past_a_failing_channel():
+    """
+    One channel refusing to restore must not strand the others.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    initial = dict(sweep.capture_initial_biases())
+    sweep.zero_other_channels()
+
+    failing_channel = sweep._zero_channels[0]
+    original_set = instrument.set_tes_bias
+
+    def flaky_set(bias, unit=None, detector_channel=None):
+        """
+        Raise for one channel and delegate to the real fake write
+        for every other channel, to simulate an instrument that is
+        not responding on a single channel.
+
+        Parameters
+        ----------
+        bias : float
+            The bias value to write.
+        unit : str or None
+            Unit of the bias, unused by this fake.
+        detector_channel : str or None
+            Detector channel name to write to.
+
+        Returns
+        -------
+        success : bool
+            True, mimicking a successful hardware write, for every
+            channel other than the failing one.
+        """
+        if detector_channel == failing_channel:
+            raise RuntimeError('instrument not responding')
+        return original_set(bias, unit=unit,
+                            detector_channel=detector_channel)
+
+    instrument.set_tes_bias = flaky_set
+
+    sweep.restore_initial_biases()
+
+    for channel, bias in initial.items():
+        if channel == failing_channel:
+            continue
+        assert instrument.biases[channel] == pytest.approx(bias)
+
+
+def test_capture_is_not_repeated_on_a_second_call():
+    """
+    Capturing twice after zeroing would record 0 as the value to
+    restore, which would silently discard the user's bias points, so
+    the first capture must win.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    initial = dict(sweep.capture_initial_biases())
+    sweep.zero_other_channels()
+
+    recaptured = sweep.capture_initial_biases()
+
+    assert recaptured == initial

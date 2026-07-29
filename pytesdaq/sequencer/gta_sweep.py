@@ -230,6 +230,100 @@ class GtaSweep(Sequencer):
 
         return tes_channels, non_tes_channels
 
+    def capture_initial_biases(self):
+        """
+        Read and remember the pre-run TES bias of every real TES
+        channel, so they can all be restored when the sweep ends.
+
+        Calling this again after the biases have been changed would
+        record the changed values, silently discarding the user's
+        bias points, so the first capture wins.
+
+        Returns
+        -------
+        initial_biases_ua : dict
+            Detector channel name to TES bias [uA].
+        """
+
+        if len(self._initial_biases_ua) > 0:
+            return self._initial_biases_ua
+
+        channels = [self._tes_channel] + self._zero_channels
+
+        for channel in channels:
+            bias_ua = float(self._instrument.get_tes_bias(
+                detector_channel=channel,
+                unit='uA'
+            ))
+            self._initial_biases_ua[channel] = bias_ua
+
+        if self._verbose:
+            print('INFO: Pre-run TES biases [uA]: '
+                  + ', '.join(
+                      f'{channel} = {bias:.6g}'
+                      for channel, bias in self._initial_biases_ua.items()
+                  ))
+
+        return self._initial_biases_ua
+
+    def zero_other_channels(self):
+        """
+        Set every real TES channel except the swept one to zero bias,
+        so that no other device dissipates power into the absorber.
+
+        Channels that are not TESs are never written to.
+
+        Returns
+        -------
+        None
+        """
+
+        if len(self._zero_channels) == 0:
+            if self._verbose:
+                print('INFO: No other TES channels to zero')
+            return
+
+        if self._verbose:
+            print('INFO: Setting TES bias to 0 uA on '
+                  f'{", ".join(self._zero_channels)}')
+
+        for channel in self._zero_channels:
+            self._instrument.set_tes_bias(
+                0,
+                unit='uA',
+                detector_channel=channel
+            )
+
+    def restore_initial_biases(self):
+        """
+        Put every real TES channel back to its pre-run bias.
+
+        A channel that fails to restore is reported and the rest are
+        still attempted, because a channel left biased keeps heating
+        the absorber.
+
+        Returns
+        -------
+        None
+        """
+
+        if len(self._initial_biases_ua) == 0:
+            print('INFO: Pre-run TES biases unknown, leaving TES '
+                  'biases untouched')
+            return
+
+        for channel, bias_ua in self._initial_biases_ua.items():
+            try:
+                self._instrument.set_tes_bias(
+                    bias_ua,
+                    unit='uA',
+                    detector_channel=channel
+                )
+                print(f'INFO: TES bias on {channel} set back to its '
+                      f'original pre-run value of {bias_ua:.6g} uA')
+            except Exception as err:
+                print(f'ERROR restoring TES bias on {channel}: {err}')
+
     def _print_dry_run(self):
         """
         Print the sweep plan without any hardware interaction.
