@@ -80,8 +80,33 @@ def get_adc_channel_list(connection_table,
 
 def extract_adc_connection(connections):
     """
-    extract connections either from string (comma separated
-    or space) or list
+    Extract connection fields from a setup file connection line.
+
+    A line that declares "tes:" is a real TES channel controlled by the
+    front end board. A line without it (TTL input, accelerometer
+    readout) still gets a tes_channel synthesized from its controller
+    channel, so that callers indexing on tes_channel keep working, but
+    is_tes_channel reports False for it.
+
+    The synthesized "tes:" token is also appended to the returned token
+    list, which is what gets written into raw data metadata. Connection
+    tables rebuilt from a raw data file therefore report
+    is_tes_channel = True for every channel. Use is_tes_channel only on
+    tables built from a setup file through Config.get_adc_connections.
+
+    Parameters
+    ----------
+    connections : str or list
+        Connection fields, comma separated string or list of tokens.
+
+    Returns
+    -------
+    connection_type_val_list : list of str
+        The raw "name:value" tokens.
+    connection_type_list : list of str
+        Field names, matching connection_val_list.
+    connection_val_list : list
+        Field values, matching connection_type_list.
     """
     
     
@@ -123,14 +148,22 @@ def extract_adc_connection(connections):
         if val_split[0]=='detector':
             detector_chan = val_split[1]
                     
+    # a connection line that declares "tes:" is a real TES channel on
+    # the front end board. Lines without it (TTL, accelerometer) still
+    # get a tes_channel synthesized from the controller channel, kept
+    # for backward compatibility, but they are not TES channels and
+    # must never be biased
+    is_tes_channel = tes_chan is not None
+
     if tes_chan is None:
         tes_chan = controller_chan
-        connection_type_val_list.append('tes:'+str(controller_chan))
+        connection_type_val_list.append('tes:' + str(controller_chan))
 
-
-    connection_type_list = ['detector_channel','tes_channel','controller_id','controller_channel']
-    connection_val_list = [detector_chan,tes_chan,controller_id,controller_chan]
-    return connection_type_val_list,connection_type_list,connection_val_list
+    connection_type_list = ['detector_channel', 'tes_channel', 'controller_id',
+                            'controller_channel', 'is_tes_channel']
+    connection_val_list = [detector_chan, tes_chan, controller_id, controller_chan,
+                           is_tes_channel]
+    return connection_type_val_list, connection_type_list, connection_val_list
 
 
             
