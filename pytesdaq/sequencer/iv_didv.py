@@ -81,6 +81,10 @@ class IV_dIdV(Sequencer):
         """
         Instrument control object for external drivers.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         instrument.Control or None
@@ -109,6 +113,10 @@ class IV_dIdV(Sequencer):
         """
         Group name for the measurement data.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         str
@@ -121,6 +129,10 @@ class IV_dIdV(Sequencer):
         """
         Raw data path for the measurement.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         str
@@ -132,6 +144,10 @@ class IV_dIdV(Sequencer):
     def run_comment_suffix(self):
         """
         Suffix to append to the IV run comment.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
