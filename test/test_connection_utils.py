@@ -1,4 +1,5 @@
 from pytesdaq.utils import connection_utils
+import pytesdaq.config.settings as settings
 
 
 def test_explicit_tes_field_marks_a_real_tes_channel():
@@ -38,8 +39,6 @@ def test_missing_tes_field_still_falls_back_to_controller_channel():
 
 
 def test_connection_table_from_setup_file_has_the_column():
-    import pytesdaq.config.settings as settings
-
     config = settings.Config(setup_file='pytesdaq/config/setup.ini')
     connection_table = config.get_adc_connections()
 
