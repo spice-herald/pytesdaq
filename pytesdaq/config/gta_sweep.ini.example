@@ -1,0 +1,91 @@
+[gta_sweep]
+
+# fridge thermometry (MC thermometer is labeled CP in the heater software)
+# PID settings are never touched by this script; set them manually first
+thermometer_name = CP
+thermometer_instrument = macrt
+heater_name = heaterMC
+
+# the single TES channel to IV sweep, biased in transition manually by the
+# user before the run. Every other real TES channel on the connection map is
+# set to 0 uA for the duration of the sweep and restored afterwards. Channels
+# that are not TESs, such as the TTL input and the accelerometer readouts, are
+# never touched: they are the connection lines with no "tes:" field
+tes_channel = D
+
+# temperature sweep: explicit vector OR start/stop/step
+# the sweep runs from high to low, a few mK below the Tc of the TES down to
+# the base temperature of the fridge
+use_temperature_vect = true
+temperature_vect_mK = 42, 40, 38, 36, 34
+#temperature_start_mK = 42
+#temperature_stop_mK = 10
+#temperature_step_mK = 1
+
+# MC temperature settling: the script polls the thermometer itself and waits
+# for the setpoint to actually be reached, so a large temperature step simply
+# takes longer than a small one. The reading must stay within
+# temperature_tolerance_frac (fractional, 0.02 means 2 percent) of the
+# setpoint for temperature_stable_time_s before the IV sweep starts. On
+# timeout the sweep continues but flags the datapoint with
+# temperature_ok = False
+temperature_poll_interval_s = 5
+temperature_stable_time_s = 120
+temperature_max_wait_time_s = 7200
+temperature_tolerance_frac = 0.02
+
+# MC temperature per datapoint: sampled repeatedly over this window, then a
+# Gaussian is fit to the histogram of samples; the fit mean is the recorded
+# temperature and its sigma the uncertainty. Sampled once before and once
+# after the IV sweep, so drift over the sweep is visible
+temperature_sampling_time_s = 5
+
+# extra dwell after the setpoint is reached, before starting the IV sweep
+post_temperature_settle_wait_s = 0
+
+
+[iv_didv]
+# standard IV sweep settings, read by the IV_dIdV sequencer. The temperature
+# sweep keys of a normal iv_didv.ini do not belong here: the [gta_sweep]
+# section above owns temperature
+
+daq_driver = polaris
+
+# sleep time after a bias change [seconds]
+tes_bias_change_sleep_time = 10
+
+use_negative_tes_bias = false
+
+# TES bias sweep in uA, high to low: use vect OR min/max/step
+# one vector is used at every temperature. It must bracket the target R0 at
+# every bath temperature in the sweep, otherwise the offline interpolation has
+# nothing to interpolate between at the cold end
+use_tes_bias_vect = true
+tes_bias_vect = 80,60,40,30,20,15,12,10,8,7,6,5.5,5,4.5,4,3.5,3,2.5,2,1.5,1,0.5,0
+
+#tes_bias_max = 90
+#tes_bias_min = 0
+#tes_bias_T = 40
+#tes_bias_SC = 10
+#tes_bias_step_N = 7
+#tes_bias_step_T = 1
+#tes_bias_step_SC = 0.2
+
+
+[iv]
+
+# sample rate [Hz]
+sample_rate = 1250000
+
+# run time per bias point [seconds]
+run_time = 40
+
+# trace length in "ms" or "adc"
+trace_length_ms = 100
+
+# voltage range
+voltage_min = -10
+voltage_max = 10
+
+# TES/SQUID parameters (remove/comment if no change needed)
+#output_gain = 50
