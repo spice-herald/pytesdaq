@@ -396,6 +396,15 @@ class GtaSweep(Sequencer):
 
         iv_config = self._config.get_sequencer_setup('iv_didv', ['iv'])
         bias_vect = iv_config['iv_didv'].get('tes_bias_vect')
+
+        # get_sequencer_setup only casts values whose text passes
+        # isdigit, which a decimal such as "5.5" does not, so the raw
+        # vector arrives as a mix of floats and strings. IV_dIdV casts
+        # them itself before use; this is only so the printed plan
+        # reads as one list of numbers
+        if isinstance(bias_vect, (list, tuple)):
+            bias_vect = [float(bias) for bias in bias_vect]
+
         print(f'\nTES bias sweep [uA]: {bias_vect}')
         print(f'IV run time per bias point: '
               f'{iv_config["iv"].get("run_time")} s')
