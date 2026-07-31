@@ -1,5 +1,15 @@
+import os
+
 from pytesdaq.utils import connection_utils
 import pytesdaq.config.settings as settings
+from pytesdaq.io import hdf5
+
+# committed test fixture, so the suite runs on a fresh clone
+SETUP_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'fixtures',
+    'setup_test.ini'
+)
 
 
 def test_explicit_tes_field_marks_a_real_tes_channel():
@@ -92,8 +102,45 @@ def test_connection_table_from_setup_file_has_the_column():
     None
     """
 
-    config = settings.Config(setup_file='pytesdaq/config/setup.ini')
+    config = settings.Config(setup_file=SETUP_FILE)
     connection_table = config.get_adc_connections()
 
     assert 'is_tes_channel' in connection_table.columns
     assert connection_table['is_tes_channel'].any()
+
+
+def test_connection_table_from_raw_data_does_not_claim_tes_status():
+    """
+    A connection table rebuilt from raw data metadata cannot know
+    which channels were real TES channels.
+
+    The synthesized "tes:" token is written into the metadata for
+    every channel, TTL and accelerometer included, so re-parsing it
+    would report is_tes_channel True for all of them. Reporting True
+    there would invite a caller to bias an accelerometer readout, so
+    the column reports None instead: unknown, not yes.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    metadata = {
+        'adc_list': ['adc1'],
+        'groups': {
+            'adc1': {
+                'connection0': ['detector:TestTES_A', 'tes:A',
+                                'controller:feb1_A'],
+                'connection4': ['detector:rigolTTL', 'tes:ttl',
+                                'controller:ttl_ttl'],
+            }
+        }
+    }
+
+    table = hdf5.H5Reader().get_connection_table(metadata=metadata)
+
+    for value in table['is_tes_channel']:
+        assert value is None

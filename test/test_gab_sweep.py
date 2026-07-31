@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import qetpy as qp
@@ -7,6 +9,13 @@ from pytesdaq.sequencer.gab_sweep import (
     compute_next_bias,
     fit_didv_r0,
     propagate_r0_error_to_bias,
+)
+
+# committed test fixture, so the suite runs on a fresh clone
+SETUP_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    'fixtures',
+    'setup_test.ini'
 )
 
 
@@ -216,7 +225,7 @@ def _make_dry_sweep():
     from pytesdaq.sequencer import GabSweep
     sweep = GabSweep(
         sequencer_file='pytesdaq/config/gab_sweep.ini.example',
-        setup_file='pytesdaq/config/setup.ini',
+        setup_file=SETUP_FILE,
         dry_run=True,
     )
     return sweep
@@ -239,7 +248,7 @@ def test_rejects_same_thermometer_and_heater_channel(tmp_path):
     with pytest.raises(ValueError, match='must be different channels'):
         GabSweep(
             sequencer_file=str(config_file),
-            setup_file='pytesdaq/config/setup.ini',
+            setup_file=SETUP_FILE,
             dry_run=True,
         )
 
@@ -305,7 +314,7 @@ def test_stability_mode_requires_its_parameters(tmp_path):
     with pytest.raises(ValueError, match='nb_events_stability'):
         GabSweep(
             sequencer_file=str(config_file),
-            setup_file='pytesdaq/config/setup.ini',
+            setup_file=SETUP_FILE,
             dry_run=True,
         )
 
@@ -353,7 +362,7 @@ def test_rejects_both_signal_gen_voltage_and_current(tmp_path):
     with pytest.raises(ValueError, match='not both'):
         GabSweep(
             sequencer_file=str(config_file),
-            setup_file='pytesdaq/config/setup.ini',
+            setup_file=SETUP_FILE,
             dry_run=True,
         )
 
@@ -694,12 +703,49 @@ def test_shutdown_restores_initial_heater_bias():
     sweep = _make_dry_sweep()
 
     device = {'bias': 500.0}
+    heater_calls = list()
 
     def fake_set_bias(bias, unit=None, detector_channel=None):
+        """
+        Record the commanded TES bias.
+
+        Parameters
+        ----------
+        bias : float
+            The bias value to write.
+        unit : str or None
+            Unit of the bias, unused by this fake.
+        detector_channel : str or None
+            Detector channel name to write to, unused by this fake.
+
+        Returns
+        -------
+        success : bool
+            Always True.
+        """
         device['bias'] = float(bias)
         return True
 
     def fake_set_temperature(value, **kwargs):
+        """
+        Record the commanded setpoint and where it was routed.
+
+        Recording the routing matters: a heater-to-zero aimed at the
+        wrong channel leaves the real heater driving.
+
+        Parameters
+        ----------
+        value : float
+            The commanded temperature setpoint.
+        **kwargs : dict
+            Channel routing and wait flags passed by the caller.
+
+        Returns
+        -------
+        success : bool
+            Always True.
+        """
+        heater_calls.append((value, kwargs))
         return True
 
     class FakeInstrument:
@@ -722,6 +768,81 @@ def test_shutdown_restores_initial_heater_bias():
 
     assert device['bias'] == 42.0
 
+    # the MC heater setpoint must be driven to 0, on the configured
+    # heater channel, without blocking on the fridge getting there
+    assert len(heater_calls) == 1
+    value, kwargs = heater_calls[0]
+    assert value == 0
+    assert kwargs['heater_channel_name'] == sweep._heater_name
+    assert kwargs['channel_name'] == sweep._thermometer_name
+    assert kwargs['wait_temperature_reached'] is False
+
+
+def test_shutdown_reports_a_refused_heater_bias_restore(capsys):
+    """
+    Control.set_tes_bias reports a refused write by return value, not
+    by raising. Printing the success line regardless would tell the
+    operator the heater TES was put back when it was not, and a heater
+    TES left biased keeps warming the absorber.
+
+    Parameters
+    ----------
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep = _make_dry_sweep()
+
+    def refusing_set_bias(bias=None, unit=None, detector_channel=None):
+        """
+        Refuse the write the way the real driver does, by returning
+        False rather than raising.
+
+        Parameters
+        ----------
+        bias : float or None
+            The bias value to write, unused by this fake.
+        unit : str or None
+            Unit of the bias, unused by this fake.
+        detector_channel : str or None
+            Detector channel name, unused by this fake.
+
+        Returns
+        -------
+        success : bool
+            Always False.
+        """
+        return False
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(refusing_set_bias)
+
+        @staticmethod
+        def set_temperature(value, **kwargs):
+            return True
+
+        @staticmethod
+        def set_signal_gen_onoff(on_off_flag, detector_channel=None):
+            return True
+
+        @staticmethod
+        def connect_signal_gen_to_tes(do_connect, detector_channel=None):
+            return True
+
+    sweep._instrument = FakeInstrument()
+    sweep._daq = None
+    sweep._heater_initial_bias_ua = 42.0
+
+    capsys.readouterr()
+    sweep.shutdown()
+    printed = capsys.readouterr().out
+
+    assert 'set back to its' not in printed
+    assert 'ERROR' in printed
+
 
 def test_shutdown_turns_off_signal_generator():
     # the square wave must not be left running on the thermometer TES
@@ -742,6 +863,8 @@ def test_shutdown_turns_off_signal_generator():
 
         @staticmethod
         def set_temperature(value, **kwargs):
+            calls.append(('temperature', value,
+                          kwargs.get('heater_channel_name')))
             return True
 
     sweep._instrument = FakeInstrument()
@@ -751,6 +874,7 @@ def test_shutdown_turns_off_signal_generator():
 
     assert ('onoff', 'off') in calls
     assert ('connect', False) in calls
+    assert ('temperature', 0, sweep._heater_name) in calls
 
 
 def _make_linear_device_sweep(device=None, r0_offset=100.0):
@@ -1072,12 +1196,46 @@ def test_shutdown_leaves_heater_bias_when_initial_unknown():
     sweep = _make_dry_sweep()
 
     device = {'bias': 500.0}
+    heater_calls = list()
 
     def fake_set_bias(bias, unit=None, detector_channel=None):
+        """
+        Record the commanded TES bias.
+
+        Parameters
+        ----------
+        bias : float
+            The bias value to write.
+        unit : str or None
+            Unit of the bias, unused by this fake.
+        detector_channel : str or None
+            Detector channel name to write to, unused by this fake.
+
+        Returns
+        -------
+        success : bool
+            Always True.
+        """
         device['bias'] = float(bias)
         return True
 
     def fake_set_temperature(value, **kwargs):
+        """
+        Record the commanded setpoint and where it was routed.
+
+        Parameters
+        ----------
+        value : float
+            The commanded temperature setpoint.
+        **kwargs : dict
+            Channel routing and wait flags passed by the caller.
+
+        Returns
+        -------
+        success : bool
+            Always True.
+        """
+        heater_calls.append((value, kwargs))
         return True
 
     class FakeInstrument:
@@ -1098,6 +1256,51 @@ def test_shutdown_leaves_heater_bias_when_initial_unknown():
     sweep.shutdown()
 
     assert device['bias'] == 500.0
+
+    # not knowing the pre-run TES bias is no reason to leave the MC
+    # heater driving, so the setpoint still goes to 0
+    assert len(heater_calls) == 1
+    value, kwargs = heater_calls[0]
+    assert value == 0
+    assert kwargs['heater_channel_name'] == sweep._heater_name
+
+
+def test_gab_syncs_instrument_and_verbose_to_the_shared_sweep():
+    """
+    Both the instrument and the verbose flag can be reassigned after
+    construction: _instantiate_drivers replaces the instrument, and
+    the inherited verbose setter writes only to this object. The
+    shared sweep holds its own copies, so both are pushed across
+    before every use rather than captured once at construction.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep = _make_dry_sweep()
+
+    replacement_instrument = object()
+    sweep._instrument = replacement_instrument
+    sweep._verbose = False
+
+    synced = sweep._synced_temperature_sweep()
+
+    assert synced.instrument is replacement_instrument
+    assert synced.verbose is False
+
+    # and again after they change, so this is a refresh not a one-off
+    another_instrument = object()
+    sweep._instrument = another_instrument
+    sweep._verbose = True
+
+    synced = sweep._synced_temperature_sweep()
+
+    assert synced.instrument is another_instrument
+    assert synced.verbose is True
 
 
 def test_gab_delegates_wait_for_temperature_to_shared_sweep():
@@ -1120,6 +1323,22 @@ def test_gab_delegates_wait_for_temperature_to_shared_sweep():
     calls = list()
 
     def fake_wait(temperature_mk=None):
+        """
+        Record the setpoint it was asked to wait for and report that
+        it was reached.
+
+        Parameters
+        ----------
+        temperature_mk : float or None
+            MC temperature setpoint [mK].
+
+        Returns
+        -------
+        temperature_ok : bool
+            Always True.
+        history : list of float
+            A single fake reading [mK].
+        """
         calls.append(temperature_mk)
         return True, [40.0]
 
@@ -1154,6 +1373,20 @@ def test_gab_delegates_measure_mc_temperature_to_shared_sweep():
     sweep = _make_dry_sweep()
 
     def fake_measure():
+        """
+        Report a fixed temperature measurement in the shape the real
+        measure_temperature returns.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        measurement : dict
+            Keys temperature_k, temperature_err_k [K], fit_ok,
+            nb_samples and samples.
+        """
         return {'temperature_k': 0.040, 'temperature_err_k': 0.0001,
                 'fit_ok': True, 'nb_samples': 100, 'samples': [0.040]}
 

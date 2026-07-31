@@ -74,6 +74,22 @@ def _make_sweep(readings, monkeypatch, **overrides):
     class FakeInstrument:
         @staticmethod
         def get_temperature(channel_name=None, instrument_name=None):
+            """
+            Return the next scripted reading, repeating the last one
+            once the script is exhausted.
+
+            Parameters
+            ----------
+            channel_name : str or None
+                Thermometer channel name, unused by this fake.
+            instrument_name : str or None
+                Thermometer instrument name, unused by this fake.
+
+            Returns
+            -------
+            reading : float
+                The next scripted thermometer reading [K].
+            """
             if len(values) > 1:
                 return values.pop(0)
             return values[0]
@@ -83,9 +99,33 @@ def _make_sweep(readings, monkeypatch, **overrides):
     clock = {'now': 0.0}
 
     def fake_time():
+        """
+        Report the fake clock, which only moves when sleep is called.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        now : float
+            Current fake time [s].
+        """
         return clock['now']
 
     def fake_sleep(seconds):
+        """
+        Advance the fake clock instead of really sleeping.
+
+        Parameters
+        ----------
+        seconds : float
+            How far to advance the clock [s].
+
+        Returns
+        -------
+        None
+        """
         clock['now'] = clock['now'] + seconds
 
     monkeypatch.setattr(temperature_sweep_module.time, 'time', fake_time)
@@ -274,6 +314,75 @@ def test_fit_temperature_gaussian_falls_back_on_few_samples():
     assert result['sigma'] == pytest.approx(np.std(samples))
 
 
+def test_fit_temperature_gaussian_rejects_a_runaway_fit():
+    """
+    Fall back to the sample statistics when the fit runs away from the
+    data.
+
+    A bimodal sample set, which is what a thermometer reading across
+    an unstable setpoint looks like, sends curve_fit to a mean far
+    outside the samples and an enormous sigma. Reporting those would
+    put a physically absurd temperature and uncertainty into the
+    science CSV, and the offline Gta fit has no way to tell that the
+    value is nonsense.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    rng = np.random.default_rng(seed=0)
+    samples = np.concatenate([
+        rng.normal(0.030, 0.00005, 60),
+        rng.normal(0.050, 0.00005, 60),
+    ])
+
+    result = fit_temperature_gaussian(samples=samples)
+
+    assert result['fit_ok'] is False
+
+    # the fallback is the sample mean and standard deviation, both
+    # inside the data, not the runaway fit values
+    assert result['mean'] == pytest.approx(float(np.mean(samples)))
+    assert result['sigma'] == pytest.approx(float(np.std(samples)))
+    assert result['mean'] >= float(np.min(samples))
+    assert result['mean'] <= float(np.max(samples))
+
+
+def test_fit_temperature_gaussian_falls_back_when_the_fit_raises():
+    """
+    Fall back to the sample statistics when curve_fit cannot converge
+    at all.
+
+    A flat spread of readings has no peak to fit, and curve_fit gives
+    up with RuntimeError. That has to come back as a measurement
+    flagged fit_ok False, not as an exception propagating out of a
+    sweep that is hours into a run.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    rng = np.random.default_rng(seed=0)
+    samples = rng.uniform(0.0, 1.0, 200)
+
+    result = fit_temperature_gaussian(samples=samples)
+
+    assert result['fit_ok'] is False
+    assert result['mean'] == pytest.approx(float(np.mean(samples)))
+    assert result['sigma'] == pytest.approx(float(np.std(samples)))
+    assert result['nb_samples'] == 200
+
+
 def test_fit_temperature_gaussian_rejects_empty_samples():
     """
     Reject an empty sample list, since no temperature can be
@@ -370,6 +479,13 @@ def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
     assert pytest.approx(50.0) in history
     assert history.index(pytest.approx(50.0)) < len(history) - 1
 
+    # the excursion must restart the 3 s hold rather than let the
+    # earlier in-tolerance reading count toward it. With a 1 s poll
+    # that is 6 readings: one in tolerance, the excursion, then a full
+    # 3 s hold re-counted from scratch. A timer that did not restart
+    # would return after 4.
+    assert len(history) == 6
+
 
 def test_wait_for_temperature_times_out_when_setpoint_unreachable(
         monkeypatch):
@@ -428,6 +544,21 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     class FakeInstrument:
         @staticmethod
         def get_temperature(channel_name=None, instrument_name=None):
+            """
+            Return the next reading from the prepared sample set.
+
+            Parameters
+            ----------
+            channel_name : str or None
+                Thermometer channel name, unused by this fake.
+            instrument_name : str or None
+                Thermometer instrument name, unused by this fake.
+
+            Returns
+            -------
+            reading : float
+                The next thermometer reading [K].
+            """
             return readings.pop(0)
 
     sweep.instrument = FakeInstrument()
@@ -437,6 +568,19 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     clock = {'now': 0.0}
 
     def fake_time():
+        """
+        Advance the fake clock by 10 ms on every call, so a sampling
+        window closes after a deterministic number of samples.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        now : float
+            Current fake time [s].
+        """
         clock['now'] = clock['now'] + 0.010
         return clock['now']
 
@@ -447,6 +591,13 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     assert measurement['nb_samples'] == pytest.approx(100, abs=1)
     assert measurement['temperature_k'] == pytest.approx(0.040, abs=0.0001)
     assert len(measurement['samples']) == measurement['nb_samples']
+
+    # the uncertainty is published in the science CSV, so the fitted
+    # sigma has to survive into temperature_err_k rather than being
+    # dropped or defaulted
+    assert measurement['temperature_err_k'] == pytest.approx(
+        0.0002, rel=0.5
+    )
 
 
 def test_measure_temperature_zero_window_takes_one_sample():
@@ -471,6 +622,21 @@ def test_measure_temperature_zero_window_takes_one_sample():
     class FakeInstrument:
         @staticmethod
         def get_temperature(channel_name=None, instrument_name=None):
+            """
+            Return one fixed reading.
+
+            Parameters
+            ----------
+            channel_name : str or None
+                Thermometer channel name, unused by this fake.
+            instrument_name : str or None
+                Thermometer instrument name, unused by this fake.
+
+            Returns
+            -------
+            reading : float
+                A fixed thermometer reading [K].
+            """
             return 0.040
 
     sweep.instrument = FakeInstrument()
@@ -480,6 +646,10 @@ def test_measure_temperature_zero_window_takes_one_sample():
     assert measurement['nb_samples'] == 1
     assert measurement['temperature_k'] == pytest.approx(0.040)
     assert measurement['fit_ok'] is False
+
+    # one sample has no spread, so the reported uncertainty is zero
+    # rather than absent
+    assert measurement['temperature_err_k'] == 0.0
 
 
 def test_set_setpoint_does_not_use_the_driver_blocking_wait():
@@ -505,6 +675,26 @@ def test_set_setpoint_does_not_use_the_driver_blocking_wait():
                             heater_channel_name=None,
                             instrument_name=None,
                             wait_temperature_reached=None):
+            """
+            Record the commanded setpoint and how it was routed.
+
+            Parameters
+            ----------
+            temperature : float
+                The commanded setpoint [K].
+            channel_name : str or None
+                Thermometer channel the setpoint is regulated against.
+            heater_channel_name : str or None
+                Heater channel driving the stage.
+            instrument_name : str or None
+                Instrument the thermometer is read through.
+            wait_temperature_reached : bool or None
+                Whether the driver should block until reached.
+
+            Returns
+            -------
+            None
+            """
             calls.append({
                 'temperature': temperature,
                 'channel_name': channel_name,
@@ -544,14 +734,51 @@ def test_heater_to_zero_sets_setpoint_zero():
                             heater_channel_name=None,
                             instrument_name=None,
                             wait_temperature_reached=None):
-            calls.append(temperature)
+            """
+            Record the commanded setpoint and how it was routed.
+
+            The routing is recorded, not just the value: a heater to
+            zero aimed at the wrong channel leaves the real heater
+            driving and would otherwise look identical here.
+
+            Parameters
+            ----------
+            temperature : float
+                The commanded setpoint [K].
+            channel_name : str or None
+                Thermometer channel the setpoint is regulated against.
+            heater_channel_name : str or None
+                Heater channel driving the stage.
+            instrument_name : str or None
+                Instrument the thermometer is read through.
+            wait_temperature_reached : bool or None
+                Whether the driver should block until reached.
+
+            Returns
+            -------
+            None
+            """
+            calls.append({
+                'temperature': temperature,
+                'channel_name': channel_name,
+                'heater_channel_name': heater_channel_name,
+                'instrument_name': instrument_name,
+                'wait_temperature_reached': wait_temperature_reached,
+            })
 
     sweep = TemperatureSweep(config_dict=_make_config(), verbose=False)
     sweep.instrument = FakeInstrument()
 
     sweep.heater_to_zero()
 
-    assert calls == [0]
+    assert len(calls) == 1
+    assert calls[0]['temperature'] == 0
+    assert calls[0]['channel_name'] == 'CP'
+    assert calls[0]['heater_channel_name'] == 'heaterMC'
+    assert calls[0]['instrument_name'] == 'macrt'
+
+    # shutdown must not block waiting for the fridge to get there
+    assert calls[0]['wait_temperature_reached'] is False
 
 
 def test_missing_required_key_is_rejected():

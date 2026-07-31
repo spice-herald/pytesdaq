@@ -1253,6 +1253,13 @@ class H5Reader:
                     adc_chan = re.sub(r'\s+','', str(key))[10:]
                     name_val_list, name_list, val_list = (
                         connection_utils.extract_adc_connection(list(val)))
+
+                    # keep track of if this is a "real" TES channel or not.
+                    # (vs. signal gen channel or accelerometer channel)
+                    # used for avoiding setting QET bias on non-TES channels
+                    if 'is_tes_channel' in name_list:
+                        val_list[name_list.index('is_tes_channel')] = None
+
                     val_list  = [adc_id,adc_chan] + val_list
                     name_list = ['adc_id','adc_channel'] + name_list
                     connection_list.append(val_list)

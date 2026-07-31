@@ -13,8 +13,75 @@ import qetpy as qp
 from datetime import datetime
 
 
+def build_tes_bias_vect(config_dict):
+    """
+    Resolve the TES bias sweep vector from an [iv_didv] config section.
+
+    Either an explicit tes_bias_vect is used, or one is built from the
+    normal, transition and superconducting ranges with their step
+    sizes. Either way use_negative_tes_bias flips the sign of every
+    entry at the end.
+
+    This is shared rather than duplicated so that a caller wanting to
+    show the user which biases will be applied, such as the Gta sweep
+    dry run, reports the same vector the sweep will actually use.
+
+    Parameters
+    ----------
+    config_dict : dict
+        The [iv_didv] configuration section.
+
+    Returns
+    -------
+    tes_bias_vect : numpy.ndarray or list of float
+        The bias points in sweep order.
+    """
+
+    tes_bias_vect = []
+
+    if config_dict['use_tes_bias_vect']:
+        if not config_dict['tes_bias_vect']:
+            raise ValueError('IV/dIdV sweep required bias vector if "use_tes_bias_vect" = true!')
+        else:
+            tes_bias_vect = [float(bias) for bias in config_dict['tes_bias_vect']]
+            tes_bias_vect = np.asarray(tes_bias_vect)
+    else:
+        required_parameter = ['use_negative_tes_bias',
+                              'tes_bias_min','tes_bias_max','tes_bias_step_n',
+                              'tes_bias_step_t','tes_bias_t']
+
+        for key in required_parameter:
+            if key not in config_dict:
+                raise ValueError('IV/dIdV measurement require ' + str(key) +
+                                 ' if "use_tes_bias_vect" = false! Please check configuration')
+
+        tes_bias_vect_n = np.arange(float(config_dict['tes_bias_max']),
+                                    float(config_dict['tes_bias_t']),
+                                    -float(config_dict['tes_bias_step_n']))
+        tes_bias_vect_t = np.arange(float(config_dict['tes_bias_t']),
+                                    float(config_dict['tes_bias_sc']),
+                                    -float(config_dict['tes_bias_step_t']))
+        tes_bias_vect_sc = np.arange(float(config_dict['tes_bias_sc']),
+                                     float(config_dict['tes_bias_min']),
+                                     -float(config_dict['tes_bias_step_sc']))
+
+        tes_bias_vect = np.unique(np.concatenate((tes_bias_vect_n,
+                                                  tes_bias_vect_t,
+                                                  tes_bias_vect_sc,
+                                                  np.array([float(config_dict['tes_bias_min'])])),
+                                                 axis=0))
+
+        tes_bias_vect = tes_bias_vect[::-1]
+
+    if ('use_negative_tes_bias' in config_dict and
+        config_dict['use_negative_tes_bias']):
+        tes_bias_vect = [-x for x in tes_bias_vect]
+
+    return tes_bias_vect
+
+
 class IV_dIdV(Sequencer):
-    
+
     def __init__(self, iv =False, didv =False, rp=False, rn=False,
                  temperature_sweep=False,
                  tes_bias_sweep=True,
@@ -205,7 +272,20 @@ class IV_dIdV(Sequencer):
 
     def _run_iv_didv(self):
         """
-        IV/dIdV sweep
+        IV/dIdV sweep.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        success : bool
+            True if the sweep completed, or if neither IV nor dIdV was
+            enabled so there was nothing to do. False if a data taking
+            run failed or a TES bias could not be applied, in which
+            case the sweep stopped early and the data taken so far is
+            incomplete.
         """
 
         if not (self._enable_iv or self._enable_didv):
@@ -524,15 +604,28 @@ class IV_dIdV(Sequencer):
                     print(f'INFO: Setting TES bias all channels to : '
                         f'{bias} ' + ' ' + tes_bias_unit +'!')
      
-                    # set TES bias all channels
+                    # set TES bias all channels. The driver reports a
+                    # refused write by return value rather than by
+                    # raising, so an unchecked call would record a
+                    # full sweep of data taken at whatever bias the
+                    # hardware happened to be sitting at
                     for channel in self._detector_channels:
 
-                        self._instruments_inst.set_tes_bias(
+                        bias_success = self._instruments_inst.set_tes_bias(
                             bias, unit=tes_bias_unit,
                             detector_channel=channel,
                             use_net_resistance=single_TES_bias_source
                         )
-                                
+
+                        if not bias_success:
+                            print(f'ERROR: Unable to set TES bias to '
+                                  f'{bias} {tes_bias_unit} on channel '
+                                  f'{channel}! Stopping the sweep, '
+                                  'because any data taken from here on '
+                                  'would be recorded at the wrong bias.')
+                            self._daq.clear()
+                            return False
+
                     # sleep
                     time.sleep(sleeptime_s)
 
@@ -856,6 +949,7 @@ class IV_dIdV(Sequencer):
 
                     if not success:
                         print('ERROR taking data! Stopping sequencer')
+                        self._daq.clear()
                         return False
 
                 # -----------
@@ -959,6 +1053,7 @@ class IV_dIdV(Sequencer):
                            
                             if not success:
                                 print('ERROR taking data! Stopping sequencer')
+                                self._daq.clear()
                                 return False
                      
                             # turn off signal genrator
@@ -1011,6 +1106,7 @@ class IV_dIdV(Sequencer):
 
                         if not success:
                             print('ERROR taking data! Stopping sequencer')
+                            self._daq.clear()
                             return False
                             
             self._daq.clear()
@@ -1054,7 +1150,9 @@ class IV_dIdV(Sequencer):
         if self._verbose:
             print('IV/dIdV successfully finished!')
 
-      
+        return True
+
+
     def _run_rp_rn(self):
         """
         Measure Rp/Rn
@@ -1226,49 +1324,9 @@ class IV_dIdV(Sequencer):
             config_dict = self._measurement_config['iv_didv']
          
             # Build TES bias vector
-            tes_bias_vect = []
             temperature_vect = []
-            if config_dict['use_tes_bias_vect']: 
-                if not config_dict['tes_bias_vect']:
-                    raise ValueError('IV/dIdV sweep required bias vector if "use_tes_bias_vect" = true!')
-                else:
-                    tes_bias_vect = [float(bias) for bias in config_dict['tes_bias_vect']]
-                    tes_bias_vect = np.asarray(tes_bias_vect)
-            else:
-                required_parameter = ['use_negative_tes_bias',
-                                      'tes_bias_min','tes_bias_max','tes_bias_step_n',
-                                      'tes_bias_step_t','tes_bias_t']
 
-                for key in required_parameter:
-                    if key not in config_dict:
-                        raise ValueError('IV/dIdV measurement require ' + str(key) +
-                                         ' if "use_tes_bias_vect" = false! Please check configuration')
-                
-                tes_bias_vect_n = np.arange(float(config_dict['tes_bias_max']),
-                                            float(config_dict['tes_bias_t']),
-                                            -float(config_dict['tes_bias_step_n']))
-                tes_bias_vect_t = np.arange(float(config_dict['tes_bias_t']),
-                                            float(config_dict['tes_bias_sc']),
-                                            -float(config_dict['tes_bias_step_t']))
-                tes_bias_vect_sc = np.arange(float(config_dict['tes_bias_sc']),
-                                             float(config_dict['tes_bias_min']),
-                                             -float(config_dict['tes_bias_step_sc']))
-                
-                tes_bias_vect = np.unique(np.concatenate((tes_bias_vect_n,
-                                                          tes_bias_vect_t,
-                                                          tes_bias_vect_sc,
-                                                          np.array([float(config_dict['tes_bias_min'])])),
-                                                         axis=0))
-
-                tes_bias_vect = tes_bias_vect[::-1]
-
-          
-            if ('use_negative_tes_bias' in config_dict and
-                config_dict['use_negative_tes_bias']):
-                tes_bias_vect = [-x for x in tes_bias_vect]
-                
-                
-            config_dict['tes_bias_vect'] =  tes_bias_vect 
+            config_dict['tes_bias_vect'] = build_tes_bias_vect(config_dict)
 
           
             # Build temperature vector

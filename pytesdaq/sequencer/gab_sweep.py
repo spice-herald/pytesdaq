@@ -23,7 +23,12 @@ import qetpy as qp
 from qetpy.core._biasparams import get_biasparams_ilg
 
 from pytesdaq.sequencer.sequencer import Sequencer
-from pytesdaq.sequencer.temperature_sweep import (
+# build_temperature_list and fit_temperature_gaussian are not used in
+# this module any more, they moved to temperature_sweep. They stay
+# imported so that notebooks and scripts still doing
+# "from pytesdaq.sequencer.gab_sweep import build_temperature_list"
+# keep working
+from pytesdaq.sequencer.temperature_sweep import (  # noqa: F401
     TemperatureSweep,
     build_temperature_list,
     config_get,
@@ -402,16 +407,6 @@ class GabSweep(Sequencer):
             verbose=self._verbose
         )
 
-        # aliases, so the rest of this class reads unchanged
-        self._thermometer_name = self._temperature_sweep.thermometer_name
-        self._thermometer_instrument = (
-            self._temperature_sweep.thermometer_instrument
-        )
-        self._heater_name = self._temperature_sweep.heater_name
-        self._temperature_list_mk = (
-            self._temperature_sweep.temperature_list_mk
-        )
-
         # TES channels
         self._thermometer_tes_channel = str(
             require('thermometer_tes_channel')
@@ -677,6 +672,73 @@ class GabSweep(Sequencer):
 
         self._adc_config = {adc_id: adc_setup}
 
+    @property
+    def _thermometer_name(self):
+        """
+        Name of the MC thermometer channel.
+
+        Read through to the shared temperature sweep rather than
+        copied, so the two cannot drift apart.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        thermometer_name : str
+            The configured thermometer channel name.
+        """
+        return self._temperature_sweep.thermometer_name
+
+    @property
+    def _thermometer_instrument(self):
+        """
+        Name of the instrument the MC thermometer is read through.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        thermometer_instrument : str
+            The configured thermometer instrument name.
+        """
+        return self._temperature_sweep.thermometer_instrument
+
+    @property
+    def _heater_name(self):
+        """
+        Name of the MC heater channel.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        heater_name : str
+            The configured heater channel name.
+        """
+        return self._temperature_sweep.heater_name
+
+    @property
+    def _temperature_list_mk(self):
+        """
+        MC temperature setpoints for the sweep.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        temperature_list_mk : list of float
+            Strictly decreasing setpoints [mK].
+        """
+        return self._temperature_sweep.temperature_list_mk
+
     def _synced_temperature_sweep(self):
         """
         The shared temperature sweep, with its instrument and verbose
@@ -684,6 +746,10 @@ class GabSweep(Sequencer):
 
         Both can be reassigned after the drivers are instantiated, so
         they are refreshed before every use rather than captured once.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -1393,6 +1459,10 @@ class GabSweep(Sequencer):
 
         self.teardown_signal_generator()
 
+        # a Ctrl-C landing inside the restore below must not skip the
+        # rest of shutdown, so it is remembered and re-raised at the end
+        pending_interrupt = None
+
         if self._instrument is not None:
 
             try:
@@ -1404,17 +1474,38 @@ class GabSweep(Sequencer):
                 print('INFO: Pre-run heater TES bias unknown, '
                       'leaving heater TES bias untouched')
             else:
+                # the driver reports a refused write by return value
+                # rather than by raising, so the success message is
+                # printed only when the write actually reported
+                # success. It is the operator's only confirmation that
+                # the heater TES was put back
                 try:
-                    self._instrument.set_tes_bias(
-                        self._heater_initial_bias_ua,
+                    success = self._instrument.set_tes_bias(
+                        bias=self._heater_initial_bias_ua,
                         unit='uA',
                         detector_channel=self._heater_tes_channel
                     )
-                    print('INFO: Heater TES bias set back to its '
-                          'original pre-run value of '
-                          f'{self._heater_initial_bias_ua:.6g} uA')
+
+                    if success:
+                        print('INFO: Heater TES bias set back to its '
+                              'original pre-run value of '
+                              f'{self._heater_initial_bias_ua:.6g} uA')
+                    else:
+                        print('ERROR restoring heater TES bias: the '
+                              'instrument refused the write, so the '
+                              'heater TES is NOT at its pre-run value '
+                              f'of {self._heater_initial_bias_ua:.6g} '
+                              'uA! Check it by hand.')
+
                 except Exception as err:
                     print(f'ERROR restoring heater TES bias: {err}')
+
+                except BaseException as err:
+                    # a second Ctrl-C landing here would otherwise skip
+                    # the diagnostics save and the DAQ teardown below
+                    print(f'ERROR restoring heater TES bias: {err!r}. '
+                          'Finishing shutdown before stopping.')
+                    pending_interrupt = err
 
         try:
             self._save_diagnostics()
@@ -1427,6 +1518,9 @@ class GabSweep(Sequencer):
                 self._daq.clear()
             except Exception as err:
                 print(f'ERROR clearing DAQ: {err}')
+
+        if pending_interrupt is not None:
+            raise pending_interrupt
 
     def _create_output_directory(self):
         """

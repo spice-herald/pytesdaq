@@ -15,12 +15,13 @@ so the data taking is identical to run_iv_didv.py with only IV enabled.
 
 import copy
 import csv
+import math
 import pickle
 import shutil
 import time
 from datetime import datetime
 
-from pytesdaq.sequencer.iv_didv import IV_dIdV
+from pytesdaq.sequencer.iv_didv import IV_dIdV, build_tes_bias_vect
 from pytesdaq.sequencer.sequencer import Sequencer
 from pytesdaq.sequencer.temperature_sweep import (
     TemperatureSweep,
@@ -106,6 +107,10 @@ class GtaSweep(Sequencer):
         the composed IV_dIdV does all the data taking, so it keeps
         detector_channels unset and never instantiates a DAQ.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         None
@@ -135,6 +140,10 @@ class GtaSweep(Sequencer):
         """
         Cast the gta_sweep config section into typed attributes and
         classify the channels.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -208,6 +217,10 @@ class GtaSweep(Sequencer):
         TTL input and the accelerometer readouts, are readout channels
         that must never be biased.
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         tes_channels : list of str
@@ -268,6 +281,19 @@ class GtaSweep(Sequencer):
                 detector_channel=channel,
                 unit='uA'
             ))
+
+            # the driver returns NaN when it cannot identify the TES
+            # controller, and float(NaN) succeeds. Committing that
+            # would later write NaN back to the hardware while
+            # printing it as the original value
+            if not math.isfinite(bias_ua):
+                raise ValueError(
+                    f'GtaSweep: the pre-run TES bias read back on '
+                    f'channel "{channel}" is not a finite value '
+                    f'({bias_ua})! Refusing to start, because the '
+                    'bias could not be restored afterwards.'
+                )
+
             captured_biases_ua[channel] = bias_ua
 
         self._initial_biases_ua = captured_biases_ua
@@ -289,6 +315,13 @@ class GtaSweep(Sequencer):
 
         Channels that are not TESs are never written to.
 
+        The driver reports a refused write by return value rather than
+        by raising: None when no TES controller is available, False
+        when the write itself failed. A channel that silently stays
+        biased dissipates power into the absorber for the whole sweep
+        and contaminates every recorded datapoint, so a falsy return
+        stops the run rather than being ignored.
+
         Parameters
         ----------
         None
@@ -308,11 +341,21 @@ class GtaSweep(Sequencer):
                   f'{", ".join(self._zero_channels)}')
 
         for channel in self._zero_channels:
-            self._instrument.set_tes_bias(
+            success = self._instrument.set_tes_bias(
                 bias=0,
                 unit='uA',
                 detector_channel=channel
             )
+
+            if not success:
+                raise RuntimeError(
+                    f'GtaSweep: the TES bias on channel "{channel}" '
+                    'could not be set to 0 uA! That channel would '
+                    'keep dissipating power into the absorber for the '
+                    'whole sweep, so every datapoint would be '
+                    'contaminated. Aborting; the pre-run biases are '
+                    'restored on the way out.'
+                )
 
     def restore_initial_biases(self):
         """
@@ -321,6 +364,13 @@ class GtaSweep(Sequencer):
         A channel that fails to restore is reported and the rest are
         still attempted, because a channel left biased keeps heating
         the absorber.
+
+        The driver reports a refused write by return value rather than
+        by raising, so the return is checked as well as the exception
+        caught. The success message is printed only when the write
+        actually reported success: it is the operator's only
+        confirmation that the safe shutdown worked, so printing it on
+        a refused write would be worse than printing nothing.
 
         Parameters
         ----------
@@ -331,26 +381,53 @@ class GtaSweep(Sequencer):
         None
         """
 
-        if len(self._initial_biases_ua) == 0:
+        if not self._biases_captured:
             print('INFO: Pre-run TES biases unknown, leaving TES '
                   'biases untouched')
             return
 
+        pending_interrupt = None
+
         for channel, bias_ua in self._initial_biases_ua.items():
             try:
-                self._instrument.set_tes_bias(
+                success = self._instrument.set_tes_bias(
                     bias=bias_ua,
                     unit='uA',
                     detector_channel=channel
                 )
-                print(f'INFO: TES bias on {channel} set back to its '
-                      f'original pre-run value of {bias_ua:.6g} uA')
+
+                if success:
+                    print(f'INFO: TES bias on {channel} set back to '
+                          f'its original pre-run value of '
+                          f'{bias_ua:.6g} uA')
+                else:
+                    print(f'ERROR restoring TES bias on {channel}: '
+                          'the instrument refused the write, so the '
+                          f'channel is NOT at its pre-run value of '
+                          f'{bias_ua:.6g} uA! Check it by hand.')
+
             except Exception as err:
                 print(f'ERROR restoring TES bias on {channel}: {err}')
+
+            except BaseException as err:
+                # a second Ctrl-C landing here would otherwise leave
+                # every channel after this one at 0 uA. Remember it,
+                # finish restoring the rest, then let it carry on
+                print(f'ERROR restoring TES bias on {channel}: '
+                      f'{err!r}. Finishing the remaining channels '
+                      'before stopping.')
+                pending_interrupt = err
+
+        if pending_interrupt is not None:
+            raise pending_interrupt
 
     def _print_dry_run(self):
         """
         Print the sweep plan without any hardware interaction.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -395,17 +472,26 @@ class GtaSweep(Sequencer):
               'measured before and after each IV sweep')
 
         iv_config = self._config.get_sequencer_setup('iv_didv', ['iv'])
-        bias_vect = iv_config['iv_didv'].get('tes_bias_vect')
 
-        # get_sequencer_setup only casts values whose text passes
-        # isdigit, which a decimal such as "5.5" does not, so the raw
-        # vector arrives as a mix of floats and strings. IV_dIdV casts
-        # them itself before use; this is only so the printed plan
-        # reads as one list of numbers
-        if isinstance(bias_vect, (list, tuple)):
-            bias_vect = [float(bias) for bias in bias_vect]
+        # resolve the vector the same way IV_dIdV will, so the printed
+        # plan is the biases that will actually be applied. Reading
+        # tes_bias_vect straight out of the config would miss the
+        # use_negative_tes_bias sign flip and would print an unused
+        # vector when the min/max/step form is configured. The section
+        # is copied because the resolver writes its result back into
+        # the dict it is given
+        bias_vect = self._resolved_bias_vect()
 
-        print(f'\nTES bias sweep [uA]: {bias_vect}')
+        if bias_vect is None:
+            # a dry run exists to be safe to run at any time, so a bad
+            # config is reported rather than raised out of the script
+            print('\nTES bias sweep [uA]: UNUSABLE, the configured '
+                  'bias vector could not be resolved. The real run '
+                  'would fail at startup, fix the config first. '
+                  f'Configured value: '
+                  f'{iv_config["iv_didv"].get("tes_bias_vect")!r}')
+        else:
+            print(f'\nTES bias sweep [uA]: {bias_vect}')
         print(f'IV run time per bias point: '
               f'{iv_config["iv"].get("run_time")} s')
 
@@ -413,6 +499,71 @@ class GtaSweep(Sequencer):
               'data is saved as a normal series group per step, and '
               'gta_sweep_data.csv pairs each series with its '
               'temperature.')
+
+        self._warn_if_bias_vector_ends_hot()
+
+    def _resolved_bias_vect(self):
+        """
+        Resolve the TES bias vector exactly as the composed IV_dIdV
+        will, so that what is reported is what will be applied.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bias_vect : list of float or None
+            The bias points in sweep order, or None when the config
+            cannot be resolved.
+        """
+
+        iv_config = self._config.get_sequencer_setup('iv_didv', ['iv'])
+
+        # the section is copied because the resolver writes its result
+        # back into the dict it is given
+        try:
+            bias_vect = build_tes_bias_vect(
+                copy.deepcopy(iv_config['iv_didv'])
+            )
+            return [float(bias) for bias in bias_vect]
+
+        except (ValueError, KeyError, TypeError):
+            return None
+
+    def _warn_if_bias_vector_ends_hot(self):
+        """
+        Warn when the bias vector does not end at 0 uA.
+
+        Between temperature steps the swept TES is left wherever the
+        IV sweep ended, which is by design. A vector that ends at a
+        non-zero bias therefore leaves that TES dissipating into the
+        absorber for the whole settling time of the next setpoint,
+        which is the heat load every other channel is zeroed to
+        avoid. Nothing in the recorded data reveals it afterwards.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        bias_vect = self._resolved_bias_vect()
+
+        if bias_vect is None or len(bias_vect) == 0:
+            return
+
+        if bias_vect[-1] != 0:
+            print(f'\nWARNING: the configured TES bias vector does '
+                  f'not end at 0 uA (last point is {bias_vect[-1]:.6g} '
+                  'uA). Between temperature steps the swept TES is '
+                  'left at the last bias of the sweep, so it will keep '
+                  'dissipating power into the absorber while the '
+                  'fridge settles at the next setpoint. End the vector '
+                  'at 0 unless you meant this.')
 
     def _build_iv_sequencer(self):
         """
@@ -486,19 +637,24 @@ class GtaSweep(Sequencer):
                 if self._comment and self._comment != 'No comment':
                     print(f'  ({self._comment})')
                 print('=====================================')
-                print('REMINDER: the configured tes_bias_vect must '
-                      'bracket the target R0 at every bath temperature '
-                      'in the sweep, otherwise the offline '
-                      'interpolation has nothing to interpolate '
-                      'between at the cold end. Every other TES '
-                      'channel is set to 0 uA now and restored at '
-                      'shutdown.')
+                print('REMINDER: the PID settings are never touched '
+                      'by this script and must already be set. The '
+                      'configured tes_bias_vect must bracket the '
+                      'target R0 at every bath temperature in the '
+                      'sweep, otherwise the offline interpolation has '
+                      'nothing to interpolate between at the cold '
+                      'end. Every other TES channel is set to 0 uA '
+                      'now and restored at shutdown.')
 
-            self.zero_other_channels()
+            self._warn_if_bias_vector_ends_hot()
 
+            # everything that can fail on configuration or disk is
+            # done before any TES is driven out of transition
             self._iv_sequencer = self._build_iv_sequencer()
 
             self._create_output_directory()
+
+            self.zero_other_channels()
             self._diagnostics['config'] = copy.deepcopy(
                 self._measurement_config[self._measurement_name]
             )
@@ -577,13 +733,17 @@ class GtaSweep(Sequencer):
             f', Gta step {step_index}, T_set = {temperature_mk:.6g} mK'
         )
 
-        iv_success = self._iv_sequencer._run_iv_didv()
-        if iv_success is None:
-            iv_success = True
+        # _run_iv_didv returns True on success and False when a data
+        # taking run failed or a TES bias could not be applied.
+        # Anything else means its contract was broken, and is scored
+        # as a failure rather than trusted: a point wrongly flagged is
+        # discarded offline, a bad point wrongly trusted is fitted
+        iv_result = self._iv_sequencer._run_iv_didv()
+        iv_success = (iv_result is True)
 
         if not iv_success:
             print(f'WARNING: Step {step_index}: IV sweep reported a '
-                  'data-taking failure')
+                  f'data-taking failure (result was {iv_result!r})')
 
         after = self._temperature_sweep.measure_temperature()
         after_mk = after['temperature_k'] * 1000.0
@@ -651,7 +811,10 @@ class GtaSweep(Sequencer):
             except Exception as err:
                 print(f'ERROR setting heater setpoint to 0: {err}')
 
-            self.restore_initial_biases()
+            try:
+                self.restore_initial_biases()
+            except Exception as err:
+                print(f'ERROR restoring TES biases: {err}')
 
         try:
             self._save_diagnostics()

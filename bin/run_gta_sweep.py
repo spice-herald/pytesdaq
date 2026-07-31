@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from pytesdaq.sequencer import GtaSweep
 
@@ -70,7 +71,7 @@ if __name__ == "__main__":
 
     if not os.path.isfile(setup_file):
         print('ERROR: Setup file "' + setup_file + '" not found!')
-        exit()
+        sys.exit(1)
 
     # sequencer file
     sequencer_file = None
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     if not os.path.isfile(sequencer_file):
         print('ERROR: Sequencer file "' + sequencer_file
               + '" not found!')
-        exit()
+        sys.exit(1)
 
     # ========================
     # Start sequencer

@@ -315,54 +315,220 @@ class TemperatureSweep:
 
     @property
     def instrument(self):
+        """
+        Instrument control object used to reach the fridge.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        instrument : object or None
+            The instrument control instance, None until one is set.
+        """
         return self._instrument
 
     @instrument.setter
     def instrument(self, value):
+        """
+        Set the instrument control object.
+
+        Callers that rebuild their driver must set this again, since
+        this class holds its own reference.
+
+        Parameters
+        ----------
+        value : object
+            The instrument control instance.
+
+        Returns
+        -------
+        None
+        """
         self._instrument = value
 
     @property
     def verbose(self):
+        """
+        Whether status messages are printed.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        verbose : bool
+            True if status messages are printed.
+        """
         return self._verbose
 
     @verbose.setter
     def verbose(self, value):
+        """
+        Set whether status messages are printed.
+
+        Parameters
+        ----------
+        value : bool
+            True to print status messages.
+
+        Returns
+        -------
+        None
+        """
         self._verbose = value
 
     @property
     def thermometer_name(self):
+        """
+        Name of the thermometer channel being polled.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        thermometer_name : str
+            The configured thermometer channel name. Note the MC
+            thermometer is labeled CP in the heater software.
+        """
         return self._thermometer_name
 
     @property
     def thermometer_instrument(self):
+        """
+        Name of the instrument the thermometer is read through.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        thermometer_instrument : str
+            The configured thermometer instrument name.
+        """
         return self._thermometer_instrument
 
     @property
     def heater_name(self):
+        """
+        Name of the heater channel the setpoint is applied to.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        heater_name : str
+            The configured heater channel name.
+        """
         return self._heater_name
 
     @property
     def temperature_list_mk(self):
-        return self._temperature_list_mk
+        """
+        The temperature setpoints for the sweep.
+
+        A copy is returned, so that a caller holding the list cannot
+        shorten or reorder the sweep for every other holder.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        temperature_list_mk : list of float
+            Strictly decreasing setpoints [mK].
+        """
+        return list(self._temperature_list_mk)
 
     @property
     def poll_interval_s(self):
+        """
+        How often the thermometer is polled while waiting.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        poll_interval_s : float
+            Poll interval [s].
+        """
         return self._poll_interval_s
 
     @property
     def stable_time_s(self):
+        """
+        How long the reading must hold within tolerance.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        stable_time_s : float
+            Required hold time [s].
+        """
         return self._stable_time_s
 
     @property
     def max_wait_time_s(self):
+        """
+        How long to wait for a setpoint before giving up.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        max_wait_time_s : float
+            Timeout [s].
+        """
         return self._max_wait_time_s
 
     @property
     def tolerance_frac(self):
+        """
+        How close to the setpoint counts as reached.
+
+        This is a fraction of the setpoint, not a percentage: 0.02
+        means 2 percent.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        tolerance_frac : float
+            Tolerance as a fraction of the setpoint.
+        """
         return self._tolerance_frac
 
     @property
     def sampling_time_s(self):
+        """
+        Window over which the temperature is sampled per datapoint.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        sampling_time_s : float
+            Sampling window [s].
+        """
         return self._sampling_time_s
 
     def set_setpoint(self, temperature_mk=None):
@@ -476,6 +642,10 @@ class TemperatureSweep:
         is the temperature, its sigma the uncertainty (sample mean
         and standard deviation when the fit is not possible).
 
+        Parameters
+        ----------
+        None
+
         Returns
         -------
         measurement : dict
@@ -515,6 +685,10 @@ class TemperatureSweep:
     def heater_to_zero(self):
         """
         Set the MC heater setpoint to zero, without waiting.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
