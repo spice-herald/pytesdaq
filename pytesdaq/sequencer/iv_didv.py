@@ -807,44 +807,44 @@ class IV_dIdV(Sequencer):
                         std_median = np.median(traces_std, axis=0)
                         stds.append([std_median])
                 
-                        # save
-                        bias_array = [[-bias*1e-6]]*nb_channels
-                        bias_err_array = [[0]]*nb_channels
+                    # save
+                    bias_array = [[-bias*1e-6]]*nb_channels
+                    bias_err_array = [[0]]*nb_channels
                             
-                        if online_iv_offset is None:
-                                online_iv_offset = np.array(offsets)
-                        else:
-                            online_iv_offset = np.append(
-                                online_iv_offset, offsets, axis=1
-                            )
+                    if online_iv_offset is None:
+                        online_iv_offset = np.array(offsets)
+                    else:
+                        online_iv_offset = np.append(
+                            online_iv_offset, offsets, axis=1
+                        )
 
-                        if online_iv_offset_err is None:
-                            online_iv_offset_err = np.array(offsets_err)
-                        else:
-                            online_iv_offset_err = np.append(
-                                online_iv_offset_err, offsets_err, axis=1
-                            )
+                    if online_iv_offset_err is None:
+                        online_iv_offset_err = np.array(offsets_err)
+                    else:
+                        online_iv_offset_err = np.append(
+                            online_iv_offset_err, offsets_err, axis=1
+                        )
 
-                        if online_iv_std is None:
-                            online_iv_std = np.array(stds)
-                        else:
-                            online_iv_std = np.append(
-                                online_iv_std, stds, axis=1
-                            )  
-                            
-                        if online_iv_tes_bias is None:
-                            online_iv_tes_bias = np.array(bias_array)
-                        else:
-                            online_iv_tes_bias = np.append(
-                                online_iv_tes_bias,  bias_array, axis=1
-                            )  
-
-                        if online_iv_tes_bias_err is None:
-                            online_iv_tes_bias_err = np.array(bias_err_array)
-                        else:
-                            online_iv_tes_bias_err = np.append(
-                                online_iv_tes_bias_err,  bias_err_array, axis=1
+                    if online_iv_std is None:
+                        online_iv_std = np.array(stds)
+                    else:
+                        online_iv_std = np.append(
+                            online_iv_std, stds, axis=1
                         )  
+                            
+                    if online_iv_tes_bias is None:
+                        online_iv_tes_bias = np.array(bias_array)
+                    else:
+                        online_iv_tes_bias = np.append(
+                            online_iv_tes_bias,  bias_array, axis=1
+                        )  
+
+                    if online_iv_tes_bias_err is None:
+                        online_iv_tes_bias_err = np.array(bias_err_array)
+                    else:
+                        online_iv_tes_bias_err = np.append(
+                            online_iv_tes_bias_err,  bias_err_array, axis=1
+                    )  
 
                     # analyze
                     if istep>=3:
