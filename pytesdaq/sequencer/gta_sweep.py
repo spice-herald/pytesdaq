@@ -357,6 +357,76 @@ class GtaSweep(Sequencer):
                     'restored on the way out.'
                 )
 
+    def relock_all_channels(self):
+        """
+        Relock the SQUID of every real TES channel.
+
+        Relocking cycles the feedback loop open and closed a couple of
+        times, which is what is done by hand in the lab to recover a
+        TES that has dropped out of lock. Channels that are not TESs
+        are never touched.
+
+        The driver returns nothing, not even a flag saying whether a
+        SQUID controller was available, so unlike the bias writes there
+        is no return value to check here. A channel that failed to lock
+        shows up only in the IV curve it produces afterwards.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        channels = [self._tes_channel] + self._zero_channels
+
+        if self._verbose:
+            print(f'INFO: Relocking {", ".join(channels)}')
+
+        for channel in channels:
+            self._instrument.relock(detector_channel=channel)
+
+    def prepare_detectors_for_iv(self):
+        """
+        Put every real TES channel back at its standard bias point,
+        relock it, then zero every channel except the swept one.
+
+        A TES generally drops out of lock when the bath temperature is
+        changed, and lock is much harder to recover while the device
+        sits superconducting at 0 uA than while it sits in transition.
+        The swept channel in particular ends the previous IV sweep at
+        the last point of the bias vector, normally 0 uA. So the
+        pre-run bias, the point the operator put the devices at before
+        the run, is restored on every channel first, and only then is
+        the loop cycled.
+
+        The other channels go straight back to 0 uA afterwards, so they
+        dissipate into the absorber only for the few seconds the relock
+        takes rather than for the whole IV sweep. The swept channel is
+        left at its standard bias point, which the IV sequencer
+        overwrites with the first point of the bias vector before it
+        takes any data.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        if self._verbose:
+            print('INFO: Restoring the standard bias point on every '
+                  'TES channel, relocking, then re-zeroing the '
+                  'channels that are not swept')
+
+        self.restore_initial_biases()
+        self.relock_all_channels()
+        self.zero_other_channels()
+
     def restore_initial_biases(self):
         """
         Put every real TES channel back to its pre-run bias.
@@ -494,6 +564,13 @@ class GtaSweep(Sequencer):
             print(f'\nTES bias sweep [uA]: {bias_vect}')
         print(f'IV run time per bias point: '
               f'{iv_config["iv"].get("run_time")} s')
+
+        print('\nOnce each setpoint is reached, every TES channel is '
+              'put back at its standard pre-run bias point and '
+              'relocked, then the channels that are not swept go back '
+              'to 0 uA and the IV sweep starts. The same relock is '
+              'done at shutdown, so the devices are handed back in '
+              'transition.')
 
         print('\nOne IV sweep is taken per temperature setpoint. Raw '
               'data is saved as a normal series group per step, and '
@@ -644,7 +721,11 @@ class GtaSweep(Sequencer):
                       'sweep, otherwise the offline interpolation has '
                       'nothing to interpolate between at the cold '
                       'end. Every other TES channel is set to 0 uA '
-                      'now and restored at shutdown.')
+                      'now and restored at shutdown. The bias point '
+                      'the channels are at right now is the one they '
+                      'are put back to and relocked at before every '
+                      'IV sweep, so make sure they are in transition '
+                      'before starting.')
 
             self._warn_if_bias_vector_ends_hot()
 
@@ -720,6 +801,14 @@ class GtaSweep(Sequencer):
         if self._post_settle_wait_s > 0:
             time.sleep(self._post_settle_wait_s)
 
+        # the temperature change will generally have knocked the TESs
+        # out of lock, so they are put back in transition and relocked
+        # before any data is taken at this setpoint
+        self.prepare_detectors_for_iv()
+
+        # measured after the relock, so the recorded temperature is the
+        # one the IV sweep actually sees rather than the one the
+        # briefly biased channels perturbed
         before = self._temperature_sweep.measure_temperature()
         before_mk = before['temperature_k'] * 1000.0
         before_err_mk = before['temperature_err_k'] * 1000.0
@@ -815,6 +904,15 @@ class GtaSweep(Sequencer):
                 self.restore_initial_biases()
             except Exception as err:
                 print(f'ERROR restoring TES biases: {err}')
+
+            # the devices end the sweep at the last point of the bias
+            # vector, normally 0 uA and superconducting, so the loop is
+            # cycled once more now that the standard bias point is back
+            # to hand them over in transition and locked
+            try:
+                self.relock_all_channels()
+            except Exception as err:
+                print(f'ERROR relocking the TES channels: {err}')
 
         try:
             self._save_diagnostics()
