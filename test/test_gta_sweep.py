@@ -1078,6 +1078,12 @@ def _sweep_with_fake_instrument():
     instrument = _FakeBiasInstrument(biases)
     sweep._instrument = instrument
     sweep._temperature_sweep.instrument = instrument
+
+    # the real settle wait comes from tes_bias_change_sleep_time, which
+    # is 10 s in the example config. Nothing here is timing dependent,
+    # so it is dropped rather than making every test that relocks wait
+    sweep._bias_settle_wait_s = 0.0
+
     return sweep, instrument
 
 
@@ -2190,6 +2196,7 @@ def test_run_writes_the_whole_output_set_end_to_end(tmp_path):
     instrument = _FakeBiasInstrument(biases)
     sweep._instrument = instrument
     sweep._temperature_sweep.instrument = instrument
+    sweep._bias_settle_wait_s = 0.0
 
     sweep._dry_run = False
     sweep._base_automation_data_path = str(tmp_path)
@@ -2460,18 +2467,28 @@ def test_prepare_detectors_for_iv_relocks_in_transition():
 
     sweep.prepare_detectors_for_iv()
 
-    for channel, bias_at_relock in instrument.relocks:
+    # the transition relock covers every TES channel; the extra relock
+    # at the first bias point of the sweep comes after it and is
+    # checked separately
+    nb_tes_channels = 1 + len(sweep._zero_channels)
+    transition_relocks = instrument.relocks[:nb_tes_channels]
+
+    assert len(transition_relocks) == nb_tes_channels
+
+    for channel, bias_at_relock in transition_relocks:
         assert bias_at_relock == pytest.approx(initial[channel])
 
 
 def test_prepare_detectors_for_iv_leaves_only_the_swept_channel_biased():
     """
-    Test that after the relock the swept channel is back at its
-    standard bias point and every other TES channel is at 0 uA again.
+    Test that the swept channel is left at the first bias point of the
+    IV vector and every other TES channel at 0 uA.
 
-    A channel left biased after the relock would dissipate into the
-    absorber for the whole IV sweep, which is exactly what zeroing
-    exists to prevent.
+    A channel left biased would dissipate into the absorber for the
+    whole IV sweep, which is exactly what zeroing exists to prevent.
+    The swept channel is the exception: it is deliberately parked at
+    the bias the sweep is about to start from, so the relock that
+    follows happens at that bias.
 
     Parameters
     ----------
@@ -2482,16 +2499,135 @@ def test_prepare_detectors_for_iv_leaves_only_the_swept_channel_biased():
     None
     """
     sweep, instrument = _sweep_with_fake_instrument()
-    initial = dict(sweep.capture_initial_biases())
+    sweep.capture_initial_biases()
 
     sweep.prepare_detectors_for_iv()
 
+    first_bias_ua = sweep._resolved_bias_vect()[0]
     assert instrument.biases[sweep._tes_channel] == pytest.approx(
-        initial[sweep._tes_channel]
+        first_bias_ua
     )
 
     for channel in sweep._zero_channels:
         assert instrument.biases[channel] == 0
+
+
+def test_prepare_detectors_for_iv_relocks_again_at_the_first_bias_point():
+    """
+    Test that the last relock of the preparation is on the swept
+    channel, at the first bias point of the IV vector.
+
+    The transition relock alone was not enough in the lab: the raw
+    traces of a failed step were railed from the first bias point
+    onward, so the lock was being lost on the jump from the transition
+    bias up to the top of the sweep. Relocking after that jump is the
+    point of this step, and a relock recorded at any other bias would
+    not test what it is meant to.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep.capture_initial_biases()
+
+    sweep.prepare_detectors_for_iv()
+
+    first_bias_ua = sweep._resolved_bias_vect()[0]
+    last_channel, last_bias = instrument.relocks[-1]
+
+    assert last_channel == sweep._tes_channel
+    assert last_bias == pytest.approx(first_bias_ua)
+
+    # the bias is applied before the relock, never after it
+    writes = instrument.writes
+    bias_index = writes.index((sweep._tes_channel, first_bias_ua))
+    relock_index = len(writes) - 1 - writes[::-1].index(
+        (sweep._tes_channel, 'relock')
+    )
+    assert bias_index < relock_index
+
+
+def test_relock_at_first_bias_point_aborts_when_the_write_is_refused():
+    """
+    Test that a refused bias write on the swept channel stops the run
+    rather than relocking at whatever bias the hardware was sitting at.
+
+    Relocking at the wrong bias would produce a sweep that looks
+    prepared but was locked somewhere else entirely, and nothing in the
+    recorded data would show it.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep.capture_initial_biases()
+
+    def refusing_set_tes_bias(bias, unit=None, detector_channel=None):
+        """
+        Refuse the write on the swept channel, allow the others.
+
+        Parameters
+        ----------
+        bias : float
+            The bias value to write.
+        unit : str or None
+            Unit of the bias.
+        detector_channel : str or None
+            Detector channel name to write to.
+
+        Returns
+        -------
+        success : bool
+            False for the swept channel, True otherwise.
+        """
+        if detector_channel == sweep._tes_channel:
+            return False
+        return True
+
+    instrument.set_tes_bias = refusing_set_tes_bias
+
+    with pytest.raises(RuntimeError):
+        sweep.relock_swept_channel_at_first_bias()
+
+    relocked_channels = [channel for channel, bias in instrument.relocks]
+    assert sweep._tes_channel not in relocked_channels
+
+
+def test_relock_at_first_bias_point_skips_an_unusable_bias_vector(capsys):
+    """
+    Test that an unresolvable bias vector is reported and skipped
+    rather than raising.
+
+    The sweep is about to fail on that config anyway, with a far better
+    message from the IV sequencer. Raising here would replace it with a
+    confusing one from the preparation step.
+
+    Parameters
+    ----------
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep.capture_initial_biases()
+    sweep._resolved_bias_vect = lambda: None
+
+    assert sweep.relock_swept_channel_at_first_bias() is False
+    assert 'could not be resolved' in capsys.readouterr().out
+    assert len(instrument.relocks) == 0
 
 
 def test_run_single_step_relocks_before_taking_any_iv_data():
@@ -2554,8 +2690,10 @@ def test_run_single_step_relocks_before_taking_any_iv_data():
 
     sweep.run_single_step(temperature_mk=40.0, step_index=0)
 
-    nb_tes_channels = 1 + len(sweep._zero_channels)
-    assert relocks_at_iv_time == [nb_tes_channels]
+    # every TES channel relocked in transition, plus the swept channel
+    # relocked again at the first bias point
+    nb_relocks_per_step = 1 + len(sweep._zero_channels) + 1
+    assert relocks_at_iv_time == [nb_relocks_per_step]
 
 
 def test_run_relocks_at_every_temperature_step(tmp_path):
@@ -2598,9 +2736,12 @@ def test_run_relocks_at_every_temperature_step(tmp_path):
 
     sweep.run()
 
-    # one relock per TES channel per setpoint, plus the shutdown relock
+    # per setpoint: every TES channel relocked in transition, plus the
+    # swept channel relocked again at the first bias point. Then the
+    # transition relock once more at shutdown
+    nb_relocks_per_step = nb_tes_channels + 1
     assert len(instrument.relocks) == (
-        nb_tes_channels * (nb_setpoints + 1)
+        nb_relocks_per_step * nb_setpoints + nb_tes_channels
     )
 
 
@@ -2696,3 +2837,237 @@ def test_shutdown_saves_diagnostics_even_when_the_relock_fails(
     )
     assert os.path.isfile(diagnostics_path)
     assert 'ERROR relocking' in capsys.readouterr().out
+
+
+def _sweep_with_recorded_steps(tmp_path, rows=None):
+    """
+    Build a sweep with an output directory and a diagnostics log
+    already populated, as if the given steps had been recorded.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation output root.
+    rows : list of dict or None
+        Partial CSV rows. Each is merged over a passing default, so a
+        test names only the fields it cares about.
+
+    Returns
+    -------
+    sweep : GtaSweep
+        A sweep whose diagnostics hold one step per supplied row.
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+    sweep._base_automation_data_path = str(tmp_path)
+    sweep._create_output_directory()
+
+    if rows is None:
+        rows = list()
+
+    for index, partial_row in enumerate(rows):
+        group_name = f'iv_I1_D20260803_T00000{index}'
+        row = {
+            'step': index,
+            'temperature_setpoint_mk': 42.0 - index,
+            'temperature_ok': True,
+            'iv_group_name': group_name,
+            'iv_raw_data_path': (sweep._base_raw_data_path + '/'
+                                 + group_name),
+            'iv_success': True,
+        }
+        row.update(partial_row)
+        sweep._diagnostics['steps'].append({'row': row})
+
+    return sweep
+
+
+def test_print_output_summary_names_every_series_and_the_directories(
+        tmp_path, capsys):
+    """
+    Test that the end of sweep summary names the automation directory,
+    the raw data directory and the series recorded at each setpoint.
+
+    This is the operator's only pointer from a finished run to the
+    data it produced. The raw series names are generated from the
+    wall clock at the moment each IV sweep starts, so they cannot be
+    worked out afterwards from the config alone.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation output root.
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep = _sweep_with_recorded_steps(tmp_path, rows=[{}, {}, {}])
+
+    sweep.print_output_summary()
+
+    printed = capsys.readouterr().out
+
+    assert sweep._output_path in printed
+    assert sweep._base_raw_data_path in printed
+    assert 'gta_sweep_data.csv' in printed
+
+    for step in sweep._diagnostics['steps']:
+        assert step['row']['iv_group_name'] in printed
+
+
+def test_print_output_summary_marks_the_steps_to_leave_out(
+        tmp_path, capsys):
+    """
+    Test that a step whose IV sweep failed and a step whose
+    temperature never settled are both flagged in the summary.
+
+    A summary that listed every series as if it were equally good
+    would send the operator off to fit data that the sweep already
+    knew was suspect.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation output root.
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep = _sweep_with_recorded_steps(
+        tmp_path,
+        rows=[
+            {},
+            {'iv_success': False},
+            {'temperature_ok': False},
+        ]
+    )
+
+    sweep.print_output_summary()
+
+    lines = capsys.readouterr().out.splitlines()
+
+    def line_for_step(step_index):
+        """
+        Return the summary line naming the series of one step.
+
+        Parameters
+        ----------
+        step_index : int
+            Zero-based index of the step in the sweep.
+
+        Returns
+        -------
+        line : str
+            The summary line mentioning that step's series name.
+        """
+        group_name = (
+            sweep._diagnostics['steps'][step_index]['row']['iv_group_name']
+        )
+        matches = [line for line in lines if group_name in line]
+        assert len(matches) == 1
+        return matches[0]
+
+    assert 'FAILED' not in line_for_step(0)
+    assert 'never settled' not in line_for_step(0)
+
+    assert 'IV FAILED' in line_for_step(1)
+    assert 'never settled' in line_for_step(2)
+
+
+def test_print_output_summary_shows_a_series_stored_off_the_raw_root(
+        tmp_path, capsys):
+    """
+    Test that a series written somewhere other than under the raw data
+    path named in the header is reported by its full path.
+
+    The summary prints the raw data root once and then bare series
+    names under it, which is only truthful while every series really
+    is under that root. Printing a bare name for a series that is not
+    would send the operator to a directory that does not exist.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation output root.
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    elsewhere = '/extdata2/run74/raw/iv_I1_D20260803_T120000'
+    sweep = _sweep_with_recorded_steps(
+        tmp_path,
+        rows=[{'iv_raw_data_path': elsewhere}]
+    )
+
+    sweep.print_output_summary()
+
+    assert elsewhere in capsys.readouterr().out
+
+
+def test_print_output_summary_survives_a_run_that_recorded_nothing(
+        capsys):
+    """
+    Test that the summary reports plainly, rather than raising, when
+    the run died before the output directory was created.
+
+    It is called from shutdown(), which runs on every exit path
+    including a failure during setup, so it must cope with a sweep
+    that never got as far as producing anything.
+
+    Parameters
+    ----------
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep, instrument = _sweep_with_fake_instrument()
+
+    assert sweep._output_path is None
+
+    sweep.print_output_summary()
+
+    assert 'no Gta data was recorded' in capsys.readouterr().out
+
+
+def test_shutdown_prints_the_output_summary_last(tmp_path, capsys):
+    """
+    Test that shutdown ends by printing the output summary, so it is
+    what the operator is left looking at rather than being buried
+    above the bias restore messages.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Pytest fixture directory used as the automation output root.
+    capsys : pytest fixture
+        Captures stdout and stderr produced during the test.
+
+    Returns
+    -------
+    None
+    """
+    sweep = _sweep_with_recorded_steps(tmp_path, rows=[{}])
+    sweep.capture_initial_biases()
+    sweep._temperature_sweep.heater_to_zero = lambda: None
+
+    sweep.shutdown()
+
+    printed = capsys.readouterr().out
+    group_name = sweep._diagnostics['steps'][0]['row']['iv_group_name']
+
+    assert 'Gta sweep output' in printed
+    assert printed.index('Gta sweep output') > printed.index(
+        'Safe shutdown'
+    )
+    assert group_name in printed

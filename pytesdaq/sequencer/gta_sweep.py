@@ -175,6 +175,25 @@ class GtaSweep(Sequencer):
                 'be negative!'
             )
 
+        # settle time the IV sweep itself waits after a bias change,
+        # reused when relocking at the first bias point so that the
+        # relock sees the same settled state the sweep would. A broken
+        # or missing [iv_didv] section is not raised on here, because
+        # the resolved bias vector reports that failure with a much
+        # better message when the sweep starts
+        self._bias_settle_wait_s = 5.0
+        try:
+            iv_config_dict = self._config.get_sequencer_setup(
+                'iv_didv', ['iv']
+            )['iv_didv']
+            if config_has(iv_config_dict, 'tes_bias_change_sleep_time'):
+                self._bias_settle_wait_s = float(
+                    config_get(iv_config_dict,
+                               'tes_bias_change_sleep_time')
+                )
+        except (ValueError, KeyError, TypeError):
+            pass
+
         # the single TES channel to sweep
         self._detector_connection_table = (
             self._config.get_adc_connections()
@@ -404,10 +423,13 @@ class GtaSweep(Sequencer):
 
         The other channels go straight back to 0 uA afterwards, so they
         dissipate into the absorber only for the few seconds the relock
-        takes rather than for the whole IV sweep. The swept channel is
-        left at its standard bias point, which the IV sequencer
-        overwrites with the first point of the bias vector before it
-        takes any data.
+        takes rather than for the whole IV sweep.
+
+        The swept channel is then moved to the first point of the bias
+        vector and relocked a second time, because the transition
+        relock on its own was not enough: the raw traces of a failed
+        step are railed from the first bias point onward. See
+        relock_swept_channel_at_first_bias.
 
         Parameters
         ----------
@@ -420,12 +442,86 @@ class GtaSweep(Sequencer):
 
         if self._verbose:
             print('INFO: Restoring the standard bias point on every '
-                  'TES channel, relocking, then re-zeroing the '
-                  'channels that are not swept')
+                  'TES channel, relocking, re-zeroing the channels '
+                  'that are not swept, then relocking the swept '
+                  'channel again at the first bias point of the sweep')
 
         self.restore_initial_biases()
         self.relock_all_channels()
         self.zero_other_channels()
+        self.relock_swept_channel_at_first_bias()
+
+    def relock_swept_channel_at_first_bias(self):
+        """
+        Set the swept channel to the first bias point of the IV vector
+        and relock it there.
+
+        Relocking in transition gets the device locked, but the sweep's
+        very next move is to jump it to the top of the bias vector,
+        which is the largest bias change in the whole run and is where
+        the lock was observed to be lost: the raw traces of a failed
+        step are already railed at the first bias point. Making that
+        jump here and relocking after it means the sweep starts from a
+        lock that has been established at the bias it actually begins
+        at.
+
+        The IV sequencer sets the same bias again as its first step,
+        which is a no-op on hardware already sitting there.
+
+        Only the swept channel is touched. The others stay at 0 uA,
+        where the transition relock left them.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        success : bool
+            True when the bias was applied and the relock was
+            attempted, False when the bias vector could not be
+            resolved and the step was skipped.
+        """
+
+        bias_vect = self._resolved_bias_vect()
+
+        if bias_vect is None or len(bias_vect) == 0:
+            print('WARNING: the configured TES bias vector could not '
+                  'be resolved, so the swept channel cannot be '
+                  'relocked at the first bias point. The IV sweep will '
+                  'start from whatever lock the transition relock '
+                  'left behind.')
+            return False
+
+        first_bias_ua = bias_vect[0]
+
+        if self._verbose:
+            print(f'INFO: Setting {self._tes_channel} to the first '
+                  f'bias point of the sweep, {first_bias_ua:.6g} uA, '
+                  'and relocking there')
+
+        success = self._instrument.set_tes_bias(
+            bias=first_bias_ua,
+            unit='uA',
+            detector_channel=self._tes_channel
+        )
+
+        if not success:
+            raise RuntimeError(
+                f'GtaSweep: the TES bias on the swept channel '
+                f'"{self._tes_channel}" could not be set to the first '
+                f'bias point of the sweep, {first_bias_ua:.6g} uA! '
+                'Aborting, because the IV sweep would not have been '
+                'able to apply it either; the pre-run biases are '
+                'restored on the way out.'
+            )
+
+        if self._bias_settle_wait_s > 0:
+            time.sleep(self._bias_settle_wait_s)
+
+        self._instrument.relock(detector_channel=self._tes_channel)
+
+        return True
 
     def restore_initial_biases(self):
         """
@@ -568,9 +664,12 @@ class GtaSweep(Sequencer):
         print('\nOnce each setpoint is reached, every TES channel is '
               'put back at its standard pre-run bias point and '
               'relocked, then the channels that are not swept go back '
-              'to 0 uA and the IV sweep starts. The same relock is '
-              'done at shutdown, so the devices are handed back in '
-              'transition.')
+              'to 0 uA. The swept channel is then moved to the first '
+              'bias point of the sweep and relocked a second time '
+              'there, so the sweep starts from a lock established at '
+              'the bias it actually begins at. The transition relock '
+              'is done again at shutdown, so the devices are handed '
+              'back in transition.')
 
         print('\nOne IV sweep is taken per temperature setpoint. Raw '
               'data is saved as a normal series group per step, and '
@@ -916,8 +1015,100 @@ class GtaSweep(Sequencer):
 
         try:
             self._save_diagnostics()
+        except Exception as err_diagnostics:
+            print(f'ERROR saving diagnostics: {err_diagnostics}')
+
+        # printed last so it is what the operator is left looking at,
+        # and guarded so a formatting slip cannot swallow the shutdown
+        try:
+            self.print_output_summary()
         except Exception as err:
-            print(f'ERROR saving diagnostics: {err}')
+            print(f'ERROR printing the output summary: {err}')
+
+    def print_output_summary(self):
+        """
+        Print where the sweep's data landed: the automation directory
+        holding the science dataset, and the raw IV series recorded at
+        each temperature setpoint.
+
+        Printed at the very end of shutdown, so it is the last thing
+        left on the operator's screen and so it still appears when the
+        sweep was interrupted partway through and only some of the
+        setpoints were recorded.
+
+        Each temperature step gets its own series group, because the
+        composed IV sequencer creates a new measurement directory on
+        every call. Steps whose IV sweep failed or whose temperature
+        never settled are marked, since those are the series to leave
+        out of the offline fit.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        if self._output_path is None:
+            print('INFO: No output directory was created, so no Gta '
+                  'data was recorded')
+            return
+
+        print('\n=====================================')
+        print('Gta sweep output')
+        print('=====================================')
+
+        print(f'\nAutomation directory: {self._output_path}')
+        print('  gta_sweep_data.csv        science dataset, one row '
+              'per temperature setpoint')
+        print('  gta_sweep_diagnostics.p   temperature histories and '
+              'Gaussian fits')
+        print('  gta_sweep.ini             copy of the config this run '
+              'used')
+
+        steps = self._diagnostics['steps']
+
+        if len(steps) == 0:
+            print('\nNo temperature setpoint was recorded, so there is '
+                  'no raw IV data.')
+            return
+
+        print(f'\nRaw IV data ({len(steps)} series) under '
+              f'{self._base_raw_data_path}:')
+
+        for step in steps:
+
+            row = step['row']
+
+            # the series name alone, unless the sequencer put it
+            # somewhere other than under the raw data path printed
+            # above, in which case the full path is the only honest
+            # thing to show
+            group_name = row['iv_group_name']
+            expected_path = self._base_raw_data_path + '/' + str(group_name)
+
+            if group_name is None:
+                series_text = '(no series was created)'
+            elif row['iv_raw_data_path'] == expected_path:
+                series_text = str(group_name)
+            else:
+                series_text = str(row['iv_raw_data_path'])
+
+            flags = list()
+            if not row['iv_success']:
+                flags.append('IV FAILED')
+            if not row['temperature_ok']:
+                flags.append('temperature never settled')
+
+            flag_text = ''
+            if len(flags) > 0:
+                flag_text = '   <-- ' + ', '.join(flags)
+
+            print(f'  Step {row["step"]}: '
+                  f'{row["temperature_setpoint_mk"]:>6.6g} mK  ->  '
+                  f'{series_text}{flag_text}')
 
     def _create_output_directory(self):
         """
