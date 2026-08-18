@@ -39,6 +39,132 @@ from pytesdaq.utils import arg_utils
 from pytesdaq.utils import connection_utils
 
 
+# two heater bias points closer together than this are the same point
+BIAS_TOLERANCE_UA = 1.0e-6
+
+
+def build_bias_list(config_dict=None):
+    """
+    Build the heater TES bias sweep vector in uA from the config,
+    using "bias_vect_uA" or bias_min/bias_max/bias_step.
+
+    The vector is returned in sweep order, which is descending, the
+    same convention as build_tes_bias_vect in iv_didv. An explicit
+    vector may be typed in either order and is sorted descending
+    regardless, because its entries are a set of bias points rather
+    than a sequence.
+
+    Parameters
+    ----------
+    config_dict : dict
+        Measurement configuration dictionary.
+
+    Returns
+    -------
+    bias_list : list of float
+        Heater TES bias points in sweep order [uA], starting at
+        bias_max_uA and ending at bias_min_uA.
+    """
+
+    required_keys = ['bias_min_uA', 'bias_max_uA']
+    for key in required_keys:
+        if not config_has(config_dict, key):
+            raise ValueError(f'GabSweep: "{key}" required in config!')
+
+    bias_min = float(config_get(config_dict, 'bias_min_uA'))
+    bias_max = float(config_get(config_dict, 'bias_max_uA'))
+
+    if bias_min >= bias_max:
+        raise ValueError(
+            'GabSweep: "bias_min_uA" must be less than "bias_max_uA"!'
+        )
+
+    use_vect = False
+    if config_has(config_dict, 'use_bias_vect'):
+        use_vect = bool(config_get(config_dict, 'use_bias_vect'))
+
+    bias_list = list()
+
+    if use_vect:
+
+        if not config_has(config_dict, 'bias_vect_uA'):
+            raise ValueError(
+                'GabSweep: "bias_vect_uA" required when '
+                '"use_bias_vect" is true!'
+            )
+
+        vect = config_get(config_dict, 'bias_vect_uA')
+        if not isinstance(vect, (list, tuple)):
+            vect = [vect]
+        for value in vect:
+            bias_list.append(float(value))
+
+    else:
+
+        if not config_has(config_dict, 'bias_step_uA'):
+            raise ValueError(
+                'GabSweep: "bias_step_uA" required when '
+                '"use_bias_vect" is false!'
+            )
+
+        step = abs(float(config_get(config_dict, 'bias_step_uA')))
+        if step == 0:
+            raise ValueError(
+                'GabSweep: "bias_step_uA" must be nonzero!'
+            )
+
+        for value in np.arange(bias_min, bias_max, step):
+            bias_list.append(float(value))
+        bias_list.append(bias_max)
+
+    if len(bias_list) == 0:
+        raise ValueError('GabSweep: empty heater bias list!')
+
+    # descending sweep order
+    bias_list.sort(reverse=True)
+
+    # a float arange can land a hair below bias_max, which would
+    # survive next to the appended bias_max under exact comparison
+    deduped = [bias_list[0]]
+    for value in bias_list[1:]:
+        if (deduped[-1] - value) > BIAS_TOLERANCE_UA:
+            deduped.append(value)
+        elif use_vect:
+            raise ValueError(
+                'GabSweep: "bias_vect_uA" contains duplicate bias '
+                f'points near {value:.6g} uA!'
+            )
+    bias_list = deduped
+
+    for value in bias_list:
+        if (value < (bias_min - BIAS_TOLERANCE_UA)
+                or value > (bias_max + BIAS_TOLERANCE_UA)):
+            raise ValueError(
+                f'GabSweep: heater bias point {value:.6g} uA is '
+                f'outside ["bias_min_uA" = {bias_min:.6g}, '
+                f'"bias_max_uA" = {bias_max:.6g}] uA!'
+            )
+
+    # the endpoints are enforced rather than inserted: bias_min_uA is
+    # where the heater sits for minutes while the MC settles, so a
+    # vector that never measures there would leave the state the
+    # thermometer spends the most time in unrecorded
+    if abs(bias_list[0] - bias_max) > BIAS_TOLERANCE_UA:
+        raise ValueError(
+            'GabSweep: the heater bias list must start at '
+            f'"bias_max_uA" = {bias_max:.6g} uA, it starts at '
+            f'{bias_list[0]:.6g} uA!'
+        )
+    if abs(bias_list[-1] - bias_min) > BIAS_TOLERANCE_UA:
+        raise ValueError(
+            'GabSweep: the heater bias list must end at '
+            f'"bias_min_uA" = {bias_min:.6g} uA, it ends at '
+            f'{bias_list[-1]:.6g} uA!'
+        )
+
+    return bias_list
+
+
 def compute_next_bias(bias_history=None,
                       r0_history=None,
                       r0_ref=None,

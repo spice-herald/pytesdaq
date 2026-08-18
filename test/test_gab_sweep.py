@@ -6,6 +6,7 @@ import qetpy as qp
 
 from pytesdaq.sequencer import gab_sweep as gab_sweep_module
 from pytesdaq.sequencer.gab_sweep import (
+    build_bias_list,
     compute_next_bias,
     fit_didv_r0,
     propagate_r0_error_to_bias,
@@ -1475,3 +1476,84 @@ def test_run_single_step_writes_every_row_key_to_csv(tmp_path,
     assert rows[0]['step'] == '0'
     # no column left unwritten
     assert all(value != '' for value in rows[0].values())
+
+
+def test_build_bias_list_from_step_is_descending():
+    # start/stop/step form spans the endpoints and comes out descending
+    config_dict = {
+        'use_bias_vect': False,
+        'bias_min_ua': 38.0,
+        'bias_max_ua': 300.0,
+        'bias_step_ua': 15.0,
+    }
+    result = build_bias_list(config_dict=config_dict)
+
+    assert result[0] == pytest.approx(300.0)
+    assert result[-1] == pytest.approx(38.0)
+    for index in range(1, len(result)):
+        assert result[index] < result[index - 1]
+
+
+def test_build_bias_list_explicit_vector_sorted_descending():
+    # typed ascending, swept descending
+    config_dict = {
+        'use_bias_vect': True,
+        'bias_vect_ua': [38.0, 90.0, 180.0, 300.0],
+        'bias_min_ua': 38.0,
+        'bias_max_ua': 300.0,
+    }
+    result = build_bias_list(config_dict=config_dict)
+
+    assert result == [300.0, 180.0, 90.0, 38.0]
+
+
+def test_build_bias_list_rejects_missing_endpoint():
+    # a vector that never measures the parked state is rejected
+    config_dict = {
+        'use_bias_vect': True,
+        'bias_vect_ua': [90.0, 180.0, 300.0],
+        'bias_min_ua': 38.0,
+        'bias_max_ua': 300.0,
+    }
+    with pytest.raises(ValueError, match='38'):
+        build_bias_list(config_dict=config_dict)
+
+
+def test_build_bias_list_rejects_entry_outside_endpoints():
+    config_dict = {
+        'use_bias_vect': True,
+        'bias_vect_ua': [38.0, 90.0, 400.0, 300.0],
+        'bias_min_ua': 38.0,
+        'bias_max_ua': 300.0,
+    }
+    with pytest.raises(ValueError, match='outside'):
+        build_bias_list(config_dict=config_dict)
+
+
+def test_build_bias_list_rejects_duplicates():
+    config_dict = {
+        'use_bias_vect': True,
+        'bias_vect_ua': [38.0, 90.0, 90.0, 300.0],
+        'bias_min_ua': 38.0,
+        'bias_max_ua': 300.0,
+    }
+    with pytest.raises(ValueError, match='duplicate'):
+        build_bias_list(config_dict=config_dict)
+
+
+def test_build_bias_list_dedups_near_endpoint_within_tolerance():
+    # an arange point landing a hair below bias_max must not survive
+    # next to the appended bias_max
+    config_dict = {
+        'use_bias_vect': False,
+        'bias_min_ua': 0.0,
+        'bias_max_ua': 300.0,
+        'bias_step_ua': 300.0 / 7.0,
+    }
+    result = build_bias_list(config_dict=config_dict)
+
+    gaps = [
+        result[index - 1] - result[index]
+        for index in range(1, len(result))
+    ]
+    assert min(gaps) > 1.0e-6
