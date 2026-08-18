@@ -199,134 +199,6 @@ def heater_power_watts(bias_ua=None, rshunt=None,
     return (tes_current ** 2) * float(rnormal)
 
 
-def compute_next_bias(bias_history=None,
-                      r0_history=None,
-                      r0_ref=None,
-                      bias_step_start=None,
-                      bias_min=0.0,
-                      noise_floor=0.0):
-    """
-    Compute the next heater TES bias from the feedback history.
-
-    First move: fixed step up by bias_step_start. Later moves: least
-    squares fit of R0 versus bias over the full history, then a step
-    toward r0_ref along the fit, clamped to 2x bias_step_start and
-    halved after overshooting the reference. Repeated biases in the
-    history (confirmation readings) are averaged naturally by the fit.
-    Only when the fit sees no R0 response above the noise floor across
-    the whole history does the probe step double in the same direction
-    instead, up to 4x bias_step_start.
-
-    Parameters
-    ----------
-    bias_history : list of float
-        Heater TES biases applied so far at this temperature [uA].
-    r0_history : list of float
-        Thermometer TES R0 after each bias [Ohms].
-    r0_ref : float
-        Reference R0 to return to [Ohms].
-    bias_step_start : float
-        Initial and fallback bias step [uA].
-    bias_min : float
-        Minimum bias keeping the heater TES normal [uA].
-    noise_floor : float
-        R0 repeatability scatter at fixed conditions [Ohms]. A fitted
-        R0 response across the history smaller than 2x this value is
-        treated as unmeasurable.
-
-    Returns
-    -------
-    next_bias : float
-        Next heater TES bias [uA], never below bias_min.
-    """
-
-    if (bias_history is None or r0_history is None
-            or len(bias_history) == 0
-            or len(bias_history) != len(r0_history)):
-        raise ValueError(
-            'GabSweep: bias and R0 histories must be non-empty '
-            'and the same length!'
-        )
-
-    last_bias = float(bias_history[-1])
-    last_r0 = float(r0_history[-1])
-    fixed_step = float(bias_step_start)
-    max_step = 2.0 * fixed_step
-    max_probe_step = 4.0 * fixed_step
-    min_bias = float(bias_min)
-
-    # most recent pair of consecutive points with distinct biases:
-    # sets the probe direction and the overshoot cap, since repeated
-    # biases (confirmation readings, clamping at the floor) carry no
-    # slope information
-    pair_index = None
-    for index in range(len(bias_history) - 1, 0, -1):
-        if float(bias_history[index]) != float(bias_history[index - 1]):
-            pair_index = index
-            break
-
-    if pair_index is None:
-        # no distinct pair yet, probe up (the heater can only add
-        # power, and a colder bath always needs more of it)
-        step = fixed_step
-
-    else:
-
-        delta_bias = (float(bias_history[pair_index])
-                      - float(bias_history[pair_index - 1]))
-
-        # least squares fit of R0 versus bias over the full history:
-        # repeated biases are averaged, drift on single points is
-        # diluted
-        fit = np.polyfit(
-            np.asarray(bias_history, dtype=float),
-            np.asarray(r0_history, dtype=float),
-            1
-        )
-        slope = float(fit[0])
-
-        bias_span = (float(np.max(bias_history))
-                     - float(np.min(bias_history)))
-        predicted_response = abs(slope) * bias_span
-
-        if predicted_response <= (2.0 * float(noise_floor)):
-
-            # even across the full bias span the fitted response does
-            # not rise above the noise: no slope can be trusted,
-            # double the probe in the same direction until one appears
-            step_magnitude = 2.0 * abs(delta_bias)
-            if step_magnitude < fixed_step:
-                step_magnitude = fixed_step
-            if step_magnitude > max_probe_step:
-                step_magnitude = max_probe_step
-            step = float(np.sign(delta_bias)) * step_magnitude
-
-        else:
-
-            step = (float(r0_ref) - last_r0) / slope
-
-            # halve the allowed step after overshooting the reference
-            previous_side = (float(r0_history[-2]) - float(r0_ref))
-            current_side = last_r0 - float(r0_ref)
-            if (previous_side * current_side) < 0:
-                overshoot_cap = abs(delta_bias) / 2.0
-                if step > overshoot_cap:
-                    step = overshoot_cap
-                if step < -overshoot_cap:
-                    step = -overshoot_cap
-
-            if step > max_step:
-                step = max_step
-            if step < -max_step:
-                step = -max_step
-
-    next_bias = last_bias + step
-    if next_bias < min_bias:
-        next_bias = min_bias
-
-    return next_bias
-
-
 def fit_didv_r0(traces=None, sample_rate=None,
                 sgfreq=None, sgamp=None,
                 rsh=None, rp=None, ibias=None,
@@ -438,48 +310,21 @@ def fit_didv_r0(traces=None, sample_rate=None,
     return result
 
 
-def propagate_r0_error_to_bias(r0=None, r0_err=None, heater_bias=None):
-    """
-    Propagate the fractional R0 uncertainty to the heater TES bias,
-    assuming linearity: the fractional uncertainty in the heater bias
-    is taken equal to the fractional uncertainty in R0 (a 10 percent
-    R0 uncertainty gives a 10 percent bias uncertainty). This simple
-    model may be refined later.
-
-    Parameters
-    ----------
-    r0 : float
-        Thermometer TES R0 [Ohms].
-    r0_err : float
-        Uncertainty in R0 [Ohms].
-    heater_bias : float
-        Heater TES bias [uA].
-
-    Returns
-    -------
-    heater_bias_err : float
-        Uncertainty in the heater TES bias [uA].
-    """
-
-    if r0 == 0:
-        return 0.0
-
-    r0_fractional_err = abs(float(r0_err) / float(r0))
-
-    return r0_fractional_err * abs(float(heater_bias))
-
-
 class GabSweep(Sequencer):
 
-    # columns of the science dataset CSV
-    CSV_COLUMNS = ['step', 'timestamp',
+    # columns of the science dataset CSV, one row per (temperature,
+    # heater bias) point
+    CSV_COLUMNS = ['step', 'bias_index', 'timestamp',
                    'temperature_setpoint_mk',
                    'mc_temperature_mk', 'mc_temperature_err_mk',
-                   'heater_tes_bias_ua', 'heater_tes_bias_err_ua',
+                   'heater_tes_bias_requested_ua',
+                   'heater_tes_bias_ua', 'heater_tes_power_w',
+                   'thermometer_tes_bias_ua',
                    'thermometer_r0_ohms', 'thermometer_r0_err_ohms',
-                   'r0_offset_percent', 'converged',
-                   'pinned_at_floor', 'stability_ok',
-                   'temperature_ok']
+                   'thermometer_i0_amps', 'thermometer_p0_watts',
+                   'didv_fit_cost', 'didv_fit_ok', 'autocuts_ok',
+                   'nb_traces', 'nb_traces_kept',
+                   'stability_ok', 'temperature_ok']
 
     def __init__(self, sequencer_file=None, setup_file=None,
                  comment='No comment',
@@ -522,11 +367,8 @@ class GabSweep(Sequencer):
         self._configure_adc()
 
         # runtime state
-        self._r0_ref = None
-        self._r0_noise_floor = 0.0
         self._heater_initial_bias_ua = None
         self._thermometer_initial_bias_ua = None
-        self._bias_min_actual = None
         self._sg_current_amps_pp = None
         self._close_loop_norm = None
         self._thermometer_bias_amps = None
@@ -810,17 +652,11 @@ class GabSweep(Sequencer):
                 'negative!'
             )
 
-        # heater TES feedback
+        # heater TES bias sweep
         self._bias_min = float(require('bias_min_uA'))
-        self._bias_step_start = float(require('bias_step_start_uA'))
         self._bias_max = float(require('bias_max_uA'))
-        self._feedback_timeout = float(require('feedback_timeout_s'))
         self._post_bias_wait = float(require('post_bias_wait_s'))
 
-        if self._bias_step_start <= 0:
-            raise ValueError(
-                'GabSweep: "bias_step_start_uA" must be positive!'
-            )
         if self._bias_min < 0:
             raise ValueError(
                 'GabSweep: "bias_min_uA" must not be negative!'
@@ -842,6 +678,11 @@ class GabSweep(Sequencer):
             raise ValueError(
                 'GabSweep: "settle_wait_time_s" must not be negative!'
             )
+
+        # the heater bias points, in sweep order (descending), and one
+        # dIdV fit seed per point carried across temperatures
+        self._bias_list = build_bias_list(config_dict=config_dict)
+        self._guess_params = [None] * len(self._bias_list)
 
     def _configure_adc(self):
         """
@@ -1488,57 +1329,6 @@ class GabSweep(Sequencer):
 
         return quality['r0']
 
-    def _set_heater_bias_min(self):
-        """
-        Set the heater TES bias to bias_min, its lowest normal state,
-        and wait post_bias_wait for it to settle.
-
-        The front end board supports a quantized set of bias currents
-        and snaps any request to the nearest one, so the bias it lands
-        on is read back and kept as the effective floor. Comparing
-        against the requested bias_min instead would fail every time
-        the request snapped downwards.
-        """
-
-        if self._verbose:
-            print('INFO: Setting heater TES bias to bias_min_uA = '
-                  f'{self._bias_min:.6g} uA')
-
-        self._instrument.set_tes_bias(
-            self._bias_min,
-            unit='uA',
-            detector_channel=self._heater_tes_channel
-        )
-
-        if self._post_bias_wait > 0:
-            time.sleep(self._post_bias_wait)
-
-        self._bias_min_actual = float(self._instrument.get_tes_bias(
-            detector_channel=self._heater_tes_channel,
-            unit='uA'
-        ))
-
-        if self._verbose:
-            print('INFO: Heater TES bias read back at '
-                  f'{self._bias_min_actual:.6g} uA, using it as the '
-                  'effective bias floor')
-
-    def _get_bias_floor(self):
-        """
-        Lowest heater TES bias the sweep may apply.
-
-        Returns
-        -------
-        bias_floor : float
-            The bias read back after setting bias_min [uA], or the
-            requested bias_min if it has not been set yet.
-        """
-
-        if self._bias_min_actual is None:
-            return self._bias_min
-
-        return self._bias_min_actual
-
     def _print_r0_quality(self, quality=None, label=None):
         """
         Print one R0 measurement with its quality metrics.
@@ -1551,19 +1341,15 @@ class GabSweep(Sequencer):
             Short label describing the measurement.
         """
 
-        message = (f'INFO: {label}: R0 = '
-                   f'{quality["r0"] * 1000.0:.6g} mOhms '
-                   f'(err = {quality["r0_err"] * 1000.0:.3g} mOhms), '
-                   f'{quality["nb_traces_kept"]}/{quality["nb_traces"]} '
-                   'traces kept by autocuts')
+        if not quality['didv_fit_ok']:
+            print(f'INFO: {label}: no usable dIdV fit')
+            return
 
-        if self._r0_ref is not None and self._r0_ref != 0:
-            offset = (quality['r0'] - self._r0_ref)
-            offset = offset / abs(self._r0_ref) * 100.0
-            message = message + (f', {offset:+.3g} percent from '
-                                 'reference')
-
-        print(message)
+        print(f'INFO: {label}: R0 = '
+              f'{quality["r0"] * 1000.0:.6g} mOhms '
+              f'(err = {quality["r0_err"] * 1000.0:.3g} mOhms), '
+              f'{quality["nb_traces_kept"]}/{quality["nb_traces"]} '
+              'traces kept by autocuts')
 
     def wait_for_temperature(self, temperature_mk=None):
         """
@@ -1737,7 +1523,6 @@ class GabSweep(Sequencer):
 
         mean = float(np.mean(r0_values))
         scatter = float(np.std(r0_values))
-        self._r0_noise_floor = scatter
 
         scatter_percent = None
         if mean != 0:
@@ -1877,8 +1662,12 @@ class GabSweep(Sequencer):
                 detector_channel=self._heater_tes_channel,
                 unit='uA'
             )
-            # remembered so shutdown can restore the user's bias point
+            # remembered so shutdown can restore the operator's bias
+            # points, including when a Ctrl-C lands inside a relock
             self._heater_initial_bias_ua = float(heater_bias_ua)
+            self._thermometer_initial_bias_ua = float(
+                thermometer_bias_ua
+            )
 
             if self._verbose:
                 print(f'INFO: Preflight: MC temperature = '
@@ -1913,11 +1702,35 @@ class GabSweep(Sequencer):
             # same conditions; turned off at shutdown
             self.setup_signal_generator()
 
+            # everything needed to recompute R0 offline under
+            # different circuit assumptions. The thermometer bias is
+            # deliberately not here: a relock can shift it, so it is a
+            # per row CSV column instead
+            self._diagnostics['circuit'] = {
+                'sg_current_amps_pp': self._sg_current_amps_pp,
+                'close_loop_norm': self._get_close_loop_norm(),
+                'thermometer_rshunt_ohms': self._thermometer_rshunt,
+                'thermometer_rparasitic_ohms': (
+                    self._thermometer_rparasitic
+                ),
+                'thermometer_rn_ohms': self._thermometer_rn,
+                'heater_rshunt_ohms': self._heater_rshunt,
+                'heater_rparasitic_ohms': self._heater_rparasitic,
+                'heater_rn_ohms': self._heater_rn,
+            }
+
+            # the relock runs at the top of the bias vector so that
+            # startup matches the conditions every later relock runs
+            # under
+            self._set_heater_bias(bias_ua=self._bias_list[0])
+            self._diagnostics['startup_relock'] = (
+                self.relock_and_verify()
+            )
+
             # the heater TES goes to its lowest normal state before
-            # any R0 is measured, so the startup check is taken with
-            # the same heater state as every sweep datapoint and
-            # cannot bias them
-            self._set_heater_bias_min()
+            # the startup check and the drift check, so both are taken
+            # at the same fixed, lowest power state
+            self._set_heater_bias(bias_ua=self._bias_min)
 
             # sanity check the thermometer TES readout and the dIdV
             # fit before committing to the sweep
@@ -1935,15 +1748,10 @@ class GabSweep(Sequencer):
             for step_index, temperature_mk in (
                     enumerate(self._temperature_list_mk)):
 
-                end_sweep = self.run_single_step(
+                self.run_single_step(
                     temperature_mk=temperature_mk,
                     step_index=step_index
                 )
-
-                if end_sweep:
-                    print('INFO: Ending sweep early, heater TES can no '
-                          'longer restore the absorber temperature.')
-                    break
 
             if self._verbose:
                 print('\nINFO: Gab sweep complete!')
@@ -2105,235 +1913,27 @@ class GabSweep(Sequencer):
             writer = csv.DictWriter(f, fieldnames=self.CSV_COLUMNS)
             writer.writerow(row_dict)
 
-    def _run_feedback(self, initial_r0=None):
-        """
-        Adjust the heater TES bias (between bias_min and bias_max)
-        until the thermometer TES R0 returns to the reference.
-        Convergence requires two consecutive readings at an unchanged
-        bias: both in tolerance, or a near miss on the second (within
-        2x tolerance) whose mean with the first is in tolerance. A
-        single lucky reading in a drifting environment is not
-        accepted, but a hair's-width confirmation miss does not
-        restart the feedback either.
-
-        Parameters
-        ----------
-        initial_r0 : float or None
-            Settled R0 already measured at the current bias [Ohms].
-            Measured here if None.
-
-        Returns
-        -------
-        result : dict
-            Keys: bias_history, r0_history, converged, cap_reached,
-            pinned_at_floor, stability_ok.
-        """
-
-        if self._r0_ref is None:
-            raise ValueError(
-                'GabSweep: reference R0 not set, '
-                'run the first sweep step first!'
-            )
-
-        current_bias = float(self._instrument.get_tes_bias(
-            detector_channel=self._heater_tes_channel,
-            unit='uA'
-        ))
-
-        if current_bias < self._get_bias_floor():
-            print(f'WARNING: Heater TES bias ({current_bias:.6g} uA) '
-                  'below the bias floor '
-                  f'({self._get_bias_floor():.6g} uA), raising it to '
-                  'keep the heater TES normal!')
-            self._set_heater_bias_min()
-            current_bias = self._get_bias_floor()
-            initial_r0 = None
-
-        if initial_r0 is None:
-            initial_r0 = self.measure_r0()
-
-        bias_history = [current_bias]
-        r0_history = [float(initial_r0)]
-        stability_ok = True
-        cap_reached = False
-        pinned_at_floor = False
-
-        # bias comparisons against the floor tolerate readback jitter
-        floor_epsilon_ua = 1.0e-3
-
-        def offset_from_ref_percent(r0):
-            if self._r0_ref == 0:
-                # relative comparison is meaningless at zero
-                return None
-            offset = abs(r0 - self._r0_ref)
-            offset = offset / abs(self._r0_ref)
-            return offset * 100.0
-
-        def is_converged(r0):
-            offset = offset_from_ref_percent(r0)
-            if offset is None:
-                return False
-            return offset <= self._r0_stability_tolerance_percent
-
-        def print_reading(applied_bias, r0, label):
-            message = (f'INFO: {label}: bias = {applied_bias:.6g} uA, '
-                       f'R0 = {r0 * 1000.0:.6g} mOhms')
-            if self._r0_ref == 0:
-                message = message + (', reference is 0, offset '
-                                     'undefined')
-            else:
-                offset = (r0 - self._r0_ref)
-                offset = offset / abs(self._r0_ref) * 100.0
-                message = message + (
-                    f', reference = {self._r0_ref * 1000.0:.6g} '
-                    f'mOhms, offset = {offset:+.3g} percent'
-                )
-            print(message)
-
-        converged = False
-        start_time = time.time()
-
-        while not converged and not cap_reached and not pinned_at_floor:
-
-            if (time.time() - start_time) > self._feedback_timeout:
-                print('WARNING: Feedback timeout '
-                      f'({self._feedback_timeout:.6g} s), '
-                      'recording point as not converged!')
-                break
-
-            if is_converged(r0_history[-1]):
-
-                # in-tolerance reading: confirm it with a second
-                # reading at the same bias before accepting it
-                step_settled, _ = self.wait_for_settled_r0()
-                if not step_settled:
-                    stability_ok = False
-
-                previous_r0 = r0_history[-1]
-                r0 = self.measure_r0()
-                bias_history.append(bias_history[-1])
-                r0_history.append(r0)
-
-                label = None
-                if is_converged(r0):
-                    converged = True
-                    label = 'Confirmation reading, converged'
-                else:
-                    # drift can push a single confirmation reading
-                    # just outside tolerance; the mean of the two
-                    # readings is the better estimate, accept it when
-                    # the confirmation reading itself is not too far
-                    # out (within 2x tolerance)
-                    confirmation_offset = offset_from_ref_percent(r0)
-                    mean_r0 = (previous_r0 + r0) / 2.0
-                    mean_offset = offset_from_ref_percent(mean_r0)
-                    tolerance = self._r0_stability_tolerance_percent
-                    if (confirmation_offset is not None
-                            and confirmation_offset <= (2.0 * tolerance)
-                            and mean_offset <= tolerance):
-                        converged = True
-                        label = ('Confirmation near miss, converged '
-                                 'on the mean of both readings')
-                    else:
-                        label = ('Confirmation reading failed, '
-                                 'continuing feedback')
-
-                if self._verbose:
-                    print_reading(bias_history[-1], r0, label)
-
-                continue
-
-            next_bias = compute_next_bias(
-                bias_history=bias_history,
-                r0_history=r0_history,
-                r0_ref=self._r0_ref,
-                bias_step_start=self._bias_step_start,
-                bias_min=self._get_bias_floor(),
-                noise_floor=self._r0_noise_floor
-            )
-
-            if (next_bias <= (self._get_bias_floor() + floor_epsilon_ua)
-                    and bias_history[-1] <= (self._get_bias_floor()
-                                             + floor_epsilon_ua)):
-                # the feedback wants a bias below the floor while
-                # already sitting at it: the reference cannot be
-                # reached (the heater cannot remove power), most
-                # likely a drift artifact; flag it instead of looping
-                pinned_at_floor = True
-                print('WARNING: Feedback pinned at the bias floor '
-                      f'({self._get_bias_floor():.6g} uA), the '
-                      'reference R0 cannot be reached from '
-                      'here, recording point as not converged!')
-                break
-
-            if next_bias >= self._bias_max:
-                next_bias = self._bias_max
-                cap_reached = True
-                print('WARNING: Heater TES bias cap reached '
-                      f'({self._bias_max:.6g} uA)!')
-
-            self._instrument.set_tes_bias(
-                next_bias,
-                unit='uA',
-                detector_channel=self._heater_tes_channel
-            )
-
-            if self._post_bias_wait > 0:
-                time.sleep(self._post_bias_wait)
-
-            step_settled, _ = self.wait_for_settled_r0()
-            if not step_settled:
-                stability_ok = False
-
-            # the front end board snaps next_bias to the nearest bias
-            # current it supports, and R0 responds to the bias it
-            # actually applied, so the slope update must be fed the
-            # read back value: pairing a requested bias with a
-            # measured R0 would skew the slope
-            applied_bias = float(self._instrument.get_tes_bias(
-                detector_channel=self._heater_tes_channel,
-                unit='uA'
-            ))
-
-            r0 = self.measure_r0()
-            bias_history.append(applied_bias)
-            r0_history.append(r0)
-
-            if self._verbose:
-                print_reading(
-                    applied_bias,
-                    r0,
-                    f'Feedback (requested {next_bias:.6g} uA)'
-                )
-
-        result = {
-            'bias_history': bias_history,
-            'r0_history': r0_history,
-            'converged': converged,
-            'cap_reached': cap_reached,
-            'pinned_at_floor': pinned_at_floor,
-            'stability_ok': stability_ok,
-        }
-
-        return result
-
     def run_single_step(self, temperature_mk=None, step_index=None):
         """
-        Run one full temperature point of the Gab sweep: set the MC
-        temperature, run the heater TES feedback (or measure the
-        reference R0 on the first point), record the datapoint.
+        Run one temperature point of the Gab sweep.
+
+        Sets the MC temperature, relocks the thermometer at the top of
+        the bias vector, then walks the heater bias down through every
+        point recording R0 at each one. No R0 is targeted and nothing
+        is converged: the operating point is chosen offline from the
+        recorded curve.
 
         Parameters
         ----------
         temperature_mk : float
-            MC temperature setpoint in mK.
+            MC temperature setpoint [mK].
         step_index : int
-            Zero-based index of this point in the sweep.
+            Zero-based index of this temperature in the sweep.
 
         Returns
         -------
-        end_sweep : bool
-            True if the sweep should end (bias cap reached).
+        rows : list of dict
+            One row per bias point, keyed by CSV_COLUMNS.
         """
 
         if self._verbose:
@@ -2351,141 +1951,182 @@ class GabSweep(Sequencer):
             temperature_mk=temperature_mk
         )
 
-        end_sweep = False
         step_diagnostics = {'step': step_index,
                             'temperature_setpoint_mk': temperature_mk,
                             'temperature_ok': temperature_ok,
-                            'temperature_history': temperature_history}
+                            'temperature_history': temperature_history,
+                            'points': list()}
 
-        if step_index == 0:
+        # the relock runs at the top of the vector, where the absorber
+        # is warmest and the thermometer sits highest in its
+        # transition, and never between two bias points: a relock
+        # shifts the readout offset, which would split this
+        # temperature's R0 curve across two different footings
+        self._set_heater_bias(bias_ua=self._bias_list[0])
+        relock_result = self.relock_and_verify()
+        step_diagnostics['relock'] = relock_result
 
-            # re-assert the lowest normal state: run() already did this
-            # before the startup check, but the step must not depend on
-            # that when it is driven directly from a notebook
-            self._set_heater_bias_min()
+        rows = list()
+        nb_failed_fits = 0
 
-        # settled R0 at this temperature, before any feedback: on
-        # later steps its offset from the reference is the bias point
-        # shift the feedback has to undo
-        stability_ok, stability_history = (
-            self.wait_for_settled_r0()
+        for bias_index, bias_ua in enumerate(self._bias_list):
+
+            row_dict, point_diagnostics = self.measure_bias_point(
+                step_index=step_index,
+                bias_index=bias_index,
+                bias_ua=bias_ua,
+                temperature_mk=temperature_mk,
+                temperature_ok=temperature_ok
+            )
+
+            if not row_dict['didv_fit_ok']:
+                nb_failed_fits = nb_failed_fits + 1
+
+            rows.append(row_dict)
+            step_diagnostics['points'].append(point_diagnostics)
+            self._append_datapoint(row_dict=row_dict)
+
+        self._diagnostics['steps'].append(step_diagnostics)
+
+        if nb_failed_fits == len(self._bias_list):
+            print(f'WARNING: Step {step_index} '
+                  f'({temperature_mk:.6g} mK): the dIdV fit failed at '
+                  'every bias point. This is a dead temperature, not '
+                  'a statistic: it contributes nothing to the '
+                  'measurement. Check the thermometer lock and bias.')
+        elif nb_failed_fits > 0 and self._verbose:
+            print(f'INFO: Step {step_index}: {nb_failed_fits} of '
+                  f'{len(self._bias_list)} bias points had no usable '
+                  'dIdV fit, as expected at the ends of the vector')
+
+        return rows
+
+    def _set_heater_bias(self, bias_ua=None):
+        """
+        Set the heater TES bias and wait for it to settle.
+
+        Parameters
+        ----------
+        bias_ua : float
+            Requested heater TES bias [uA].
+
+        Returns
+        -------
+        applied_bias_ua : float
+            The bias the front end board actually applied [uA].
+        """
+
+        success = self._instrument.set_tes_bias(
+            bias=bias_ua,
+            unit='uA',
+            detector_channel=self._heater_tes_channel
         )
-        settled_quality = self.measure_r0_quality()
-        step_diagnostics['stability_history'] = stability_history
-        step_diagnostics['settled_quality'] = settled_quality
 
-        if self._verbose:
-            self._print_r0_quality(
-                quality=settled_quality,
-                label=f'Step {step_index} settled'
-            )
+        if not success:
+            print('ERROR: the instrument refused to set the heater '
+                  f'TES bias to {bias_ua:.6g} uA!')
 
-        if step_index == 0:
+        if self._post_bias_wait > 0:
+            time.sleep(self._post_bias_wait)
 
-            r0 = settled_quality['r0']
-            r0_err = settled_quality['r0_err']
-            self._r0_ref = r0
-            converged = True
-            pinned_at_floor = False
-            bias_history = list()
-            r0_history = [r0]
-
-            if self._verbose:
-                print(f'INFO: Reference R0: {r0 * 1000.0:.6g} mOhms')
-
-        else:
-
-            result = self._run_feedback(
-                initial_r0=settled_quality['r0']
-            )
-            converged = result['converged']
-            pinned_at_floor = result['pinned_at_floor']
-            if not result['stability_ok']:
-                stability_ok = False
-            end_sweep = result['cap_reached']
-            bias_history = result['bias_history']
-            r0_history = result['r0_history']
-
-            # feedback drives with the R0 value alone; the recorded R0
-            # and its error must come from one measurement, so take a
-            # final quality measurement at the converged bias (the bias
-            # is unchanged, so R0 is already settled)
-            final_quality = self.measure_r0_quality()
-            r0 = final_quality['r0']
-            r0_err = final_quality['r0_err']
-            step_diagnostics['final_quality'] = final_quality
-
-        # read back the final state; the MC temperature is sampled
-        # over a window and Gaussian fit for its uncertainty
-        heater_bias_ua = float(self._instrument.get_tes_bias(
+        return float(self._instrument.get_tes_bias(
             detector_channel=self._heater_tes_channel,
             unit='uA'
         ))
+
+    def measure_bias_point(self, step_index=None, bias_index=None,
+                           bias_ua=None, temperature_mk=None,
+                           temperature_ok=None):
+        """
+        Measure one heater bias point of one temperature step.
+
+        Parameters
+        ----------
+        step_index : int
+            Zero-based temperature index.
+        bias_index : int
+            Zero-based position in the bias vector.
+        bias_ua : float
+            Requested heater TES bias [uA].
+        temperature_mk : float
+            MC temperature setpoint [mK].
+        temperature_ok : bool
+            Whether the setpoint was reached for this temperature.
+
+        Returns
+        -------
+        row_dict : dict
+            One row keyed by CSV_COLUMNS.
+        point_diagnostics : dict
+            Fit parameters and covariance for offline recomputation.
+        """
+
+        applied_bias_ua = self._set_heater_bias(bias_ua=bias_ua)
+
+        stability_ok, stability_history = self.wait_for_settled_r0()
+
+        quality = self.measure_r0_quality(bias_index=bias_index)
+
         temperature_measurement = self.measure_mc_temperature()
-        mc_temperature_mk = (
-            temperature_measurement['temperature_k'] * 1000.0
-        )
-        mc_temperature_err_mk = (
-            temperature_measurement['temperature_err_k'] * 1000.0
-        )
-        step_diagnostics['temperature_measurement'] = (
-            temperature_measurement
+
+        power_w = heater_power_watts(
+            bias_ua=applied_bias_ua,
+            rshunt=self._heater_rshunt,
+            rparasitic=self._heater_rparasitic,
+            rnormal=self._heater_rn
         )
 
-        # propagate the R0 fractional uncertainty to the heater TES
-        # bias point (a colder bath needs more heater power to hold R0,
-        # so an R0 uncertainty maps to a bias uncertainty)
-        heater_bias_err_ua = propagate_r0_error_to_bias(
-            r0=r0,
-            r0_err=r0_err,
-            heater_bias=heater_bias_ua
+        thermometer_bias_ua = (
+            self._get_thermometer_bias_amps() * 1.0e6
         )
-
-        offset_percent = 0.0
-        if self._r0_ref is not None and self._r0_ref != 0:
-            offset_percent = (r0 - self._r0_ref)
-            offset_percent = (offset_percent
-                              / abs(self._r0_ref) * 100.0)
 
         row_dict = {
             'step': step_index,
+            'bias_index': bias_index,
             'timestamp': datetime.now().isoformat(),
             'temperature_setpoint_mk': temperature_mk,
-            'mc_temperature_mk': mc_temperature_mk,
-            'mc_temperature_err_mk': mc_temperature_err_mk,
-            'heater_tes_bias_ua': heater_bias_ua,
-            'heater_tes_bias_err_ua': heater_bias_err_ua,
-            'thermometer_r0_ohms': r0,
-            'thermometer_r0_err_ohms': r0_err,
-            'r0_offset_percent': offset_percent,
-            'converged': converged,
-            'pinned_at_floor': pinned_at_floor,
+            'mc_temperature_mk': (
+                temperature_measurement['temperature_k'] * 1000.0
+            ),
+            'mc_temperature_err_mk': (
+                temperature_measurement['temperature_err_k'] * 1000.0
+            ),
+            'heater_tes_bias_requested_ua': bias_ua,
+            'heater_tes_bias_ua': applied_bias_ua,
+            'heater_tes_power_w': power_w,
+            'thermometer_tes_bias_ua': thermometer_bias_ua,
+            'thermometer_r0_ohms': quality['r0'],
+            'thermometer_r0_err_ohms': quality['r0_err'],
+            'thermometer_i0_amps': quality['i0'],
+            'thermometer_p0_watts': quality['p0'],
+            'didv_fit_cost': quality['fit_cost'],
+            'didv_fit_ok': quality['didv_fit_ok'],
+            'autocuts_ok': quality['autocuts_ok'],
+            'nb_traces': quality['nb_traces'],
+            'nb_traces_kept': quality['nb_traces_kept'],
             'stability_ok': stability_ok,
             'temperature_ok': temperature_ok,
         }
-        self._append_datapoint(row_dict=row_dict)
 
-        step_diagnostics['bias_history'] = bias_history
-        step_diagnostics['r0_history'] = r0_history
-        step_diagnostics['row'] = row_dict
-        self._diagnostics['steps'].append(step_diagnostics)
+        point_diagnostics = {
+            'bias_index': bias_index,
+            'fit_params': quality['fit_params'],
+            'cov': quality['cov'],
+            'stability_history': stability_history,
+            'temperature_measurement': temperature_measurement,
+            'row': row_dict,
+        }
 
         if self._verbose:
-            print(f'INFO: Step {step_index} recorded: MC = '
-                  f'{mc_temperature_mk:.6g} '
-                  f'+- {mc_temperature_err_mk:.3g} mK '
-                  f'({temperature_measurement["nb_samples"]} samples), '
-                  f'heater TES bias = {heater_bias_ua:.6g} '
-                  f'+- {heater_bias_err_ua:.3g} uA, '
-                  f'R0 = {r0 * 1000.0:.6g} '
-                  f'+- {r0_err * 1000.0:.3g} mOhms '
-                  f'({offset_percent:+.3g} percent from reference), '
-                  f'converged = {converged}, '
-                  f'pinned_at_floor = {pinned_at_floor}, '
-                  f'stability_ok = {stability_ok}, '
-                  f'temperature_ok = {temperature_ok}')
+            self._print_r0_quality(
+                quality=quality,
+                label=(f'Step {step_index} bias '
+                       f'{bias_index + 1}/{len(self._bias_list)} at '
+                       f'{applied_bias_ua:.6g} uA')
+            )
 
-        return end_sweep
+        return row_dict, point_diagnostics
+
 
     def _save_diagnostics(self):
         """

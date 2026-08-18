@@ -1,3 +1,4 @@
+import csv
 import os
 
 import numpy as np
@@ -8,9 +9,7 @@ from pytesdaq.sequencer import gab_sweep as gab_sweep_module
 from pytesdaq.sequencer.gab_sweep import (
     build_bias_list,
     heater_power_watts,
-    compute_next_bias,
     fit_didv_r0,
-    propagate_r0_error_to_bias,
 )
 
 # committed test fixture, so the suite runs on a fresh clone
@@ -19,208 +18,6 @@ SETUP_FILE = os.path.join(
     'fixtures',
     'setup_test.ini'
 )
-
-
-def test_compute_next_bias_first_move_is_fixed_step_up():
-    # with a single history point, physics says increase the heater bias
-    result = compute_next_bias(
-        bias_history=[0.0],
-        r0_history=[100.0],
-        r0_ref=120.0,
-        bias_step_start=15.0,
-    )
-    assert result == 15.0
-
-
-def test_compute_next_bias_secant_moves_toward_reference():
-    # R0 rose from 100 to 110 when bias went 0 -> 15
-    # slope is 10/15, reference 120 needs 10 more R0 units
-    result = compute_next_bias(
-        bias_history=[0.0, 15.0],
-        r0_history=[100.0, 110.0],
-        r0_ref=120.0,
-        bias_step_start=15.0,
-    )
-    assert result == pytest.approx(30.0)
-
-
-def test_compute_next_bias_clamps_large_secant_step():
-    # very shallow slope would suggest a huge jump; clamp to 2x step
-    result = compute_next_bias(
-        bias_history=[0.0, 15.0],
-        r0_history=[100.0, 100.001],
-        r0_ref=120.0,
-        bias_step_start=15.0,
-    )
-    assert result == pytest.approx(15.0 + 30.0)
-
-
-def test_compute_next_bias_corrects_overshoot_downward():
-    # R0 overshot the reference; secant must step back down
-    result = compute_next_bias(
-        bias_history=[15.0, 30.0],
-        r0_history=[110.0, 130.0],
-        r0_ref=120.0,
-        bias_step_start=15.0,
-    )
-    assert result < 30.0
-    assert result == pytest.approx(22.5)
-
-
-def test_compute_next_bias_never_negative():
-    result = compute_next_bias(
-        bias_history=[5.0, 2.0],
-        r0_history=[130.0, 125.0],
-        r0_ref=50.0,
-        bias_step_start=15.0,
-    )
-    assert result >= 0.0
-
-
-def test_compute_next_bias_never_below_bias_min():
-    # secant wants to go far below the minimum; the heater TES must
-    # stay normal, so the result is floored at bias_min
-    result = compute_next_bias(
-        bias_history=[120.0, 110.0],
-        r0_history=[130.0, 125.0],
-        r0_ref=50.0,
-        bias_step_start=15.0,
-        bias_min=100.0,
-    )
-    assert result == 100.0
-
-
-def test_compute_next_bias_first_move_respects_bias_min():
-    # a first move from below the minimum lands at bias_min, not at
-    # last_bias plus the fixed step
-    result = compute_next_bias(
-        bias_history=[0.0],
-        r0_history=[100.0],
-        r0_ref=120.0,
-        bias_step_start=15.0,
-        bias_min=100.0,
-    )
-    assert result == 100.0
-
-
-def test_compute_next_bias_rejects_mismatched_history():
-    with pytest.raises(ValueError):
-        compute_next_bias(
-            bias_history=[0.0, 15.0],
-            r0_history=[100.0],
-            r0_ref=120.0,
-            bias_step_start=15.0,
-        )
-
-
-def test_compute_next_bias_repeated_bias_uses_last_distinct_pair():
-    # regression: after clamping at the floor the last two biases are
-    # equal; the slope must come from the last pair of distinct biases
-    # instead of falling back to a blind step up, which made the loop
-    # bounce between the floor and one step above it
-    result = compute_next_bias(
-        bias_history=[39.0, 38.0, 38.0],
-        r0_history=[130.0, 129.0, 128.0],
-        r0_ref=100.0,
-        bias_step_start=1.0,
-        bias_min=38.0,
-    )
-    assert result == 38.0
-
-
-def test_compute_next_bias_grows_probe_when_response_below_noise():
-    # R0 moved less than the noise floor, so the slope is meaningless;
-    # the probe step doubles in the same direction until the response
-    # is measurable
-    result = compute_next_bias(
-        bias_history=[38.0, 39.0],
-        r0_history=[250.0, 250.5],
-        r0_ref=260.0,
-        bias_step_start=1.0,
-        noise_floor=2.0,
-    )
-    assert result == pytest.approx(41.0)
-
-
-def test_compute_next_bias_probe_growth_is_capped():
-    # probe growth doubles the last move but never exceeds
-    # 4x bias_step_start
-    result = compute_next_bias(
-        bias_history=[38.0, 42.0],
-        r0_history=[250.0, 250.5],
-        r0_ref=260.0,
-        bias_step_start=1.0,
-        noise_floor=2.0,
-    )
-    assert result == pytest.approx(46.0)
-
-
-def test_compute_next_bias_field_regression_noise_secant_wrong_direction():
-    # regression with the exact numbers from a run14 test sweep
-    # (values were ADC baselines then, arbitrary units here): the
-    # reading is 8 units below the reference and the true slope is
-    # +20 units/uA, but the last two readings differ by only 0.5
-    # units (noise), giving the old two-point secant a slope of
-    # -1.3 units/uA; it then stepped DOWN 2 uA to 40.36 instead of
-    # nudging the bias up. The fit over the full history must drive a
-    # small step up: slope 17.3 units/uA, 8 units below reference.
-    result = compute_next_bias(
-        bias_history=[40.9795, 41.9563, 42.3633],
-        r0_history=[316.569, 339.182, 338.655],
-        r0_ref=346.651,
-        bias_step_start=1.0,
-        bias_min=37.9678,
-        noise_floor=4.4,
-    )
-    assert result > 42.3633
-    assert result == pytest.approx(42.826, abs=0.01)
-
-
-def test_compute_next_bias_field_regression_holds_without_noise_floor():
-    # same field case with the drift check disabled (noise floor 0):
-    # the full-history fit still overrides the misleading last pair
-    result = compute_next_bias(
-        bias_history=[40.9795, 41.9563, 42.3633],
-        r0_history=[316.569, 339.182, 338.655],
-        r0_ref=346.651,
-        bias_step_start=1.0,
-        bias_min=37.9678,
-    )
-    assert result > 42.3633
-    assert result == pytest.approx(42.826, abs=0.01)
-
-
-def test_compute_next_bias_fit_wins_over_probe_when_history_has_signal():
-    # regression with the exact numbers from a run14 sweep with a
-    # large drift noise floor (21 units): the +3 uA first move gave a
-    # real 60 unit response, but the old last-pair guard compared 60
-    # against 3x21 = 63 and doubled the probe to +6 uA from a reading
-    # only 2 percent below target. The history plainly holds an
-    # 18 units/uA slope, so the fit must drive a small step up.
-    result = compute_next_bias(
-        bias_history=[43.5029, 46.5147, 46.5147],
-        r0_history=[404.334, 464.365, 454.837],
-        r0_ref=464.316,
-        bias_step_start=3.0,
-        bias_min=37.9678,
-        noise_floor=21.0,
-    )
-    assert 46.5147 < result < 48.0
-    assert result == pytest.approx(47.03, abs=0.01)
-
-
-def test_compute_next_bias_fit_overrides_misleading_last_pair():
-    # the last-pair secant slope is negative while the least squares
-    # fit over the full history is clearly positive: the fit wins and
-    # the step goes toward the reference per the fit
-    result = compute_next_bias(
-        bias_history=[0.0, 10.0, 20.0],
-        r0_history=[100.0, 120.0, 115.0],
-        r0_ref=130.0,
-        bias_step_start=15.0,
-    )
-    # fit slope 0.75 units/uA, 15 units below reference: step +20
-    assert result == pytest.approx(40.0)
 
 
 def _make_dry_sweep():
@@ -472,234 +269,6 @@ def test_measure_r0_requires_signal_generator_setup():
         sweep.measure_r0_quality()
 
 
-def test_propagate_r0_error_to_bias_linear():
-    # linear model: a 10 percent R0 uncertainty is a 10 percent bias
-    # uncertainty, so 0.015 on 0.15 R0 gives 20 uA on a 200 uA bias
-    result = propagate_r0_error_to_bias(
-        r0=0.15,
-        r0_err=0.015,
-        heater_bias=200.0,
-    )
-    assert result == pytest.approx(20.0)
-
-
-def test_propagate_r0_error_to_bias_scales_with_fraction():
-    # a 1 percent R0 uncertainty gives a 1 percent bias uncertainty
-    result = propagate_r0_error_to_bias(
-        r0=0.2,
-        r0_err=0.002,
-        heater_bias=350.0,
-    )
-    assert result == pytest.approx(3.5)
-
-
-def test_propagate_r0_error_to_bias_zero_r0_is_safe():
-    # a zero R0 has no defined fractional uncertainty, return zero
-    # instead of dividing by zero
-    result = propagate_r0_error_to_bias(
-        r0=0.0,
-        r0_err=0.01,
-        heater_bias=200.0,
-    )
-    assert result == 0.0
-
-
-def test_propagate_r0_error_to_bias_uses_magnitudes():
-    # sign of the bias must not flip the (positive) uncertainty
-    result = propagate_r0_error_to_bias(
-        r0=0.15,
-        r0_err=0.015,
-        heater_bias=-200.0,
-    )
-    assert result == pytest.approx(20.0)
-
-
-def _make_quantizing_instrument(device, quantum=0.001):
-    # controller that cannot hold the requested bias exactly and
-    # always lands just below it, like the real FEB
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias) - quantum
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    return FakeInstrument()
-
-
-def test_bias_floor_uses_read_back_value():
-    # the floor is what the controller landed on, not what we asked for
-    sweep = _make_dry_sweep()
-    device = {'bias': 0.0}
-    sweep._instrument = _make_quantizing_instrument(device)
-    sweep._post_bias_wait = 0.0
-
-    # before any set, the floor is the configured request
-    assert sweep._get_bias_floor() == sweep._bias_min
-
-    sweep._set_heater_bias_min()
-
-    assert sweep._bias_min_actual == pytest.approx(
-        sweep._bias_min - 0.001
-    )
-    assert sweep._get_bias_floor() == sweep._bias_min_actual
-    assert sweep._get_bias_floor() < sweep._bias_min
-
-
-def test_quantized_bias_does_not_retrigger_floor_warning(capsys):
-    # regression: setting bias_min then entering feedback must not warn
-    # just because the controller rounded the bias down
-    sweep = _make_dry_sweep()
-    device = {'bias': 0.0}
-    sweep._instrument = _make_quantizing_instrument(device)
-    sweep._post_bias_wait = 0.0
-    sweep.measure_r0 = lambda nb_events=None: 250.0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._r0_ref = 250.0
-
-    sweep._set_heater_bias_min()
-    capsys.readouterr()
-
-    result = sweep._run_feedback()
-
-    output = capsys.readouterr().out
-    assert 'below the bias floor' not in output
-    assert result['bias_history'][0] == pytest.approx(
-        sweep._bias_min - 0.001
-    )
-
-
-def test_bias_genuinely_below_floor_still_warns(capsys):
-    # a real excursion below the floor must still be caught and fixed
-    sweep = _make_dry_sweep()
-    device = {'bias': 0.0}
-    sweep._instrument = _make_quantizing_instrument(device)
-    sweep._post_bias_wait = 0.0
-    sweep.measure_r0 = lambda nb_events=None: 250.0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._r0_ref = 250.0
-
-    sweep._set_heater_bias_min()
-
-    # heater drops far below the floor, e.g. set by hand
-    device['bias'] = 1.0
-    capsys.readouterr()
-
-    result = sweep._run_feedback()
-
-    output = capsys.readouterr().out
-    assert 'below the bias floor' in output
-    assert result['bias_history'][0] >= sweep._get_bias_floor()
-
-
-def test_bias_history_records_applied_not_requested_bias():
-    # the secant update must be fed the bias the controller actually
-    # applied, so bias_history holds read back values throughout
-    sweep = _make_dry_sweep()
-    device = {'bias': 0.0}
-    sweep._instrument = _make_quantizing_instrument(device, quantum=0.001)
-    sweep._post_bias_wait = 0.0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-
-    def fake_r0(nb_events=None):
-        # R0 responds to the bias actually applied
-        return 100.0 + device['bias']
-
-    sweep.measure_r0 = fake_r0
-    sweep._r0_ref = 250.0
-
-    sweep._set_heater_bias_min()
-    result = sweep._run_feedback()
-
-    assert len(result['bias_history']) > 1
-
-    # each R0 must be consistent with the bias entry it is paired
-    # with: recording the requested bias instead would offset every
-    # pair by the quantum and skew the secant slope
-    for bias, r0 in zip(result['bias_history'],
-                        result['r0_history']):
-        assert r0 == pytest.approx(100.0 + bias, abs=1e-9)
-
-
-def test_run_feedback_converges_with_fake_device():
-    # fake linear device: R0 responds linearly to heater bias; the
-    # device starts at bias_min (100 uA in the example config)
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 100.0}
-    r0_ref = 250.0
-
-    def fake_r0(nb_events=None):
-        # R0 rises 1 unit per uA of heater bias from 100
-        return 100.0 + device['bias']
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._r0_ref = r0_ref
-    sweep._post_bias_wait = 0.0
-
-    result = sweep._run_feedback()
-
-    assert result['converged'] is True
-    assert result['cap_reached'] is False
-    final_r0 = result['r0_history'][-1]
-    offset = abs(final_r0 - r0_ref) / r0_ref
-    assert offset * 100.0 <= sweep._r0_stability_tolerance_percent
-
-
-def test_run_feedback_stops_at_bias_cap():
-    # device too weak: R0 barely responds, cap must end feedback; the
-    # device starts below bias_min so the feedback must first raise
-    # the bias to keep the heater TES normal
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 0.0}
-
-    def fake_r0(nb_events=None):
-        return 100.0 + (0.001 * device['bias'])
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._r0_ref = 150.0
-    sweep._post_bias_wait = 0.0
-
-    result = sweep._run_feedback()
-
-    assert result['cap_reached'] is True
-    assert result['converged'] is False
-    assert result['bias_history'][0] == sweep._bias_min
-    assert result['bias_history'][-1] == sweep._bias_max
-    assert min(result['bias_history']) >= sweep._bias_min
-
-
 def test_shutdown_restores_initial_heater_bias():
     # shutdown must put the heater TES back at the bias the user had
     # it at before the run
@@ -880,229 +449,17 @@ def test_shutdown_turns_off_signal_generator():
     assert ('temperature', 0, sweep._heater_name) in calls
 
 
-def _make_linear_device_sweep(device=None, r0_offset=100.0):
-    # fake linear device shared by the feedback tests: R0 responds
-    # 1 unit per uA of heater bias
-    sweep = _make_dry_sweep()
-
-    def fake_r0(nb_events=None):
-        return r0_offset + device['bias']
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._post_bias_wait = 0.0
-
-    return sweep
-
-
-def test_run_feedback_uses_provided_initial_r0():
-    # run_single_step already measured the settled R0, so the
-    # feedback must start from it instead of silently measuring a
-    # second one it never prints
-    device = {'bias': 100.0}
-    sweep = _make_linear_device_sweep(device=device)
-    sweep._r0_ref = 250.0
-
-    nb_calls = {'count': 0}
-    original_measure = sweep.measure_r0
-
-    def counting_measure(nb_events=None):
-        nb_calls['count'] = nb_calls['count'] + 1
-        return original_measure(nb_events=nb_events)
-
-    sweep.measure_r0 = counting_measure
-
-    result = sweep._run_feedback(initial_r0=200.0)
-
-    assert result['r0_history'][0] == 200.0
-    # one history entry per measurement plus the provided one
-    assert len(result['r0_history']) == nb_calls['count'] + 1
-
-
-def test_run_feedback_requires_confirmation_reading():
-    # a single in-tolerance reading is not convergence: it must be
-    # confirmed by a second reading at the same bias
-    device = {'bias': 100.0}
-    sweep = _make_linear_device_sweep(device=device)
-    sweep._r0_ref = 250.0
-
-    result = sweep._run_feedback()
-
-    assert result['converged'] is True
-    assert result['bias_history'][-1] == result['bias_history'][-2]
-
-    tolerance = sweep._r0_stability_tolerance_percent
-    for r0 in result['r0_history'][-2:]:
-        offset = abs(r0 - 250.0) / 250.0 * 100.0
-        assert offset <= tolerance
-
-
-def test_run_feedback_confirmation_rejects_drifting_r0():
-    # the first reading is in tolerance by luck, the confirmation
-    # reading drifts out: the feedback must keep going instead of
-    # accepting the lucky reading
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 100.0}
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    r0_sequence = [250.0, 280.0, 250.0, 250.0]
-
-    def fake_r0(nb_events=None):
-        if len(r0_sequence) > 0:
-            return r0_sequence.pop(0)
-        return 250.0
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._post_bias_wait = 0.0
-    sweep._r0_ref = 250.0
-
-    result = sweep._run_feedback()
-
-    assert result['converged'] is True
-    # the failed confirmation forced at least one real bias move
-    assert len(result['bias_history']) > 2
-    assert result['bias_history'][2] != result['bias_history'][0]
-
-
-def test_run_feedback_confirmation_near_miss_converges_on_mean():
-    # field case: first reading dead on the reference, confirmation
-    # reading a hair outside tolerance (drift); the mean of the two
-    # readings is well within tolerance, so the point is accepted
-    # instead of restarting the feedback from a good bias
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 100.0}
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    # reference 250, tolerance 2 percent (band 245 to 255):
-    # confirmation lands at 244.8 (-2.08 percent), mean 247.4
-    r0_sequence = [250.0, 244.8]
-
-    def fake_r0(nb_events=None):
-        if len(r0_sequence) > 0:
-            return r0_sequence.pop(0)
-        return 250.0
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._post_bias_wait = 0.0
-    sweep._r0_ref = 250.0
-    sweep._r0_stability_tolerance_percent = 2.0
-
-    result = sweep._run_feedback()
-
-    assert result['converged'] is True
-    # accepted at the confirmation, no further bias moves
-    assert len(result['bias_history']) == 2
-    assert result['bias_history'][0] == result['bias_history'][1]
-
-
-def test_run_feedback_confirmation_near_miss_rejected_when_mean_out():
-    # both readings lean the same way and their mean is outside
-    # tolerance: the near miss must not be accepted
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 100.0}
-
-    def fake_set_bias(bias, unit=None, detector_channel=None):
-        device['bias'] = float(bias)
-        return True
-
-    def fake_get_bias(detector_channel=None, unit=None):
-        return device['bias']
-
-    class FakeInstrument:
-        set_tes_bias = staticmethod(fake_set_bias)
-        get_tes_bias = staticmethod(fake_get_bias)
-
-    # reference 250, tolerance 2 percent: first reading in tolerance
-    # at -1.92 percent, confirmation at -3.8 percent, mean -2.86
-    # percent is out, feedback must continue
-    r0_sequence = [245.2, 240.5]
-
-    def fake_r0(nb_events=None):
-        if len(r0_sequence) > 0:
-            return r0_sequence.pop(0)
-        return 250.0
-
-    sweep._instrument = FakeInstrument()
-    sweep.measure_r0 = fake_r0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep._post_bias_wait = 0.0
-    sweep._r0_ref = 250.0
-
-    result = sweep._run_feedback()
-
-    assert result['converged'] is True
-    # the near miss was rejected, at least one real bias move followed
-    assert len(result['bias_history']) > 2
-
-
-def test_run_feedback_detects_pinned_at_floor():
-    # R0 sits far above the reference and rises with bias: the target
-    # needs a bias below the floor, which is not allowed, so the
-    # feedback must flag the point instead of looping on it
-    device = {'bias': 100.0}
-    sweep = _make_linear_device_sweep(device=device, r0_offset=300.0)
-    sweep._r0_ref = 250.0
-
-    result = sweep._run_feedback()
-
-    assert result['pinned_at_floor'] is True
-    assert result['converged'] is False
-    assert result['bias_history'][-1] == pytest.approx(
-        sweep._get_bias_floor()
-    )
-
-
 def test_drift_check_parameters_parse_from_example():
     # the drift check keys are optional in the config
     sweep = _make_dry_sweep()
 
     assert sweep._drift_check_nb_measurements == 3
     assert sweep._drift_check_wait_time == 5.0
-    assert sweep._r0_noise_floor == 0.0
 
 
 def test_run_drift_check_measures_scatter(monkeypatch):
-    # the drift check repeats the R0 measurement at fixed conditions
-    # and stores the scatter as the feedback noise floor
+    # the drift check repeats the R0 measurement at fixed conditions;
+    # its scatter is the R0 repeatability, the error bar on every point
     sweep = _make_dry_sweep()
 
     r0_values = [250.0, 252.0, 248.0, 251.0, 249.0]
@@ -1116,9 +473,11 @@ def test_run_drift_check_measures_scatter(monkeypatch):
             'fit_cost': 1.0,
             'nb_traces': 50,
             'nb_traces_kept': 45,
+            'autocuts_ok': True,
+            'didv_fit_ok': True,
         })
 
-    def fake_quality(nb_events=None):
+    def fake_quality(nb_events=None, bias_index=None):
         return quality_sequence.pop(0)
 
     sweep.measure_r0_quality = fake_quality
@@ -1133,7 +492,7 @@ def test_run_drift_check_measures_scatter(monkeypatch):
     assert drift['r0_values'] == r0_values
     assert drift['mean'] == pytest.approx(np.mean(r0_values))
     assert drift['scatter'] == pytest.approx(np.std(r0_values))
-    assert sweep._r0_noise_floor == pytest.approx(np.std(r0_values))
+    assert drift['scatter'] == pytest.approx(np.std(r0_values))
     # one wait between consecutive measurements, none before the first
     assert slept == [60.0, 60.0, 60.0, 60.0]
     assert sweep._diagnostics['drift_check'] == drift
@@ -1156,9 +515,11 @@ def test_run_drift_check_warns_when_scatter_exceeds_tolerance(
             'fit_cost': 1.0,
             'nb_traces': 50,
             'nb_traces_kept': 45,
+            'autocuts_ok': True,
+            'didv_fit_ok': True,
         })
 
-    def fake_quality(nb_events=None):
+    def fake_quality(nb_events=None, bias_index=None):
         return quality_sequence.pop(0)
 
     sweep.measure_r0_quality = fake_quality
@@ -1180,17 +541,6 @@ def test_run_drift_check_disabled_returns_none():
     result = sweep.run_drift_check()
 
     assert result is None
-    assert sweep._r0_noise_floor == 0.0
-
-
-def test_r0_columns_recorded_in_csv():
-    from pytesdaq.sequencer import GabSweep
-
-    assert 'pinned_at_floor' in GabSweep.CSV_COLUMNS
-    assert 'thermometer_r0_ohms' in GabSweep.CSV_COLUMNS
-    assert 'thermometer_r0_err_ohms' in GabSweep.CSV_COLUMNS
-    assert 'mc_temperature_err_mk' in GabSweep.CSV_COLUMNS
-    assert 'heater_tes_bias_err_ua' in GabSweep.CSV_COLUMNS
 
 
 def test_shutdown_leaves_heater_bias_when_initial_unknown():
@@ -1410,74 +760,6 @@ def test_config_lookup_ignores_unit_suffix_case():
         config_dict, 'sample_rate_Hz'
     ) == '1250000'
     assert not gab_sweep_module.config_has(config_dict, 'missing_key_uA')
-
-
-def test_run_single_step_writes_every_row_key_to_csv(tmp_path,
-                                                     monkeypatch):
-    # the recorded row must be writable through csv.DictWriter, which
-    # rejects any key missing from CSV_COLUMNS; running a real step
-    # catches a row key added without updating the column list
-    import csv as csv_module
-    from pytesdaq.sequencer import GabSweep
-
-    sweep = _make_dry_sweep()
-
-    device = {'bias': 38.0}
-
-    class FakeInstrument:
-        @staticmethod
-        def set_temperature(temperature, **kwargs):
-            return True
-
-        @staticmethod
-        def get_temperature(channel_name=None, instrument_name=None):
-            return 0.042
-
-        @staticmethod
-        def set_tes_bias(bias, unit=None, detector_channel=None):
-            device['bias'] = float(bias)
-            return True
-
-        @staticmethod
-        def get_tes_bias(detector_channel=None, unit=None):
-            return device['bias']
-
-    sweep._instrument = FakeInstrument()
-    sweep._post_bias_wait = 0.0
-    # timing now lives on the shared temperature sweep, not on
-    # GabSweep itself
-    sweep._temperature_sweep._sampling_time_s = 0.0
-    sweep._temperature_sweep._stable_time_s = 0.0
-    sweep._temperature_sweep._poll_interval_s = 0.0
-    sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep.measure_r0_quality = lambda nb_events=None: {
-        'r0': 0.150,
-        'r0_err': 0.001,
-        'i0': 1.0e-6,
-        'p0': 1.0e-13,
-        'fit_cost': 1.0,
-        'nb_traces': 200,
-        'nb_traces_kept': 180,
-    }
-
-    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
-
-    csv_path = tmp_path / 'gab_sweep_data.csv'
-    with open(csv_path, 'w', newline='') as f:
-        writer = csv_module.DictWriter(f, fieldnames=GabSweep.CSV_COLUMNS)
-        writer.writeheader()
-    sweep._csv_path = str(csv_path)
-
-    sweep.run_single_step(temperature_mk=42.0, step_index=0)
-
-    with open(csv_path, 'r', newline='') as f:
-        rows = list(csv_module.DictReader(f))
-
-    assert len(rows) == 1
-    assert rows[0]['temperature_ok'] == 'True'
-    assert rows[0]['step'] == '0'
-    # no column left unwritten
-    assert all(value != '' for value in rows[0].values())
 
 
 def test_build_bias_list_from_step_is_descending():
@@ -2003,3 +1285,180 @@ def test_relock_config_parses_from_example():
     assert sweep._relock_max_attempts == 3
     assert sweep._transition_check_frac_rn_min == pytest.approx(0.05)
     assert sweep._transition_check_frac_rn_max == pytest.approx(0.95)
+
+
+class _FakeTemperatureSweep:
+    @staticmethod
+    def set_setpoint(temperature_mk=None):
+        return None
+
+
+def _make_bias_sweep_sweep(device):
+    # a sweep wired to fakes, ready to run one temperature step
+    sweep = _make_dry_sweep()
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._bias_list = [300.0, 150.0, 38.0]
+    sweep._guess_params = [None, None, None]
+    sweep.wait_for_settled_r0 = lambda: (True, [])
+    sweep.relock_and_verify = lambda: {
+        'relock_ok': True, 'nb_attempts': 1, 'r0': 0.5,
+    }
+    sweep.measure_mc_temperature = lambda: {
+        'temperature_k': 0.042,
+        'temperature_err_k': 0.0001,
+        'fit_ok': True,
+        'nb_samples': 10,
+        'samples': [0.042],
+    }
+    sweep.measure_r0_quality = (
+        lambda nb_events=None, bias_index=None: {
+            'r0': 0.1,
+            'r0_err': 0.001,
+            'i0': 1.0e-6,
+            'p0': 1.0e-15,
+            'fit_cost': 1.0,
+            'fit_params': {'A': 1.0},
+            'cov': [[1.0]],
+            'nb_traces': 10,
+            'nb_traces_kept': 10,
+            'autocuts_ok': True,
+            'didv_fit_ok': True,
+        }
+    )
+    sweep.wait_for_temperature = lambda temperature_mk=None: (True, [])
+    sweep._synced_temperature_sweep = lambda: _FakeTemperatureSweep()
+    sweep._thermometer_bias_amps = 20.0e-6
+    return sweep
+
+
+def test_one_row_per_bias_point_in_descending_order(tmp_path):
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = str(tmp_path / 'gab_sweep_data.csv')
+    with open(sweep._csv_path, 'w', newline='') as f:
+        csv.DictWriter(
+            f, fieldnames=sweep.CSV_COLUMNS
+        ).writeheader()
+
+    rows = sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    assert len(rows) == 3
+    assert [row['bias_index'] for row in rows] == [0, 1, 2]
+    applied = [row['heater_tes_bias_requested_ua'] for row in rows]
+    for index in range(1, len(applied)):
+        assert applied[index] < applied[index - 1]
+
+
+def test_step_ends_at_bias_min_and_next_starts_at_bias_max():
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+
+    sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    bias_writes = [
+        value for kind, value in device['log'] if kind == 'bias'
+    ]
+    assert bias_writes[0] == pytest.approx(300.0)
+    assert bias_writes[-1] == pytest.approx(38.0)
+
+
+def test_rows_record_the_applied_bias_not_the_requested():
+    # the board snaps the request; R0 responds to what it applied
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+
+    def quantizing_set_bias(bias=None, unit=None, detector_channel=None):
+        device['bias'] = float(bias) - 0.5
+        device['log'].append(('bias', float(bias)))
+        return True
+
+    sweep._instrument.set_tes_bias = quantizing_set_bias
+
+    rows = sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    for row in rows:
+        assert row['heater_tes_bias_ua'] == pytest.approx(
+            row['heater_tes_bias_requested_ua'] - 0.5
+        )
+
+
+def test_every_csv_column_is_written_on_every_row():
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+
+    rows = sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    for row in rows:
+        assert set(row.keys()) == set(sweep.CSV_COLUMNS)
+
+
+def test_no_relock_between_bias_points_of_one_temperature():
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+
+    relock_calls = {'count': 0}
+
+    def counting_relock():
+        relock_calls['count'] = relock_calls['count'] + 1
+        return {'relock_ok': True, 'nb_attempts': 1, 'r0': 0.5}
+
+    sweep.relock_and_verify = counting_relock
+
+    sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    assert relock_calls['count'] == 1
+
+
+def test_heater_power_column_matches_the_applied_bias():
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+
+    rows = sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    for row in rows:
+        expected = heater_power_watts(
+            bias_ua=row['heater_tes_bias_ua'],
+            rshunt=sweep._heater_rshunt,
+            rparasitic=sweep._heater_rparasitic,
+            rnormal=sweep._heater_rn,
+        )
+        assert row['heater_tes_power_w'] == pytest.approx(expected)
+
+
+def test_dead_temperature_warns_loudly(capsys):
+    # every fit failing is not a statistic, it is a dead temperature
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    sweep._csv_path = None
+    sweep._append_datapoint = lambda row_dict=None: None
+    sweep.measure_r0_quality = (
+        lambda nb_events=None, bias_index=None: {
+            'r0': float('nan'),
+            'r0_err': float('nan'),
+            'i0': float('nan'),
+            'p0': float('nan'),
+            'fit_cost': float('nan'),
+            'fit_params': None,
+            'cov': None,
+            'nb_traces': 10,
+            'nb_traces_kept': 10,
+            'autocuts_ok': True,
+            'didv_fit_ok': False,
+        }
+    )
+
+    sweep.run_single_step(temperature_mk=42.0, step_index=0)
+
+    assert 'dead temperature' in capsys.readouterr().out

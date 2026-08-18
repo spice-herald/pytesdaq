@@ -103,15 +103,30 @@ settle_wait_time_s = 5
 drift_check_nb_measurements = 3
 drift_check_wait_time_s = 5
 
-# heater TES feedback
+# heater TES bias sweep
 # bias_min_uA is the minimum current that keeps the heater TES normal
 # (above its critical current); test it manually for the configured
-# heater_tes_channel, it is different for each channel
+# heater_tes_channel, it is different for each channel. It is also
+# where the heater sits while the MC temperature settles, and the last
+# point of every bias sweep.
 bias_min_uA = 38
-bias_step_start_uA = 15
 bias_max_uA = 300
-feedback_timeout_s = 600
 post_bias_wait_s = 5
+
+# the bias points, always swept descending from bias_max_uA down to
+# bias_min_uA. Either give the vector explicitly (it may be typed in
+# either order, it is sorted descending regardless) or give a step and
+# let it be built from the endpoints. The vector must start at
+# bias_max_uA and end at bias_min_uA.
+#
+# Nothing checks during the run that these points actually reach a
+# usable R0 at every temperature. Establish that yourself with a short
+# test sweep first, along with a post_bias_wait_s long enough that the
+# absorber has settled at each point.
+use_bias_vect = false
+bias_step_uA = 15
+#use_bias_vect = true
+#bias_vect_uA = 300, 220, 180, 145, 115, 90, 70, 55, 45, 38
 
 # thermometer TES relock, run with the heater at bias_max_uA, at
 # startup and at the start of every temperature. The thermometer is
