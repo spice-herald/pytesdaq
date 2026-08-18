@@ -1462,3 +1462,17 @@ def test_dead_temperature_warns_loudly(capsys):
     sweep.run_single_step(temperature_mk=42.0, step_index=0)
 
     assert 'dead temperature' in capsys.readouterr().out
+
+
+def test_dry_run_prints_the_bias_vector_and_point_count(capsys):
+    sweep = _make_dry_sweep()
+
+    sweep._print_dry_run()
+
+    output = capsys.readouterr().out
+    nb_points = (len(sweep._temperature_list_mk)
+                 * len(sweep._bias_list))
+
+    assert str(nb_points) in output
+    assert f'{sweep._bias_list[0]:.6g}' in output
+    assert f'{sweep._bias_list[-1]:.6g}' in output

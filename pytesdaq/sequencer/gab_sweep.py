@@ -1566,9 +1566,12 @@ class GabSweep(Sequencer):
         print(f'\nThermometer TES channel: '
               f'{self._thermometer_tes_channel}')
         print(f'Heater TES channel: {self._heater_tes_channel}')
-        print(f'Heater TES bias range: {self._bias_min:.6g} uA '
-              f'(bias_min_uA, keeps the heater normal) to '
-              f'{self._bias_max:.6g} uA (bias_max_uA)')
+        nb_bias = len(self._bias_list)
+        print(f'Heater TES bias vector ({nb_bias} points, swept '
+              'descending from bias_max_uA to bias_min_uA):')
+        for idx, bias_ua in enumerate(self._bias_list):
+            print(f'  Bias {idx + 1:>{len(str(nb_bias))}}/{nb_bias}: '
+                  f'{bias_ua:.6g} uA')
         print(f'MC thermometer: {self._thermometer_name} '
               f'({self._thermometer_instrument}), '
               f'heater: {self._heater_name}')
@@ -1625,15 +1628,43 @@ class GabSweep(Sequencer):
             print(f'\nR0 settling: fixed timer, '
                   f'{self._settle_wait_time:.6g} s per measurement')
 
-        # rough duration estimate: temperature settling plus a few
-        # feedback iterations per point. How long the fridge takes to
-        # reach a setpoint is not knowable in advance, so this assumes
-        # the hold time alone and will underestimate large steps.
-        per_point_s = (self._temperature_sweep.stable_time_s
-                       + 3.0 * (self._post_bias_wait + settle_s))
-        total_min = nb_points * per_point_s / 60.0
-        print(f'\nRough estimated duration: {total_min:.4g} min '
-              f'(temperature settling dominates)')
+        # the sweep visits every bias point at every temperature, so
+        # unlike the old feedback the point count is exact. How long
+        # the fridge takes to reach a setpoint is still not knowable
+        # in advance, so this assumes the hold time alone and will
+        # underestimate large temperature steps.
+        nb_temperature = len(self._temperature_list_mk)
+        nb_measurements = nb_temperature * nb_bias
+
+        trace_time_s = (self._nb_events_didv
+                        * self._trace_length_ms_actual / 1000.0)
+        per_point_s = (trace_time_s
+                       + self._post_bias_wait
+                       + settle_s
+                       + self._temperature_sweep.sampling_time_s)
+        per_temperature_s = (
+            self._temperature_sweep.stable_time_s
+            + (nb_bias * per_point_s)
+        )
+        total_min = nb_temperature * per_temperature_s / 60.0
+
+        print(f'\nTotal measurement points: {nb_temperature} '
+              f'temperatures x {nb_bias} bias points = '
+              f'{nb_measurements}')
+        print(f'Rough per point time: {per_point_s:.4g} s '
+              f'({trace_time_s:.4g} s of traces, '
+              f'{self._post_bias_wait:.4g} s post bias wait, '
+              f'{settle_s:.4g} s settle, '
+              f'{self._temperature_sweep.sampling_time_s:.4g} s '
+              'temperature sampling)')
+        print(f'Rough estimated duration: {total_min:.4g} min')
+
+        if self._use_stability_check:
+            print('\nNOTE: the stability check runs at every bias '
+                  'point now, not once per temperature, and its inner '
+                  'loop sleeps 10 s between readings and needs five '
+                  'agreeing ones. Timer mode is what this sweep is '
+                  'designed around; stability mode can add hours.')
 
     def run(self):
         """
