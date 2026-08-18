@@ -525,6 +525,7 @@ class GabSweep(Sequencer):
         self._r0_ref = None
         self._r0_noise_floor = 0.0
         self._heater_initial_bias_ua = None
+        self._thermometer_initial_bias_ua = None
         self._bias_min_actual = None
         self._sg_current_amps_pp = None
         self._close_loop_norm = None
@@ -657,6 +658,53 @@ class GabSweep(Sequencer):
                 raise ValueError(
                     f'GabSweep: "{key}" must not be negative!'
                 )
+
+        # thermometer TES relock, run with the heater at bias_max_uA
+        self._relock_bias_ua = float(require('relock_bias_uA'))
+        if self._relock_bias_ua <= 0:
+            raise ValueError(
+                'GabSweep: "relock_bias_uA" must be positive!'
+            )
+
+        self._relock_nb_cycles = 2
+        if config_has(config_dict, 'relock_nb_cycles'):
+            self._relock_nb_cycles = int(
+                float(config_get(config_dict, 'relock_nb_cycles'))
+            )
+
+        self._relock_max_attempts = 3
+        if config_has(config_dict, 'relock_max_attempts'):
+            self._relock_max_attempts = int(
+                float(config_get(config_dict, 'relock_max_attempts'))
+            )
+
+        if self._relock_nb_cycles < 1:
+            raise ValueError(
+                'GabSweep: "relock_nb_cycles" must be at least 1!'
+            )
+        if self._relock_max_attempts < 1:
+            raise ValueError(
+                'GabSweep: "relock_max_attempts" must be at least 1!'
+            )
+
+        # what counts as back in transition, as a fraction of the
+        # thermometer normal resistance. This is a readout health
+        # check on the lock, not an operating point: it never selects
+        # a bias and never enters the science dataset
+        self._transition_check_frac_rn_min = float(
+            require('transition_check_frac_rn_min')
+        )
+        self._transition_check_frac_rn_max = float(
+            require('transition_check_frac_rn_max')
+        )
+
+        if not (0.0 < self._transition_check_frac_rn_min
+                < self._transition_check_frac_rn_max < 1.0):
+            raise ValueError(
+                'GabSweep: "transition_check_frac_rn_min" and '
+                '"transition_check_frac_rn_max" must satisfy '
+                '0 < min < max < 1!'
+            )
 
         # signal generator square wave settings (optional keys)
         self._signal_gen_frequency = 50.0
@@ -1114,6 +1162,170 @@ class GabSweep(Sequencer):
             self._thermometer_bias_amps = bias_ua * 1.0e-6
 
         return self._thermometer_bias_amps
+
+    def relock_thermometer(self):
+        """
+        Relock the thermometer SQUID through a hard normal bias.
+
+        Drives the thermometer TES well above its critical current so
+        the SQUID has a well behaved state to lock against, relocks,
+        returns the bias to the value captured at preflight, and
+        relocks again. The second relock is what lands the lock with
+        the thermometer back in its transition; the first only gives
+        it a clean starting point.
+
+        The applied bias is read back afterwards and the cached value
+        refreshed, because the front end board snaps the request to
+        the nearest bias it supports and that value is the ibias every
+        R0 is derived from.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+
+        if self._thermometer_initial_bias_ua is None:
+            raise ValueError(
+                'GabSweep: the pre-run thermometer TES bias is '
+                'unknown, so the relock cannot put it back! Run the '
+                'preflight first.'
+            )
+
+        if self._verbose:
+            print('INFO: Relocking the thermometer through '
+                  f'{self._relock_bias_ua:.6g} uA, back to '
+                  f'{self._thermometer_initial_bias_ua:.6g} uA')
+
+        relock_sequence = [
+            self._relock_bias_ua,
+            self._thermometer_initial_bias_ua,
+        ]
+
+        for bias_ua in relock_sequence:
+
+            success = self._instrument.set_tes_bias(
+                bias=bias_ua,
+                unit='uA',
+                detector_channel=self._thermometer_tes_channel
+            )
+
+            if not success:
+                print('ERROR: the instrument refused to set the '
+                      f'thermometer TES bias to {bias_ua:.6g} uA '
+                      'during the relock!')
+
+            if self._post_bias_wait > 0:
+                time.sleep(self._post_bias_wait)
+
+            self._instrument.relock(
+                detector_channel=self._thermometer_tes_channel,
+                num_relock=self._relock_nb_cycles
+            )
+
+        # the board quantizes, so re-read rather than assuming the
+        # bias came back to exactly the requested value
+        self._thermometer_bias_amps = None
+        self._get_thermometer_bias_amps()
+
+    def check_thermometer_in_transition(self):
+        """
+        Check that the thermometer came back locked in its transition.
+
+        A readout health check, not a measurement: it decides only
+        whether the relock worked. R0 is required to be a usable fit
+        and to sit between transition_check_frac_rn_min and
+        transition_check_frac_rn_max of the thermometer normal
+        resistance.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        in_transition : bool
+            True when the thermometer is usably in its transition.
+        quality : dict
+            The R0 measurement the decision was taken on.
+        """
+
+        quality = self.measure_r0_quality()
+
+        if not quality['didv_fit_ok']:
+            return False, quality
+
+        fraction = quality['r0'] / self._thermometer_rn
+
+        in_transition = (
+            self._transition_check_frac_rn_min
+            < fraction
+            < self._transition_check_frac_rn_max
+        )
+
+        if self._verbose:
+            print(f'INFO: Transition check: R0 = '
+                  f'{quality["r0"] * 1000.0:.6g} mOhms, '
+                  f'{fraction * 100.0:.3g} percent of Rn, '
+                  f'in transition = {in_transition}')
+
+        return in_transition, quality
+
+    def relock_and_verify(self):
+        """
+        Relock the thermometer until it verifies back in transition.
+
+        Repeats relock_thermometer and the transition check up to
+        relock_max_attempts times. Exhausting the attempts warns
+        loudly and returns rather than raising, so that one bad
+        temperature does not throw away every colder one; the failure
+        is recorded in the diagnostics for offline analysis to drop.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        result : dict
+            Keys: relock_ok, nb_attempts, r0.
+        """
+
+        in_transition = False
+        quality = None
+        attempt = 0
+
+        while (not in_transition
+               and attempt < self._relock_max_attempts):
+
+            attempt = attempt + 1
+            self.relock_thermometer()
+            in_transition, quality = (
+                self.check_thermometer_in_transition()
+            )
+
+        if not in_transition:
+            print('WARNING: the thermometer TES did not verify back '
+                  f'in transition after {attempt} relock attempts! '
+                  'This temperature is recorded but its R0 values '
+                  'cannot be trusted. Check that the thermometer is '
+                  'still biased in transition and that the heater '
+                  'TES has not gone superconducting.')
+
+        r0 = float('nan')
+        if quality is not None:
+            r0 = quality['r0']
+
+        result = {
+            'relock_ok': in_transition,
+            'nb_attempts': attempt,
+            'r0': r0,
+        }
+
+        return result
 
     def measure_mc_temperature(self):
         """
@@ -1749,9 +1961,21 @@ class GabSweep(Sequencer):
     def shutdown(self):
         """
         Safe shutdown: signal generator off and disconnected, MC
-        heater setpoint to 0, heater TES bias restored to its pre-run
-        value (left untouched if unknown), diagnostics flushed. The
-        thermometer TES bias is never touched.
+        heater setpoint to 0, both TES biases restored to their
+        pre-run values (left untouched if unknown), diagnostics
+        flushed.
+
+        The thermometer TES bias is restored as well as the heater's,
+        because the relock drives the thermometer hard normal and an
+        interrupt landing inside one would otherwise leave it there.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
         """
 
         print('INFO: Safe shutdown, turning off the signal generator, '
@@ -1771,40 +1995,54 @@ class GabSweep(Sequencer):
             except Exception as err:
                 print(f'ERROR setting heater setpoint to 0: {err}')
 
-            if self._heater_initial_bias_ua is None:
-                print('INFO: Pre-run heater TES bias unknown, '
-                      'leaving heater TES bias untouched')
-            else:
+            # both TES biases are restored. The thermometer is in this
+            # list because the relock drives it hard normal, so an
+            # interrupt landing inside a relock would otherwise strand
+            # it at relock_bias_uA
+            restore_targets = [
+                ('heater', self._heater_tes_channel,
+                 self._heater_initial_bias_ua),
+                ('thermometer', self._thermometer_tes_channel,
+                 self._thermometer_initial_bias_ua),
+            ]
+
+            for label, channel, initial_bias_ua in restore_targets:
+
+                if initial_bias_ua is None:
+                    print(f'INFO: Pre-run {label} TES bias unknown, '
+                          f'leaving {label} TES bias untouched')
+                    continue
+
                 # the driver reports a refused write by return value
                 # rather than by raising, so the success message is
                 # printed only when the write actually reported
                 # success. It is the operator's only confirmation that
-                # the heater TES was put back
+                # the TES was put back
                 try:
                     success = self._instrument.set_tes_bias(
-                        bias=self._heater_initial_bias_ua,
+                        bias=initial_bias_ua,
                         unit='uA',
-                        detector_channel=self._heater_tes_channel
+                        detector_channel=channel
                     )
 
                     if success:
-                        print('INFO: Heater TES bias set back to its '
-                              'original pre-run value of '
-                              f'{self._heater_initial_bias_ua:.6g} uA')
+                        print(f'INFO: {label} TES bias set back to '
+                              'its original pre-run value of '
+                              f'{initial_bias_ua:.6g} uA')
                     else:
-                        print('ERROR restoring heater TES bias: the '
+                        print(f'ERROR restoring {label} TES bias: the '
                               'instrument refused the write, so the '
-                              'heater TES is NOT at its pre-run value '
-                              f'of {self._heater_initial_bias_ua:.6g} '
-                              'uA! Check it by hand.')
+                              f'{label} TES is NOT at its pre-run '
+                              f'value of {initial_bias_ua:.6g} uA! '
+                              'Check it by hand.')
 
                 except Exception as err:
-                    print(f'ERROR restoring heater TES bias: {err}')
+                    print(f'ERROR restoring {label} TES bias: {err}')
 
                 except BaseException as err:
                     # a second Ctrl-C landing here would otherwise skip
                     # the diagnostics save and the DAQ teardown below
-                    print(f'ERROR restoring heater TES bias: {err!r}. '
+                    print(f'ERROR restoring {label} TES bias: {err!r}. '
                           'Finishing shutdown before stopping.')
                     pending_interrupt = err
 

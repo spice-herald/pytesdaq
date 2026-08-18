@@ -112,3 +112,18 @@ bias_step_start_uA = 15
 bias_max_uA = 300
 feedback_timeout_s = 600
 post_bias_wait_s = 5
+
+# thermometer TES relock, run with the heater at bias_max_uA, at
+# startup and at the start of every temperature. The thermometer is
+# driven hard normal, relocked, returned to its operating bias, and
+# relocked again, then checked to be back in transition.
+# relock_bias_uA must be well above the thermometer critical current
+relock_bias_uA = 100
+relock_nb_cycles = 2
+relock_max_attempts = 3
+
+# what counts as back in transition, as a fraction of
+# thermometer_rn_mOhm. This is a readout health check on the lock, not
+# an operating point, and it never selects a bias; keep it wide
+transition_check_frac_rn_min = 0.05
+transition_check_frac_rn_max = 0.95

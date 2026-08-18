@@ -1826,3 +1826,180 @@ def test_stability_check_still_accepts_agreeing_readings(monkeypatch):
     stability_ok, history = sweep.wait_for_stable_r0()
 
     assert stability_ok is True
+
+
+def _make_relock_instrument(device):
+    # records the order of bias writes and relock calls so the
+    # procedure can be asserted as a sequence
+    def fake_set_bias(bias=None, unit=None, detector_channel=None):
+        device['bias'] = float(bias)
+        device['log'].append(('bias', float(bias)))
+        return True
+
+    def fake_get_bias(detector_channel=None, unit=None):
+        return device['bias']
+
+    def fake_relock(detector_channel=None, num_relock=2):
+        device['log'].append(('relock', num_relock))
+
+    class FakeInstrument:
+        set_tes_bias = staticmethod(fake_set_bias)
+        get_tes_bias = staticmethod(fake_get_bias)
+        relock = staticmethod(fake_relock)
+
+    return FakeInstrument()
+
+
+def test_relock_drives_normal_then_returns_and_relocks_twice():
+    sweep = _make_dry_sweep()
+    device = {'bias': 20.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._relock_bias_ua = 100.0
+    sweep._relock_nb_cycles = 2
+
+    sweep.relock_thermometer()
+
+    assert device['log'] == [
+        ('bias', 100.0),
+        ('relock', 2),
+        ('bias', 20.0),
+        ('relock', 2),
+    ]
+
+
+def test_relock_refreshes_the_cached_thermometer_bias():
+    # the board quantizes, so what comes back can differ from what
+    # was asked for, and that value is ibias in every R0
+    sweep = _make_dry_sweep()
+    device = {'bias': 20.0, 'log': list()}
+    instrument = _make_relock_instrument(device)
+
+    def quantizing_set_bias(bias=None, unit=None, detector_channel=None):
+        device['bias'] = float(bias) - 0.001
+        device['log'].append(('bias', float(bias)))
+        return True
+
+    instrument.set_tes_bias = quantizing_set_bias
+    sweep._instrument = instrument
+    sweep._post_bias_wait = 0.0
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._relock_bias_ua = 100.0
+    sweep._relock_nb_cycles = 2
+    sweep._thermometer_bias_amps = 20.0e-6
+
+    sweep.relock_thermometer()
+
+    assert sweep._get_thermometer_bias_amps() == pytest.approx(
+        19.999e-6
+    )
+
+
+def test_transition_check_passes_inside_the_window():
+    sweep = _make_dry_sweep()
+    sweep._thermometer_rn = 1.0
+    sweep._transition_check_frac_rn_min = 0.05
+    sweep._transition_check_frac_rn_max = 0.95
+    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
+        'r0': 0.5, 'didv_fit_ok': True,
+    }
+
+    in_transition, quality = sweep.check_thermometer_in_transition()
+
+    assert in_transition is True
+
+
+@pytest.mark.parametrize('r0_value', [0.01, 0.99])
+def test_transition_check_fails_outside_the_window(r0_value):
+    sweep = _make_dry_sweep()
+    sweep._thermometer_rn = 1.0
+    sweep._transition_check_frac_rn_min = 0.05
+    sweep._transition_check_frac_rn_max = 0.95
+    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
+        'r0': r0_value, 'didv_fit_ok': True,
+    }
+
+    in_transition, quality = sweep.check_thermometer_in_transition()
+
+    assert in_transition is False
+
+
+def test_transition_check_fails_on_a_failed_fit():
+    sweep = _make_dry_sweep()
+    sweep._thermometer_rn = 1.0
+    sweep._transition_check_frac_rn_min = 0.05
+    sweep._transition_check_frac_rn_max = 0.95
+    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
+        'r0': float('nan'), 'didv_fit_ok': False,
+    }
+
+    in_transition, quality = sweep.check_thermometer_in_transition()
+
+    assert in_transition is False
+
+
+def test_relock_and_verify_retries_then_continues(capsys):
+    # exhausting the attempts warns loudly and keeps the sweep going
+    sweep = _make_dry_sweep()
+    device = {'bias': 20.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._relock_bias_ua = 100.0
+    sweep._relock_nb_cycles = 2
+    sweep._relock_max_attempts = 3
+    sweep.check_thermometer_in_transition = lambda: (
+        False, {'r0': 0.001, 'didv_fit_ok': True}
+    )
+
+    result = sweep.relock_and_verify()
+
+    assert result['relock_ok'] is False
+    assert result['nb_attempts'] == 3
+    assert 'WARNING' in capsys.readouterr().out
+
+
+def test_relock_and_verify_stops_at_the_first_success():
+    sweep = _make_dry_sweep()
+    device = {'bias': 20.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._post_bias_wait = 0.0
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._relock_bias_ua = 100.0
+    sweep._relock_nb_cycles = 2
+    sweep._relock_max_attempts = 3
+    sweep.check_thermometer_in_transition = lambda: (
+        True, {'r0': 0.5, 'didv_fit_ok': True}
+    )
+
+    result = sweep.relock_and_verify()
+
+    assert result['relock_ok'] is True
+    assert result['nb_attempts'] == 1
+
+
+def test_shutdown_restores_the_thermometer_bias():
+    # a Ctrl-C inside the relock would otherwise strand the
+    # thermometer at relock_bias_uA
+    sweep = _make_dry_sweep()
+    device = {'bias': 100.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._heater_initial_bias_ua = 38.0
+    sweep._daq = None
+    sweep._output_path = None
+
+    sweep.shutdown()
+
+    assert device['bias'] == pytest.approx(20.0)
+
+
+def test_relock_config_parses_from_example():
+    sweep = _make_dry_sweep()
+
+    assert sweep._relock_bias_ua == pytest.approx(100.0)
+    assert sweep._relock_nb_cycles == 2
+    assert sweep._relock_max_attempts == 3
+    assert sweep._transition_check_frac_rn_min == pytest.approx(0.05)
+    assert sweep._transition_check_frac_rn_max == pytest.approx(0.95)
