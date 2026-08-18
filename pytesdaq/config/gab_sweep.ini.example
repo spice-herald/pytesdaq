@@ -51,7 +51,8 @@ trace_length_ms = 50
 voltage_min_V = -5
 voltage_max_V = 5
 nb_events_didv = 200
-r0_tolerance_percent = 1
+# agreement criterion for the R0 settle only, not a target R0
+r0_stability_tolerance_percent = 1
 
 # TES circuit resistances, in mOhms, required for both channels
 # thermometer: rshunt and rparasitic feed the online dIdV fit that
@@ -86,7 +87,8 @@ didv_fcutoff_Hz = 50000
 #   use_stability_check = false -> wait a fixed settle_wait_time_s
 #   use_stability_check = true  -> repeat quick R0 measurements until
 #                                  the last 5 agree within
-#                                  r0_tolerance_percent, giving up
+#                                  r0_stability_tolerance_percent,
+#                                  giving up
 #                                  after stability_timeout_s
 use_stability_check = false
 settle_wait_time_s = 5
@@ -96,7 +98,7 @@ settle_wait_time_s = 5
 # R0 drift check at startup
 # repeated R0 measurements at fixed conditions before the sweep;
 # their scatter is the noise floor the feedback has to beat, a warning
-# is printed if it exceeds r0_tolerance_percent; set
+# is printed if it exceeds r0_stability_tolerance_percent; set
 # drift_check_nb_measurements = 0 to skip the check
 drift_check_nb_measurements = 3
 drift_check_wait_time_s = 5

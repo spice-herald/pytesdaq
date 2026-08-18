@@ -608,8 +608,10 @@ class GabSweep(Sequencer):
         if config_has(config_dict, 'nb_events_didv'):
             self._nb_events_didv = int(float(config_get(config_dict, 'nb_events_didv')))
 
-        self._r0_tolerance_percent = float(
-            require('r0_tolerance_percent')
+        # only the settle agreement criterion: there is no target R0
+        # anywhere in this sweep for a tolerance to be measured against
+        self._r0_stability_tolerance_percent = float(
+            require('r0_stability_tolerance_percent')
         )
 
         # TES circuit resistances for both channels, in mOhms in the
@@ -1403,7 +1405,7 @@ class GabSweep(Sequencer):
     def wait_for_stable_r0(self):
         """
         Wait until the last 5 quick R0 measurements agree within
-        r0_tolerance_percent, or stability_timeout is reached.
+        r0_stability_tolerance_percent, or stability_timeout is reached.
 
         Returns
         -------
@@ -1419,6 +1421,12 @@ class GabSweep(Sequencer):
         if self._verbose:
             print('INFO: Waiting for stable thermometer TES R0')
 
+        # a run this long of unusable readings means the thermometer
+        # is not in a state the fit can describe; waiting longer will
+        # not change that
+        max_consecutive_nonfinite = 10
+        consecutive_nonfinite = 0
+
         while True:
 
             r0 = self.measure_r0(
@@ -1426,19 +1434,42 @@ class GabSweep(Sequencer):
             )
             history.append(r0)
 
+            if not (np.isfinite(r0) and r0 > 0):
+                consecutive_nonfinite = consecutive_nonfinite + 1
+                if consecutive_nonfinite >= max_consecutive_nonfinite:
+                    print('WARNING: R0 settle saw '
+                          f'{consecutive_nonfinite} consecutive '
+                          'unusable readings, giving up on this '
+                          'point!')
+                    return False, history
+            else:
+                consecutive_nonfinite = 0
+
             if len(history) >= 5:
                 recent = history[-5:]
                 reference = recent[-1]
                 all_within = True
+
+                # every reading has to be usable before any of them
+                # can agree: a NaN comparison is False, so without
+                # this the loop would call garbage stable
+                for value in recent:
+                    if not (np.isfinite(value) and value > 0):
+                        all_within = False
+
                 if reference == 0:
                     # relative comparison is meaningless at zero,
                     # keep waiting for a nonzero stable R0
                     all_within = False
-                else:
+                elif all_within:
                     for value in recent:
                         offset = abs(value - reference) / abs(reference)
-                        if offset * 100.0 > self._r0_tolerance_percent:
+                        tolerance = (
+                            self._r0_stability_tolerance_percent
+                        )
+                        if (offset * 100.0) > tolerance:
                             all_within = False
+
                 if all_within:
                     return True, history
 
@@ -1454,7 +1485,7 @@ class GabSweep(Sequencer):
         Characterize the R0 drift: repeat the R0 measurement at fixed
         conditions, spaced drift_check_wait_time apart, and keep the
         scatter as the feedback noise floor. Warns when the scatter
-        exceeds r0_tolerance_percent, since the feedback cannot
+        exceeds r0_stability_tolerance_percent, since the feedback cannot
         reliably converge below the drift.
 
         Returns
@@ -1508,11 +1539,11 @@ class GabSweep(Sequencer):
             print(message)
 
         if (scatter_percent is not None
-                and scatter_percent > self._r0_tolerance_percent):
+                and scatter_percent > self._r0_stability_tolerance_percent):
             print('WARNING: R0 drift '
                   f'({scatter_percent:.3g} percent) exceeds '
-                  'r0_tolerance_percent '
-                  f'({self._r0_tolerance_percent:.6g} percent), '
+                  'r0_stability_tolerance_percent '
+                  f'({self._r0_stability_tolerance_percent:.6g} percent), '
                   'the feedback cannot converge reliably! Consider a '
                   'longer settle, more events per measurement, or a '
                   'looser tolerance.')
@@ -1904,7 +1935,7 @@ class GabSweep(Sequencer):
             offset = offset_from_ref_percent(r0)
             if offset is None:
                 return False
-            return offset <= self._r0_tolerance_percent
+            return offset <= self._r0_stability_tolerance_percent
 
         def print_reading(applied_bias, r0, label):
             message = (f'INFO: {label}: bias = {applied_bias:.6g} uA, '
@@ -1958,7 +1989,7 @@ class GabSweep(Sequencer):
                     confirmation_offset = offset_from_ref_percent(r0)
                     mean_r0 = (previous_r0 + r0) / 2.0
                     mean_offset = offset_from_ref_percent(mean_r0)
-                    tolerance = self._r0_tolerance_percent
+                    tolerance = self._r0_stability_tolerance_percent
                     if (confirmation_offset is not None
                             and confirmation_offset <= (2.0 * tolerance)
                             and mean_offset <= tolerance):

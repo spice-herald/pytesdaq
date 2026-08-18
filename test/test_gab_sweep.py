@@ -660,7 +660,7 @@ def test_run_feedback_converges_with_fake_device():
     assert result['cap_reached'] is False
     final_r0 = result['r0_history'][-1]
     offset = abs(final_r0 - r0_ref) / r0_ref
-    assert offset * 100.0 <= sweep._r0_tolerance_percent
+    assert offset * 100.0 <= sweep._r0_stability_tolerance_percent
 
 
 def test_run_feedback_stops_at_bias_cap():
@@ -943,7 +943,7 @@ def test_run_feedback_requires_confirmation_reading():
     assert result['converged'] is True
     assert result['bias_history'][-1] == result['bias_history'][-2]
 
-    tolerance = sweep._r0_tolerance_percent
+    tolerance = sweep._r0_stability_tolerance_percent
     for r0 in result['r0_history'][-2:]:
         offset = abs(r0 - 250.0) / 250.0 * 100.0
         assert offset <= tolerance
@@ -1023,7 +1023,7 @@ def test_run_feedback_confirmation_near_miss_converges_on_mean():
     sweep.wait_for_settled_r0 = lambda: (True, [])
     sweep._post_bias_wait = 0.0
     sweep._r0_ref = 250.0
-    sweep._r0_tolerance_percent = 2.0
+    sweep._r0_stability_tolerance_percent = 2.0
 
     result = sweep._run_feedback()
 
@@ -1754,3 +1754,75 @@ def test_failed_fit_leaves_its_guess_params_untouched(monkeypatch):
     sweep.measure_r0_quality(bias_index=0)
 
     assert sweep._guess_params[0] == sentinel
+
+
+def test_stability_check_rejects_all_nan_readings(monkeypatch):
+    # NaN > tolerance is False, so the old comparison reported five
+    # garbage readings as stable. The timeout is deliberately huge so
+    # that a False here can only come from rejecting the NaNs, never
+    # from running out of time
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = True
+    sweep._nb_events_stability = 1
+    sweep._stability_timeout = 1.0e6
+    sweep.measure_r0 = lambda nb_events=None: float('nan')
+
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
+
+    stability_ok, history = sweep.wait_for_stable_r0()
+
+    assert stability_ok is False
+
+
+def test_stability_check_rejects_mixed_good_and_nan(monkeypatch):
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = True
+    sweep._nb_events_stability = 1
+    sweep._stability_timeout = 1.0e6
+
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
+
+    readings = [0.1, float('nan'), 0.1, float('nan'), float('nan')]
+    state = {'index': 0}
+
+    def fake_measure(nb_events=None):
+        value = readings[min(state['index'], len(readings) - 1)]
+        state['index'] = state['index'] + 1
+        return value
+
+    sweep.measure_r0 = fake_measure
+
+    stability_ok, history = sweep.wait_for_stable_r0()
+
+    assert stability_ok is False
+
+
+def test_stability_check_exits_early_on_a_run_of_nan(monkeypatch):
+    # a run of non-finite reads must not loop to stability_timeout_s
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = True
+    sweep._nb_events_stability = 1
+    sweep._stability_timeout = 1.0e6
+    sweep.measure_r0 = lambda nb_events=None: float('nan')
+
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
+
+    stability_ok, history = sweep.wait_for_stable_r0()
+
+    assert stability_ok is False
+    assert len(history) <= 10
+
+
+def test_stability_check_still_accepts_agreeing_readings(monkeypatch):
+    sweep = _make_dry_sweep()
+    sweep._use_stability_check = True
+    sweep._nb_events_stability = 1
+    sweep._stability_timeout = 1.0e6
+    sweep._r0_stability_tolerance_percent = 1.0
+    sweep.measure_r0 = lambda nb_events=None: 0.1
+
+    monkeypatch.setattr(gab_sweep_module.time, 'sleep', lambda s: None)
+
+    stability_ok, history = sweep.wait_for_stable_r0()
+
+    assert stability_ok is True
