@@ -1,14 +1,21 @@
 """
 Gab sweep sequencer.
 
-Automates the thermal conductance (Gab) measurement: sweep the MC stage
-temperature downward while adjusting the heater TES bias so that the
-thermometer TES stays at a fixed bias point. The bias point is measured
-as the thermometer TES resistance R0, extracted online from a square
-wave dIdV fit (3-pole fit, infinite loop gain approximation). The
-heater TES bias is never taken below bias_min so it stays normal. No
-raw TES data is saved. See Gab_planning/Gab_sweep_design.md for the
-full design.
+Automates the thermal conductance (Gab) measurement: sweep the MC
+stage temperature downward and, at each temperature, walk the heater
+TES bias down a fixed vector while measuring the thermometer TES bias
+point R0 at every step. R0 is extracted online from a square wave
+dIdV fit (3-pole fit, infinite loop gain approximation).
+
+The sequencer holds no target R0 and takes no decision from R0. It
+records a curve of R0 against heater bias at every temperature, and
+the operating point is chosen offline by interpolating that curve.
+Making sure the bias vector reaches a usable R0 at every temperature
+is the operator's job, established with short test sweeps.
+
+The heater TES bias is never taken below bias_min_uA so it stays
+normal. No raw TES data is saved. See
+Gab_planning/Gab_bias_sweep_design.md for the full design.
 """
 
 import copy

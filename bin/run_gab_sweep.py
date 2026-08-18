@@ -11,15 +11,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description=(
-            'Gab thermal conductance sweep automation. '
-            'Preconditions: PID pre-set manually, thermometer TES '
-            'biased in transition. The heater TES can be left at its '
-            'usual operating bias: the script raises it to bias_min '
-            '(which must keep the heater TES normal, above its '
-            'critical current) and restores the pre-run bias at '
-            'shutdown. If the feedback cannot converge, first suspect '
-            'that one of the TESs went superconducting or normal '
-            'during the sweep.'
+            'Gab thermal conductance sweep automation. At each MC '
+            'temperature the heater TES bias is walked down a fixed '
+            'vector and the thermometer R0 is recorded at every '
+            'point, so the operating R0 is chosen offline rather than '
+            'at run time. Preconditions: PID pre-set manually, '
+            'thermometer TES biased in transition. Both TES biases '
+            'are restored at shutdown. Run --dry_run first to check '
+            'the bias vector and the estimated duration, and confirm '
+            'with a short test sweep that the vector actually reaches '
+            'a usable R0 at the coldest temperature: nothing checks '
+            'that during the run.'
         )
     )
     parser.add_argument('--setup_file', type=str,
