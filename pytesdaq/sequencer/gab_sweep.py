@@ -636,7 +636,8 @@ class GabSweep(Sequencer):
 
         # R0 drift characterization at startup (optional keys):
         # repeated R0 measurements at fixed conditions, their scatter
-        # is the noise floor the feedback has to beat
+        # is the R0 repeatability of the setup, which is the error bar
+        # on every point the sweep records
         self._drift_check_nb_measurements = 5
         if config_has(config_dict, 'drift_check_nb_measurements'):
             self._drift_check_nb_measurements = int(
@@ -1488,10 +1489,18 @@ class GabSweep(Sequencer):
     def run_drift_check(self):
         """
         Characterize the R0 drift: repeat the R0 measurement at fixed
-        conditions, spaced drift_check_wait_time apart, and keep the
-        scatter as the feedback noise floor. Warns when the scatter
-        exceeds r0_stability_tolerance_percent, since the feedback cannot
-        reliably converge below the drift.
+        conditions, spaced drift_check_wait_time apart, and report the
+        scatter.
+
+        Purely diagnostic. The scatter feeds no decision anywhere in
+        the sweep; it is the R0 repeatability at fixed conditions, and
+        so the error bar to carry into the offline analysis. Since the
+        sweep takes no repeat measurement per temperature, this is the
+        only repeatability number the run produces.
+
+        Parameters
+        ----------
+        None
 
         Returns
         -------
@@ -1547,10 +1556,12 @@ class GabSweep(Sequencer):
             print('WARNING: R0 drift '
                   f'({scatter_percent:.3g} percent) exceeds '
                   'r0_stability_tolerance_percent '
-                  f'({self._r0_stability_tolerance_percent:.6g} percent), '
-                  'the feedback cannot converge reliably! Consider a '
-                  'longer settle, more events per measurement, or a '
-                  'looser tolerance.')
+                  f'({self._r0_stability_tolerance_percent:.6g} percent). '
+                  'R0 differences smaller than this drift cannot be '
+                  'read from the recorded curve, so the interpolated '
+                  'bias will carry at least that much uncertainty. '
+                  'Consider a longer settle or more events per '
+                  'measurement.')
 
         drift = {
             'r0_values': r0_values,
@@ -1779,8 +1790,8 @@ class GabSweep(Sequencer):
                 label='Startup check'
             )
 
-            # measure the R0 repeatability the feedback is up
-            # against; also sets the noise floor for the bias probing
+            # the R0 repeatability at fixed conditions, recorded as
+            # the error bar for the offline analysis
             self.run_drift_check()
 
             for step_index, temperature_mk in (
