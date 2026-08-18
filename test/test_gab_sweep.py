@@ -7,6 +7,7 @@ import qetpy as qp
 from pytesdaq.sequencer import gab_sweep as gab_sweep_module
 from pytesdaq.sequencer.gab_sweep import (
     build_bias_list,
+    heater_power_watts,
     compute_next_bias,
     fit_didv_r0,
     propagate_r0_error_to_bias,
@@ -332,8 +333,8 @@ def test_didv_config_parses_from_example():
     assert sweep._signal_gen_offset == 0.0
     assert sweep._signal_gen_phase == 0.0
     assert sweep._didv_fcutoff == 50000.0
-    assert sweep._rshunt == 0.005
-    assert sweep._rparasitic == 0.00176
+    assert sweep._thermometer_rshunt == 0.005
+    assert sweep._thermometer_rparasitic == 0.00176
 
     # 50 ms at 50 Hz rounds to an integer number of periods
     assert sweep._nb_cycles == round(0.050 * 50.0)
@@ -375,7 +376,7 @@ def _make_synthetic_didv_traces(sweep, r0_true, nb_traces=10,
     # tau1 is kept well below the signal generator period so plenty
     # of harmonics constrain the zero frequency dVdI (a fall time
     # comparable to the period makes R0 poorly determined)
-    rl = sweep._rshunt + sweep._rparasitic
+    rl = sweep._thermometer_rshunt + sweep._thermometer_rparasitic
     params = {
         'A': 0.2,
         'B': (rl - r0_true) - 0.2,
@@ -396,7 +397,7 @@ def _make_synthetic_didv_traces(sweep, r0_true, nb_traces=10,
         sgamp,
         sweep._signal_gen_frequency,
         params,
-        rsh=sweep._rshunt,
+        rsh=sweep._thermometer_rshunt,
     )
 
     rng = np.random.default_rng(seed=seed)
@@ -418,8 +419,8 @@ def test_fit_didv_r0_recovers_known_r0():
         sample_rate=sweep._sample_rate,
         sgfreq=sweep._signal_gen_frequency,
         sgamp=sgamp,
-        rsh=sweep._rshunt,
-        rp=sweep._rparasitic,
+        rsh=sweep._thermometer_rshunt,
+        rp=sweep._thermometer_rparasitic,
         ibias=1.0e-4,
         r0_guess=0.15,
         fcutoff=sweep._didv_fcutoff,
@@ -1557,3 +1558,68 @@ def test_build_bias_list_dedups_near_endpoint_within_tolerance():
         for index in range(1, len(result))
     ]
     assert min(gaps) > 1.0e-6
+
+
+def test_heater_power_matches_closed_form():
+    # P = I^2 Rsh^2 Rn / (Rsh + Rp + Rn)^2
+    power = heater_power_watts(
+        bias_ua=300.0,
+        rshunt=5.0e-3,
+        rparasitic=2.98e-3,
+        rnormal=624.0e-3,
+    )
+    bias_amps = 300.0e-6
+    rload = 5.0e-3 + 2.98e-3
+    tes_current = bias_amps * 5.0e-3 / (rload + 624.0e-3)
+    expected = (tes_current ** 2) * 624.0e-3
+
+    assert power == pytest.approx(expected)
+
+
+def test_heater_power_is_zero_at_zero_bias():
+    power = heater_power_watts(
+        bias_ua=0.0,
+        rshunt=5.0e-3,
+        rparasitic=2.98e-3,
+        rnormal=624.0e-3,
+    )
+    assert power == pytest.approx(0.0)
+
+
+def test_circuit_resistances_parse_from_example():
+    # all six keys land as Ohms on the sweep
+    sweep = _make_dry_sweep()
+
+    assert sweep._thermometer_rshunt == pytest.approx(5.0e-3)
+    assert sweep._thermometer_rparasitic == pytest.approx(1.76e-3)
+    assert sweep._thermometer_rn > 0
+    assert sweep._heater_rshunt == pytest.approx(5.0e-3)
+    assert sweep._heater_rparasitic == pytest.approx(2.98e-3)
+    assert sweep._heater_rn == pytest.approx(624.0e-3)
+
+
+@pytest.mark.parametrize('missing_key', [
+    'thermometer_rshunt_mOhm',
+    'thermometer_rparasitic_mOhm',
+    'thermometer_rn_mOhm',
+    'heater_rshunt_mOhm',
+    'heater_rparasitic_mOhm',
+    'heater_rn_mOhm',
+])
+def test_missing_resistance_key_fails_naming_it(tmp_path, missing_key):
+    # a config file that half-applies is worse than one that refuses
+    from pytesdaq.sequencer import GabSweep
+
+    with open('pytesdaq/config/gab_sweep.ini.example', 'r') as f:
+        config_text = f.read()
+
+    config_text = config_text.replace(f'{missing_key} = ', '#removed = ')
+    config_file = tmp_path / 'gab_sweep_missing.ini'
+    config_file.write_text(config_text)
+
+    with pytest.raises(ValueError, match=missing_key):
+        GabSweep(
+            sequencer_file=str(config_file),
+            setup_file=SETUP_FILE,
+            dry_run=True,
+        )

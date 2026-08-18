@@ -165,6 +165,40 @@ def build_bias_list(config_dict=None):
     return bias_list
 
 
+def heater_power_watts(bias_ua=None, rshunt=None,
+                       rparasitic=None, rnormal=None):
+    """
+    Joule power dissipated in the heater TES, held normal.
+
+    The bias current divides between the shunt and the TES branch,
+    so the current through the TES is
+    I_tes = I_bias * Rsh / (Rsh + Rp + Rn), and the power it
+    dissipates is I_tes squared times Rn.
+
+    Parameters
+    ----------
+    bias_ua : float
+        Heater TES bias current [uA].
+    rshunt : float
+        Heater shunt resistance [Ohms].
+    rparasitic : float
+        Heater parasitic resistance [Ohms].
+    rnormal : float
+        Heater TES normal resistance [Ohms].
+
+    Returns
+    -------
+    power : float
+        Power dissipated in the heater TES [Watts].
+    """
+
+    bias_amps = float(bias_ua) * 1.0e-6
+    rload = float(rshunt) + float(rparasitic)
+    tes_current = bias_amps * float(rshunt) / (rload + float(rnormal))
+
+    return (tes_current ** 2) * float(rnormal)
+
+
 def compute_next_bias(bias_history=None,
                       r0_history=None,
                       r0_ref=None,
@@ -561,17 +595,49 @@ class GabSweep(Sequencer):
             require('r0_tolerance_percent')
         )
 
-        # TES circuit resistances, required for the dIdV fit
-        # (config in mOhms, kept in Ohms internally)
-        self._rshunt = float(require('rshunt_mOhm')) / 1000.0
-        self._rparasitic = float(require('rparasitic_mOhm')) / 1000.0
+        # TES circuit resistances for both channels, in mOhms in the
+        # config and Ohms internally. The thermometer shunt and
+        # parasitic feed the dIdV fit; the heater triplet turns its
+        # bias current into a Joule power. The thermometer normal
+        # resistance is recorded and used by the transition check.
+        self._thermometer_rshunt = (
+            float(require('thermometer_rshunt_mOhm')) / 1000.0
+        )
+        self._thermometer_rparasitic = (
+            float(require('thermometer_rparasitic_mOhm')) / 1000.0
+        )
+        self._thermometer_rn = (
+            float(require('thermometer_rn_mOhm')) / 1000.0
+        )
+        self._heater_rshunt = (
+            float(require('heater_rshunt_mOhm')) / 1000.0
+        )
+        self._heater_rparasitic = (
+            float(require('heater_rparasitic_mOhm')) / 1000.0
+        )
+        self._heater_rn = float(require('heater_rn_mOhm')) / 1000.0
 
-        if self._rshunt <= 0:
-            raise ValueError('GabSweep: "rshunt_mOhm" must be positive!')
-        if self._rparasitic < 0:
-            raise ValueError(
-                'GabSweep: "rparasitic_mOhm" must not be negative!'
-            )
+        positive_resistances = [
+            ('thermometer_rshunt_mOhm', self._thermometer_rshunt),
+            ('thermometer_rn_mOhm', self._thermometer_rn),
+            ('heater_rshunt_mOhm', self._heater_rshunt),
+            ('heater_rn_mOhm', self._heater_rn),
+        ]
+        for key, value in positive_resistances:
+            if value <= 0:
+                raise ValueError(
+                    f'GabSweep: "{key}" must be positive!'
+                )
+
+        non_negative_resistances = [
+            ('thermometer_rparasitic_mOhm', self._thermometer_rparasitic),
+            ('heater_rparasitic_mOhm', self._heater_rparasitic),
+        ]
+        for key, value in non_negative_resistances:
+            if value < 0:
+                raise ValueError(
+                    f'GabSweep: "{key}" must not be negative!'
+                )
 
         # signal generator square wave settings (optional keys)
         self._signal_gen_frequency = 50.0
@@ -1095,8 +1161,8 @@ class GabSweep(Sequencer):
             sample_rate=self._sample_rate,
             sgfreq=self._signal_gen_frequency,
             sgamp=self._sg_current_amps_pp,
-            rsh=self._rshunt,
-            rp=self._rparasitic,
+            rsh=self._thermometer_rshunt,
+            rp=self._thermometer_rparasitic,
             ibias=self._get_thermometer_bias_amps(),
             r0_guess=self._r0_guess,
             fcutoff=self._didv_fcutoff
@@ -1421,9 +1487,16 @@ class GabSweep(Sequencer):
               f'{self._trace_length_ms_actual:.6g} ms '
               f'({self._nb_cycles} signal generator periods), fit '
               f'lowpass cutoff = {self._didv_fcutoff:.6g} Hz')
-        print(f'TES circuit: rshunt = {self._rshunt * 1000.0:.6g} '
-              f'mOhms, rparasitic = '
-              f'{self._rparasitic * 1000.0:.6g} mOhms')
+        print(f'\nThermometer TES circuit: rshunt = '
+              f'{self._thermometer_rshunt * 1000.0:.6g} mOhms, '
+              f'rparasitic = '
+              f'{self._thermometer_rparasitic * 1000.0:.6g} mOhms, '
+              f'rn = {self._thermometer_rn * 1000.0:.6g} mOhms')
+        print(f'Heater TES circuit: rshunt = '
+              f'{self._heater_rshunt * 1000.0:.6g} mOhms, '
+              f'rparasitic = '
+              f'{self._heater_rparasitic * 1000.0:.6g} mOhms, '
+              f'rn = {self._heater_rn * 1000.0:.6g} mOhms')
 
         nb_points = len(self._temperature_list_mk)
         print(f'\nTemperature setpoints [mK] ({nb_points} points):')

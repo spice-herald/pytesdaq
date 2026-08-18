@@ -53,9 +53,18 @@ voltage_max_V = 5
 nb_events_didv = 200
 r0_tolerance_percent = 1
 
-# TES circuit resistances, required for the dIdV fit
-rshunt_mOhm = 5
-rparasitic_mOhm = 1.76
+# TES circuit resistances, in mOhms, required for both channels
+# thermometer: rshunt and rparasitic feed the online dIdV fit that
+# extracts R0, rn sets the scale for the relock transition check
+thermometer_rshunt_mOhm = 5
+thermometer_rparasitic_mOhm = 1.76
+thermometer_rn_mOhm = 1000
+
+# heater: held normal for the whole sweep, so all three are needed to
+# turn its bias current into a Joule power
+heater_rshunt_mOhm = 5
+heater_rparasitic_mOhm = 2.98
+heater_rn_mOhm = 624
 
 # dIdV square wave on the thermometer TES
 # signal_gen_voltage_mVpp is for an external signal generator; for
