@@ -422,7 +422,7 @@ def test_fit_didv_r0_recovers_known_r0():
         rsh=sweep._thermometer_rshunt,
         rp=sweep._thermometer_rparasitic,
         ibias=1.0e-4,
-        r0_guess=0.15,
+        guess_params=None,
         fcutoff=sweep._didv_fcutoff,
     )
 
@@ -448,16 +448,17 @@ def test_measure_r0_quality_reports_metrics():
     sweep._sg_current_amps_pp = sgamp
     sweep._close_loop_norm = 1.0
     sweep._thermometer_bias_amps = 1.0e-4
+    sweep._guess_params = [None]
 
-    quality = sweep.measure_r0_quality()
+    quality = sweep.measure_r0_quality(bias_index=0)
 
     assert quality['nb_traces'] == nb_traces
     assert 0 < quality['nb_traces_kept'] <= nb_traces
     assert quality['r0'] == pytest.approx(r0_true, rel=0.05)
     assert quality['r0_err'] >= 0.0
 
-    # a good fit seeds the next fit's guess
-    assert sweep._r0_guess == pytest.approx(quality['r0'])
+    # a good fit seeds the same bias point at the next temperature
+    assert sweep._guess_params[0] is not None
 
     # measure_r0 stays a thin float-returning wrapper
     assert sweep.measure_r0() == pytest.approx(r0_true, rel=0.05)
@@ -1623,3 +1624,133 @@ def test_missing_resistance_key_fails_naming_it(tmp_path, missing_key):
             setup_file=SETUP_FILE,
             dry_run=True,
         )
+
+
+def _make_fake_daq(traces):
+    # read_many_events returns (nb_events, nb_channels, nb_samples);
+    # the sweep reads a single channel
+    class FakeDaq:
+        @staticmethod
+        def read_many_events(nb_events, adctovolt=True):
+            return traces[:, None, :]
+
+    return FakeDaq()
+
+
+def test_measure_r0_quality_flags_a_failed_fit(monkeypatch):
+    # at the ends of the bias vector the fit fails; that is data,
+    # not an error, and the sweep must keep going
+    sweep = _make_dry_sweep()
+    sweep._sg_current_amps_pp = 2.0e-6
+    sweep._close_loop_norm = 1.0
+    sweep._thermometer_bias_amps = 1.0e-5
+    sweep._guess_params = [None]
+
+    traces, _ = _make_synthetic_didv_traces(sweep, r0_true=0.1)
+    sweep._daq = _make_fake_daq(traces)
+
+    def exploding_fit(**kwargs):
+        raise RuntimeError('fit did not converge')
+
+    monkeypatch.setattr(gab_sweep_module, 'fit_didv_r0', exploding_fit)
+
+    quality = sweep.measure_r0_quality(bias_index=0)
+
+    assert quality['didv_fit_ok'] is False
+    assert np.isnan(quality['r0'])
+    assert np.isnan(quality['r0_err'])
+
+
+def test_measure_r0_quality_flags_nonfinite_r0(monkeypatch):
+    sweep = _make_dry_sweep()
+    sweep._sg_current_amps_pp = 2.0e-6
+    sweep._close_loop_norm = 1.0
+    sweep._thermometer_bias_amps = 1.0e-5
+    sweep._guess_params = [None]
+
+    traces, _ = _make_synthetic_didv_traces(sweep, r0_true=0.1)
+    sweep._daq = _make_fake_daq(traces)
+
+    def negative_r0_fit(**kwargs):
+        return {
+            'r0': -0.5,
+            'r0_err': 0.01,
+            'i0': 1.0e-6,
+            'p0': 1.0e-15,
+            'fit_cost': 1.0,
+            'fit_params': dict(),
+            'fit_params_tuple': None,
+            'cov': None,
+        }
+
+    monkeypatch.setattr(gab_sweep_module, 'fit_didv_r0', negative_r0_fit)
+
+    quality = sweep.measure_r0_quality(bias_index=0)
+
+    assert quality['didv_fit_ok'] is False
+    assert np.isnan(quality['r0'])
+
+
+def test_measure_r0_quality_reports_autocuts_fallback(monkeypatch):
+    # autocuts rejecting everything is reported separately from
+    # autocuts keeping everything
+    sweep = _make_dry_sweep()
+    sweep._close_loop_norm = 1.0
+    sweep._thermometer_bias_amps = 1.0e-5
+    sweep._guess_params = [None]
+
+    traces, sgamp = _make_synthetic_didv_traces(sweep, r0_true=0.1)
+    sweep._sg_current_amps_pp = sgamp
+    sweep._daq = _make_fake_daq(traces)
+
+    monkeypatch.setattr(
+        gab_sweep_module.qp,
+        'autocuts_didv',
+        lambda traces, fs=None: np.zeros(traces.shape[0], dtype=bool)
+    )
+
+    quality = sweep.measure_r0_quality(bias_index=0)
+
+    assert quality['autocuts_ok'] is False
+    assert quality['nb_traces_kept'] == quality['nb_traces']
+
+
+def test_good_fit_stores_guess_params_at_its_bias_index():
+    sweep = _make_dry_sweep()
+    sweep._close_loop_norm = 1.0
+    sweep._thermometer_bias_amps = 1.0e-5
+    sweep._guess_params = [None, None, None]
+
+    traces, sgamp = _make_synthetic_didv_traces(sweep, r0_true=0.1)
+    sweep._sg_current_amps_pp = sgamp
+    sweep._daq = _make_fake_daq(traces)
+
+    quality = sweep.measure_r0_quality(bias_index=1)
+
+    assert quality['didv_fit_ok'] is True
+    assert sweep._guess_params[1] is not None
+    assert len(sweep._guess_params[1]) == 7
+    # neighbours are untouched
+    assert sweep._guess_params[0] is None
+    assert sweep._guess_params[2] is None
+
+
+def test_failed_fit_leaves_its_guess_params_untouched(monkeypatch):
+    sweep = _make_dry_sweep()
+    sweep._sg_current_amps_pp = 2.0e-6
+    sweep._close_loop_norm = 1.0
+    sweep._thermometer_bias_amps = 1.0e-5
+    sentinel = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
+    sweep._guess_params = [sentinel]
+
+    traces, _ = _make_synthetic_didv_traces(sweep, r0_true=0.1)
+    sweep._daq = _make_fake_daq(traces)
+
+    def exploding_fit(**kwargs):
+        raise RuntimeError('fit did not converge')
+
+    monkeypatch.setattr(gab_sweep_module, 'fit_didv_r0', exploding_fit)
+
+    sweep.measure_r0_quality(bias_index=0)
+
+    assert sweep._guess_params[0] == sentinel

@@ -79,7 +79,6 @@ signal_gen_phase_deg = 0
 # dIdV fit parameters
 # didv_fcutoff_Hz is the fit lowpass cutoff
 didv_fcutoff_Hz = 50000
-r0_guess_mOhm = 150
 
 # how to let the thermometer TES R0 settle before measuring it
 # pick one method, only its own parameters are read:

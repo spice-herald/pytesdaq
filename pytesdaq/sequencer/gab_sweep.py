@@ -330,7 +330,7 @@ def compute_next_bias(bias_history=None,
 def fit_didv_r0(traces=None, sample_rate=None,
                 sgfreq=None, sgamp=None,
                 rsh=None, rp=None, ibias=None,
-                r0_guess=0.15, fcutoff=50000.0):
+                guess_params=None, fcutoff=50000.0):
     """
     Fit square wave dIdV traces and extract the TES bias point R0
     using the infinite loop gain approximation.
@@ -358,15 +358,18 @@ def fit_didv_r0(traces=None, sample_rate=None,
     ibias : float
         Thermometer TES bias current [Amps], used for the derived
         bias parameters (i0, p0).
-    r0_guess : float
-        Initial guess of R0 for the fit [Ohms].
+    guess_params : tuple or None
+        Starting parameters (A, B, C, tau1, tau2, tau3, dt) for the
+        3-pole fit, normally the result of the last good fit at this
+        bias point. None lets qetpy guess them from sgamp and rsh.
     fcutoff : float
         Lowpass cutoff frequency for the fit [Hz].
 
     Returns
     -------
     result : dict
-        Keys: r0, r0_err, i0, p0 [SI units], fit_cost, fit_params.
+        Keys: r0, r0_err, i0, p0 [SI units], fit_cost, fit_params,
+        fit_params_tuple, cov.
     """
 
     didv = qp.DIDV(
@@ -375,11 +378,10 @@ def fit_didv_r0(traces=None, sample_rate=None,
         sgfreq,
         sgamp,
         rsh,
-        r0=r0_guess,
         rp=rp,
     )
 
-    didv.dofit(poles=3, fcutoff=fcutoff)
+    didv.dofit(poles=3, fcutoff=fcutoff, guess_params=guess_params)
     fit = didv.fitresult(poles=3)
 
     biasparams = get_biasparams_ilg(
@@ -412,6 +414,16 @@ def fit_didv_r0(traces=None, sample_rate=None,
     r0_variance = float(np.dot(jacobian, np.dot(cov, jacobian)))
     r0_err = float(np.sqrt(abs(r0_variance)))
 
+    # the parameter tuple in the order qetpy's dofit expects it back,
+    # so a good fit at one bias point can seed the same point at the
+    # next temperature
+    fit_params_tuple = None
+    param_order = ['A', 'B', 'C', 'tau1', 'tau2', 'tau3', 'dt']
+    if all(name in fit['params'] for name in param_order):
+        fit_params_tuple = tuple(
+            float(fit['params'][name]) for name in param_order
+        )
+
     result = {
         'r0': float(biasparams['r0']),
         'r0_err': r0_err,
@@ -419,6 +431,8 @@ def fit_didv_r0(traces=None, sample_rate=None,
         'p0': float(biasparams['p0']),
         'fit_cost': float(fit['cost']),
         'fit_params': copy.deepcopy(fit['params']),
+        'fit_params_tuple': fit_params_tuple,
+        'cov': cov.tolist(),
     }
 
     return result
@@ -515,6 +529,9 @@ class GabSweep(Sequencer):
         self._sg_current_amps_pp = None
         self._close_loop_norm = None
         self._thermometer_bias_amps = None
+        # one dIdV fit seed per heater bias point, carried across
+        # temperatures so point k seeds point k at the next one
+        self._guess_params = list()
         self._csv_path = None
         self._output_path = None
         self._diagnostics = {'config': None, 'steps': list()}
@@ -684,10 +701,6 @@ class GabSweep(Sequencer):
         self._didv_fcutoff = 50000.0
         if config_has(config_dict, 'didv_fcutoff_Hz'):
             self._didv_fcutoff = float(config_get(config_dict, 'didv_fcutoff_Hz'))
-
-        self._r0_guess = 0.15
-        if config_has(config_dict, 'r0_guess_mOhm'):
-            self._r0_guess = float(config_get(config_dict, 'r0_guess_mOhm')) / 1000.0
 
         if self._signal_gen_frequency <= 0:
             raise ValueError(
@@ -1113,23 +1126,33 @@ class GabSweep(Sequencer):
 
         return self._synced_temperature_sweep().measure_temperature()
 
-    def measure_r0_quality(self, nb_events=None):
+    def measure_r0_quality(self, nb_events=None, bias_index=None):
         """
         Measure the thermometer TES bias point R0: read signal
         generator triggered dIdV traces, apply qetpy dIdV autocuts,
         fit the average with the 3-pole model, and extract R0 with
         the infinite loop gain approximation.
 
+        A failed fit is normal at the ends of the heater bias vector,
+        where the thermometer is fully normal or fully
+        superconducting. It is recorded with didv_fit_ok False and NaN
+        R0 rather than raised.
+
         Parameters
         ----------
         nb_events : int or None
             Number of traces to read. Defaults to nb_events_didv.
+        bias_index : int or None
+            Position in the heater bias vector, used to pick and
+            update the per bias point dIdV fit seed. None skips the
+            seeding entirely.
 
         Returns
         -------
         quality : dict
             Keys: r0, r0_err [Ohms], i0 [Amps], p0 [Watts],
-            fit_cost, nb_traces, nb_traces_kept.
+            fit_cost, fit_params, cov, nb_traces, nb_traces_kept,
+            autocuts_ok, didv_fit_ok.
         """
 
         if self._sg_current_amps_pp is None:
@@ -1151,26 +1174,70 @@ class GabSweep(Sequencer):
 
         cut = qp.autocuts_didv(traces, fs=self._sample_rate)
 
+        autocuts_ok = True
         if np.sum(cut) == 0:
+            # every trace rejected: fall back to all of them, but say
+            # so, because the kept count alone cannot distinguish this
+            # from autocuts having kept everything
+            autocuts_ok = False
             print('WARNING: dIdV autocuts removed all traces, '
                   'using all traces instead!')
             cut = np.ones(traces.shape[0], dtype=bool)
 
-        fit = fit_didv_r0(
-            traces=traces[cut, :],
-            sample_rate=self._sample_rate,
-            sgfreq=self._signal_gen_frequency,
-            sgamp=self._sg_current_amps_pp,
-            rsh=self._thermometer_rshunt,
-            rp=self._thermometer_rparasitic,
-            ibias=self._get_thermometer_bias_amps(),
-            r0_guess=self._r0_guess,
-            fcutoff=self._didv_fcutoff
-        )
+        guess_params = None
+        if (bias_index is not None
+                and bias_index < len(self._guess_params)):
+            guess_params = self._guess_params[bias_index]
 
-        # a good fit seeds the next one
-        if np.isfinite(fit['r0']) and fit['r0'] > 0:
-            self._r0_guess = fit['r0']
+        fit = None
+        didv_fit_ok = True
+
+        try:
+            fit = fit_didv_r0(
+                traces=traces[cut, :],
+                sample_rate=self._sample_rate,
+                sgfreq=self._signal_gen_frequency,
+                sgamp=self._sg_current_amps_pp,
+                rsh=self._thermometer_rshunt,
+                rp=self._thermometer_rparasitic,
+                ibias=self._get_thermometer_bias_amps(),
+                guess_params=guess_params,
+                fcutoff=self._didv_fcutoff
+            )
+        except Exception as err:
+            # at the ends of the bias vector the thermometer is fully
+            # normal or fully superconducting and the 3-pole fit has
+            # nothing to fit. That is expected data, not a run ending
+            # error, so it is recorded and the sweep continues
+            didv_fit_ok = False
+            print('WARNING: dIdV fit failed at bias index '
+                  f'{bias_index}: {err}')
+
+        if fit is not None and not (np.isfinite(fit['r0'])
+                                    and fit['r0'] > 0):
+            didv_fit_ok = False
+
+        if not didv_fit_ok:
+            quality = {
+                'r0': float('nan'),
+                'r0_err': float('nan'),
+                'i0': float('nan'),
+                'p0': float('nan'),
+                'fit_cost': float('nan'),
+                'fit_params': None,
+                'cov': None,
+                'nb_traces': int(traces.shape[0]),
+                'nb_traces_kept': int(np.sum(cut)),
+                'autocuts_ok': autocuts_ok,
+                'didv_fit_ok': False,
+            }
+            return quality
+
+        # a good fit seeds the next sweep at this same bias point
+        if (bias_index is not None
+                and bias_index < len(self._guess_params)
+                and fit['fit_params_tuple'] is not None):
+            self._guess_params[bias_index] = fit['fit_params_tuple']
 
         quality = {
             'r0': fit['r0'],
@@ -1178,8 +1245,12 @@ class GabSweep(Sequencer):
             'i0': fit['i0'],
             'p0': fit['p0'],
             'fit_cost': fit['fit_cost'],
+            'fit_params': fit['fit_params'],
+            'cov': fit['cov'],
             'nb_traces': int(traces.shape[0]),
             'nb_traces_kept': int(np.sum(cut)),
+            'autocuts_ok': autocuts_ok,
+            'didv_fit_ok': True,
         }
 
         return quality
