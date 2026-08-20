@@ -255,6 +255,8 @@ class Readout:
         
     def update_analysis_config(self, norm_type=None, unit=None,
                                calc_psd=None,
+                               calc_transfer_function=None,
+                               tf_channel_out=None, tf_channel_in=None,
                                enable_pileup_rejection=None,
                                pileup_cuts=None,
                                enable_running_avg=None,
@@ -281,6 +283,15 @@ class Readout:
         
         if calc_psd is not None:
             self._analyzer.set_config('calc_psd', calc_psd)
+
+        if calc_transfer_function is not None:
+            self._analyzer.set_config('calc_transfer_function', calc_transfer_function)
+
+        if tf_channel_out is not None:
+            self._analyzer.set_config('tf_channel_out', tf_channel_out)
+
+        if tf_channel_in is not None:
+            self._analyzer.set_config('tf_channel_in', tf_channel_in)
             
         if enable_pileup_rejection is not None:
             self._analyzer.set_config('enable_pileup_rejection', enable_pileup_rejection)
@@ -345,7 +356,8 @@ class Readout:
         # reset running avg
         if (norm_type is not None or unit is not None or 
             calc_psd is not None or enable_pileup_rejection is not None or
-            pileup_cuts is not None):
+            pileup_cuts is not None or calc_transfer_function is not None or
+            tf_channel_out is not None or tf_channel_in is not None):
             self._analyzer.set_config('reset_running_avg', True)
 
 
@@ -873,7 +885,9 @@ class Readout:
             self._first_draw = True
 
             
-        if self._analyzer.get_config('calc_psd'):
+        calc_tf = self._analyzer.get_config('calc_transfer_function')
+
+        if self._analyzer.do_calc_psd():
             if freq_array is None or len(freq_array)!=nbins:
                 return
 
@@ -883,7 +897,9 @@ class Readout:
 
         # label
         ylabel = self._analyzer.get_config('unit')
-        if self._analyzer.get_config('calc_psd'):
+        if calc_tf:
+            ylabel = 'Attenuation Ratio'
+        elif self._analyzer.get_config('calc_psd'):
             ylabel = ylabel + '/rtHz'
 
         # draw!
@@ -891,7 +907,13 @@ class Readout:
            
             # axes label
             self._axes.clear()
-            if self._analyzer.get_config('calc_psd'):
+            if calc_tf:
+                self._axes.set_xlabel('Hz')
+                self._axes.set_ylabel(ylabel)
+                self._axes.set_title('Transfer Function (RMS Ratio)')
+                self._axes.set_yscale('log')
+                self._axes.set_xscale('log')
+            elif self._analyzer.get_config('calc_psd'):
                 self._axes.set_xlabel('Hz')
                 self._axes.set_ylabel(ylabel)
                 self._axes.set_title('PSD')
@@ -907,7 +929,7 @@ class Readout:
             # x axis value
             dt = 1/self._adc_config['sample_rate']
             x_axis = np.arange(0,nbins)*1e3*dt
-            if self._analyzer.get_config('calc_psd') and len(freq_array)!=0:
+            if self._analyzer.do_calc_psd() and len(freq_array)!=0:
                 x_axis = freq_array
           
             self._plot_ref = [None]*nchan
@@ -919,7 +941,10 @@ class Readout:
                 
     
             for ichan in range(nchan):
-                chan = self._adc_config['selected_channel_list'][ichan]
+                if calc_tf:
+                    chan = int(self._analyzer.get_config('tf_channel_out'))
+                else:
+                    chan = self._adc_config['selected_channel_list'][ichan]
 
                 self._plot_ref[ichan], = self._axes.plot(x_axis, data_array[ichan],
                                                          color=self._colors[chan])
@@ -942,12 +967,26 @@ class Readout:
 
         self._axes.grid(which='major',axis='both',alpha=0.6)
         self._axes.grid(which='minor',axis='both',alpha=0.3, ls='dashed')
-        self._axes.legend(self._selected_channel_name_list, loc='upper right')
+        legend_list = self._selected_channel_name_list
+        if calc_tf:
+            legend_list = [self._transfer_function_label()]
+        self._axes.legend(legend_list, loc='upper right')
         self._canvas.draw()
         self._canvas.flush_events()
             
 
         
+    def _transfer_function_label(self):
+        """
+        Legend label for the transfer function trace
+        """
+
+        channel_out = self._analyzer.get_config('tf_channel_out')
+        channel_in = self._analyzer.get_config('tf_channel_in')
+
+        return 'AI' + str(channel_out) + ' / AI' + str(channel_in)
+
+
     def _fill_norm(self):
         """
         Fill normalization list and store in analysis dictionary

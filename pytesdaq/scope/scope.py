@@ -423,6 +423,9 @@ class MainWindow(QtWidgets.QMainWindow):
             
         # update readout
         self._readout.select_channels(self._channel_list)
+        self._update_transfer_function_channels()
+        if str(self._waveform_combobox.currentText())=='Transfer Function':
+            self._handle_transfer_function_channels()
 
         
         
@@ -436,13 +439,83 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # type
         calc_psd = False
+        calc_transfer_function = False
         if waveform_type=='PSD':
             calc_psd = True
-      
-        # update analysis config
-        self._readout.update_analysis_config(calc_psd=calc_psd)
+        elif waveform_type=='Transfer Function':
+            calc_transfer_function = True
 
-  
+        # swap unit/norm for the two channels being compared
+        self._unit_label.setVisible(not calc_transfer_function)
+        self._unit_combobox.setVisible(not calc_transfer_function)
+        self._norm_label.setVisible(not calc_transfer_function)
+        self._norm_combobox.setVisible(not calc_transfer_function)
+        self._tf_chan1_label.setVisible(calc_transfer_function)
+        self._tf_chan1_combobox.setVisible(calc_transfer_function)
+        self._tf_chan2_label.setVisible(calc_transfer_function)
+        self._tf_chan2_combobox.setVisible(calc_transfer_function)
+
+        # update analysis config
+        self._readout.update_analysis_config(calc_psd=calc_psd,
+                                             calc_transfer_function=calc_transfer_function)
+
+        if calc_transfer_function:
+            # ratio is dimensionless, so per-channel ADC calibration is normalization enough
+            self._readout.update_analysis_config(unit='Volts', norm_type='NoNorm')
+            self._update_transfer_function_channels()
+            self._handle_transfer_function_channels()
+        else:
+            self._handle_waveform_unit()
+
+
+    def _update_transfer_function_channels(self):
+        """
+        Refill the transfer function channel selectors from the selected channels
+        """
+
+        channel_list = sorted(self._channel_list)
+
+        for index, combobox in enumerate([self._tf_chan1_combobox,
+                                          self._tf_chan2_combobox]):
+
+            previous = str(combobox.currentText())
+
+            combobox.blockSignals(True)
+            combobox.clear()
+            for channel_num in channel_list:
+                combobox.addItem('AI' + str(channel_num))
+
+            previous_index = combobox.findText(previous, QtCore.Qt.MatchFixedString)
+            if previous_index >= 0:
+                combobox.setCurrentIndex(previous_index)
+            elif combobox.count() > index:
+                combobox.setCurrentIndex(index)
+            combobox.blockSignals(False)
+
+        # a ratio of a channel against itself is flat, so default the two apart
+        if (self._tf_chan2_combobox.count() > 1
+            and self._tf_chan2_combobox.currentIndex() == self._tf_chan1_combobox.currentIndex()):
+            self._tf_chan2_combobox.blockSignals(True)
+            self._tf_chan2_combobox.setCurrentIndex(
+                (self._tf_chan1_combobox.currentIndex() + 1) % self._tf_chan2_combobox.count())
+            self._tf_chan2_combobox.blockSignals(False)
+
+
+    def _handle_transfer_function_channels(self):
+        """
+        Handle transfer function channel selection (Signal/Slot connection)
+        """
+
+        channel_1 = str(self._tf_chan1_combobox.currentText())
+        channel_2 = str(self._tf_chan2_combobox.currentText())
+
+        if not channel_1 or not channel_2:
+            return
+
+        self._readout.update_analysis_config(tf_channel_out=int(channel_1.replace('AI', '')),
+                                             tf_channel_in=int(channel_2.replace('AI', '')))
+
+
 
 
     def _handle_waveform_unit(self):
@@ -899,7 +972,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # waveform type selection
         font.setBold(False)
         self._waveform_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._waveform_combobox.setGeometry(QtCore.QRect(10, 30, 100, 25))
+        self._waveform_combobox.setGeometry(QtCore.QRect(10, 30, 150, 25))
         self._waveform_combobox.setFont(font)
         self._waveform_combobox.setStyleSheet("QComboBox"
                                               "{"
@@ -908,19 +981,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._waveform_combobox.setObjectName('waveformComboBox')
         self._waveform_combobox.addItem('Waveform')
         self._waveform_combobox.addItem('PSD')
+        self._waveform_combobox.addItem('Transfer Function')
        
 
         # unit
         font.setBold(True)
-        unit_label = QtWidgets.QLabel(self._display_frame)
-        unit_label.setGeometry(QtCore.QRect(122, 30, 31, 25))
-        unit_label.setFont(font)
-        unit_label.setText('Unit:')
+        self._unit_label = QtWidgets.QLabel(self._display_frame)
+        self._unit_label.setGeometry(QtCore.QRect(170, 30, 31, 25))
+        self._unit_label.setFont(font)
+        self._unit_label.setText('Unit:')
 
 
         font.setBold(False)
         self._unit_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._unit_combobox.setGeometry(QtCore.QRect(159, 30, 80, 25))
+        self._unit_combobox.setGeometry(QtCore.QRect(205, 30, 80, 25))
         self._unit_combobox.setFont(font)
         self._unit_combobox.setStyleSheet("QComboBox"
                                           "{"
@@ -941,15 +1015,15 @@ class MainWindow(QtWidgets.QMainWindow):
        
         # norm
         font.setBold(True)
-        norm_label = QtWidgets.QLabel(self._display_frame)
-        norm_label.setGeometry(QtCore.QRect(254, 30, 60, 25))
-        norm_label.setFont(font)
-        norm_label.setText('Norm:')
+        self._norm_label = QtWidgets.QLabel(self._display_frame)
+        self._norm_label.setGeometry(QtCore.QRect(292, 30, 45, 25))
+        self._norm_label.setFont(font)
+        self._norm_label.setText('Norm:')
 
 
         font.setBold(False)
         self._norm_combobox = QtWidgets.QComboBox(self._display_frame)
-        self._norm_combobox.setGeometry(QtCore.QRect(300, 30, 171, 25))
+        self._norm_combobox.setGeometry(QtCore.QRect(340, 30, 131, 25))
         self._norm_combobox.setStyleSheet("QComboBox"
                                           "{"
                                           "background-color: lightgreen;"
@@ -960,6 +1034,44 @@ class MainWindow(QtWidgets.QMainWindow):
         #self._norm_combobox.addItem('OpenLoop')
         #self._norm_combobox.addItem('CloseLoop')
     
+
+        # transfer function channels, shown in place of unit/norm
+        font.setBold(True)
+        self._tf_chan1_label = QtWidgets.QLabel(self._display_frame)
+        self._tf_chan1_label.setGeometry(QtCore.QRect(170, 30, 40, 25))
+        self._tf_chan1_label.setFont(font)
+        self._tf_chan1_label.setText('Ch 1:')
+        self._tf_chan1_label.setVisible(False)
+
+        font.setBold(False)
+        self._tf_chan1_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._tf_chan1_combobox.setGeometry(QtCore.QRect(214, 30, 62, 25))
+        self._tf_chan1_combobox.setFont(font)
+        self._tf_chan1_combobox.setStyleSheet("QComboBox"
+                                              "{"
+                                              "background-color: lightgreen;"
+                                              "}")
+        self._tf_chan1_combobox.setObjectName('tfChan1ComboBox')
+        self._tf_chan1_combobox.setVisible(False)
+
+        font.setBold(True)
+        self._tf_chan2_label = QtWidgets.QLabel(self._display_frame)
+        self._tf_chan2_label.setGeometry(QtCore.QRect(288, 30, 40, 25))
+        self._tf_chan2_label.setFont(font)
+        self._tf_chan2_label.setText('Ch 2:')
+        self._tf_chan2_label.setVisible(False)
+
+        font.setBold(False)
+        self._tf_chan2_combobox = QtWidgets.QComboBox(self._display_frame)
+        self._tf_chan2_combobox.setGeometry(QtCore.QRect(332, 30, 62, 25))
+        self._tf_chan2_combobox.setFont(font)
+        self._tf_chan2_combobox.setStyleSheet("QComboBox"
+                                              "{"
+                                              "background-color: lightgreen;"
+                                              "}")
+        self._tf_chan2_combobox.setObjectName('tfChan2ComboBox')
+        self._tf_chan2_combobox.setVisible(False)
+
 
         # auto_scale
         font.setBold(True)
@@ -997,6 +1109,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._waveform_combobox.currentIndexChanged.connect(self._handle_waveform_type)
         self._unit_combobox.currentIndexChanged.connect(self._handle_waveform_unit)
         self._norm_combobox.activated.connect(self._handle_waveform_norm)
+        self._tf_chan1_combobox.activated.connect(self._handle_transfer_function_channels)
+        self._tf_chan2_combobox.activated.connect(self._handle_transfer_function_channels)
         self._auto_scale_checkbox.toggled.connect(self._handle_auto_scale)
 
     def _init_channel_frame(self):

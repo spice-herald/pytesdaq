@@ -45,6 +45,16 @@ class Analyzer:
                              '" not available!')
         
         
+    def do_calc_psd(self):
+        """
+        Check if power spectra are needed, either for display or as
+        the input to the transfer function.
+        """
+
+        return (self._analysis_config['calc_psd']
+                or self._analysis_config['calc_transfer_function'])
+
+
     def set_config(self, config_name, config_val):
         """
         Set/Update analysis config
@@ -110,7 +120,7 @@ class Analyzer:
         # ---------------------
         # PSD
         # ---------------------        
-        if self._analysis_config['calc_psd']:
+        if self.do_calc_psd():
             data_array = self.calc_psd(data_array, adc_config['sample_rate'])
         else:
             self._freq_array = None
@@ -173,7 +183,9 @@ class Analyzer:
         # ---------------------
         # PSD -> sqrt
         # ---------------------
-        if self._analysis_config['calc_psd']:
+        if self._analysis_config['calc_transfer_function']:
+            data_array = self.calc_rms_ratio(data_array, adc_config)
+        elif self._analysis_config['calc_psd']:
             data_array = np.sqrt(data_array)
         
             
@@ -267,6 +279,53 @@ class Analyzer:
 
 
                 
+    def calc_rms_ratio(self, psd_array, adc_config):
+        """
+        Calculate the RMS ratio transfer function between two channels
+
+        Arguments:
+        ----------
+
+        psd_array: 2D ndarray
+           power spectra [nb channels, nb frequency bins], not square rooted
+        adc_config: dictionary
+
+        Return:
+        ------
+
+        ratio_array: ndarray
+           2D numpy float64 array [1, nb frequency bins] with the dimensionless
+           amplitude ratio sqrt(S_out/S_in)
+
+        """
+
+        # running average buffer leaves a trailing event axis on the single event pass
+        if psd_array.ndim == 3:
+            psd_array = psd_array[:, :, 0]
+
+        channel_out = self._analysis_config['tf_channel_out']
+        channel_in = self._analysis_config['tf_channel_in']
+
+        if channel_out is None or channel_in is None:
+            return np.zeros((0, np.size(psd_array, 1)), dtype=np.float64)
+
+        channel_list = list(adc_config['selected_channel_list'])
+        if (int(channel_out) not in channel_list
+            or int(channel_in) not in channel_list):
+            return np.zeros((0, np.size(psd_array, 1)), dtype=np.float64)
+
+        index_out = channel_list.index(int(channel_out))
+        index_in = channel_list.index(int(channel_in))
+
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratio = np.sqrt(psd_array[index_out, :] / psd_array[index_in, :])
+
+        ratio_array = np.zeros((1, len(ratio)), dtype=np.float64)
+        ratio_array[0, :] = ratio
+
+        return ratio_array
+
+
     def calc_offset(self, data_array):
         """
         Calculate offset
@@ -820,6 +879,9 @@ class Analyzer:
         self._analysis_config['norm_type'] = 'NoNorm'
         self._analysis_config['norm_list'] = None
         self._analysis_config['calc_psd'] = False
+        self._analysis_config['calc_transfer_function'] = False
+        self._analysis_config['tf_channel_out'] = None
+        self._analysis_config['tf_channel_in'] = None
         self._analysis_config['enable_running_avg'] = False
         self._analysis_config['reset_running_avg'] = False
         self._analysis_config['nb_events_avg'] = 1
