@@ -96,10 +96,11 @@ settle_wait_time_s = 5
 #stability_timeout_s = 300
 
 # R0 drift check at startup
-# repeated R0 measurements at fixed conditions before the sweep;
-# their scatter is the noise floor the feedback has to beat, a warning
-# is printed if it exceeds r0_stability_tolerance_percent; set
-# drift_check_nb_measurements = 0 to skip the check
+# repeated R0 measurements at fixed conditions before the sweep; their
+# scatter is the R0 repeatability of the setup, which is the error bar
+# on every point the sweep records. A warning is printed if it exceeds
+# r0_stability_tolerance_percent; set drift_check_nb_measurements = 0
+# to skip the check
 drift_check_nb_measurements = 3
 drift_check_wait_time_s = 5
 

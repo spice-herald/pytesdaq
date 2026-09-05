@@ -27,9 +27,10 @@ if __name__ == "__main__":
     parser.add_argument('--setup_file', type=str,
                         help=('Setup configuration file name (full path) '
                               '[default: pytesdaq/config/setup.ini]'))
-    parser.add_argument('--sequencer_file', type=str,
+    parser.add_argument('--config_file', '--sequencer_file', type=str,
                         help=('Gab sweep configuration file name '
-                              '(full path) '
+                              '(full path). This is the [gab_sweep] '
+                              'config, not setup.ini '
                               '[default: pytesdaq/config/gab_sweep.ini]'))
     parser.add_argument('--comment', dest='comment', type=str,
                         help='Comment (use quotes "") '
@@ -71,17 +72,17 @@ if __name__ == "__main__":
         print('ERROR: Setup file "' + setup_file + '" not found!')
         exit()
 
-    # sequencer file
-    sequencer_file = None
-    if args.sequencer_file:
-        sequencer_file = args.sequencer_file
+    # config file. --sequencer_file is kept as an alias so the older
+    # spelling, and anything already scripted around it, keeps working
+    config_file = None
+    if args.config_file:
+        config_file = args.config_file
     else:
         this_dir = os.path.dirname(os.path.realpath(__file__))
-        sequencer_file = this_dir + '/../pytesdaq/config/gab_sweep.ini'
+        config_file = this_dir + '/../pytesdaq/config/gab_sweep.ini'
 
-    if not os.path.isfile(sequencer_file):
-        print('ERROR: Sequencer file "' + sequencer_file
-              + '" not found!')
+    if not os.path.isfile(config_file):
+        print('ERROR: Config file "' + config_file + '" not found!')
         exit()
 
     # ========================
@@ -89,7 +90,7 @@ if __name__ == "__main__":
     # ========================
 
     measurement = GabSweep(
-        sequencer_file=sequencer_file,
+        sequencer_file=config_file,
         setup_file=setup_file,
         comment=comment,
         dry_run=dry_run,

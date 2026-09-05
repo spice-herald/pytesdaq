@@ -1646,11 +1646,9 @@ class GabSweep(Sequencer):
             print(f'\nR0 settling: fixed timer, '
                   f'{self._settle_wait_time:.6g} s per measurement')
 
-        # the sweep visits every bias point at every temperature, so
-        # unlike the old feedback the point count is exact. How long
-        # the fridge takes to reach a setpoint is still not knowable
-        # in advance, so this assumes the hold time alone and will
-        # underestimate large temperature steps.
+        # the fridge settling time is not knowable in advance, so this
+        # assumes the hold time alone and underestimates large
+        # temperature steps
         nb_temperature = len(self._temperature_list_mk)
         nb_measurements = nb_temperature * nb_bias
 
