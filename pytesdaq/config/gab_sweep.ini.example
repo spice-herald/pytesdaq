@@ -140,6 +140,13 @@ relock_max_attempts = 3
 
 # what counts as back in transition, as a fraction of
 # thermometer_rn_mOhm. This is a readout health check on the lock, not
-# an operating point, and it never selects a bias; keep it wide
+# an operating point, and it never selects a bias, so keep it wide.
+# The upper bound is what catches a thermometer left biased normal, so
+# it has to stay well below 1: an R0 within a few percent of Rn is a
+# normal TES, not a high one.
 transition_check_frac_rn_min = 0.05
-transition_check_frac_rn_max = 0.95
+transition_check_frac_rn_max = 0.6
+
+# refuse to start when the startup relock does not verify the
+# thermometer in transition, instead of recording a blind sweep
+require_transition_at_startup = true

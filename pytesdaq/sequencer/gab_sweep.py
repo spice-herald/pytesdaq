@@ -14,7 +14,11 @@ Making sure the bias vector reaches a usable R0 at every temperature
 is the operator's job, established with short test sweeps.
 
 The heater TES bias is never taken below bias_min_uA so it stays
-normal. No raw TES data is saved. See
+normal. No raw TES data is saved. Each bias point's diagnostics holds
+didv_data with the average current trace [A], complex dIdV [1/Ohm],
+and complex standard errors of the mean. Reload for offline fitting
+with qetpy.didvinitfromdata(**point['didv_data']). The data is retained
+if fitting fails after trace processing. See
 Gab_planning/Gab_bias_sweep_design.md for the full design.
 """
 
@@ -209,7 +213,7 @@ def heater_power_watts(bias_ua=None, rshunt=None,
 def fit_didv_r0(traces=None, sample_rate=None,
                 sgfreq=None, sgamp=None,
                 rsh=None, rp=None, ibias=None,
-                guess_params=None, fcutoff=50000.0):
+                guess_params=None, fcutoff=50000.0, didv_data=None):
     """
     Fit square wave dIdV traces and extract the TES bias point R0
     using the infinite loop gain approximation.
@@ -243,6 +247,9 @@ def fit_didv_r0(traces=None, sample_rate=None,
         bias point. None lets qetpy guess them from sgamp and rsh.
     fcutoff : float
         Lowpass cutoff frequency for the fit [Hz].
+    didv_data : dict or None
+        Optional output dictionary populated before fitting with inputs
+        for qetpy.didvinitfromdata, including complex standard errors.
 
     Returns
     -------
@@ -259,6 +266,26 @@ def fit_didv_r0(traces=None, sample_rate=None,
         rsh,
         rp=rp,
     )
+
+    didv.processtraces()
+    if didv_data is not None:
+        # Preserve the fit inputs even when the optimizer fails.
+        didv_data.update({
+            'tmean': didv._tmean.copy(),
+            'didvmean': didv._didvmean.copy(),
+            'didvstd': didv._didvstd.copy(),
+            'offset': float(didv._offset),
+            'offset_err': float(didv._offset_err),
+            'fs': didv._fs,
+            'sgfreq': didv._sgfreq,
+            'sgamp': didv._sgamp,
+            'rsh': didv._rsh,
+            'rp': didv._rp,
+            'r0': didv._r0,
+            'dutycycle': didv._dutycycle,
+            'dt0': didv._dt0,
+            'add180phase': didv._add180phase,
+        })
 
     didv.dofit(poles=3, fcutoff=fcutoff, guess_params=guess_params)
     fit = didv.fitresult(poles=3)
@@ -553,6 +580,15 @@ class GabSweep(Sequencer):
                 'GabSweep: "transition_check_frac_rn_min" and '
                 '"transition_check_frac_rn_max" must satisfy '
                 '0 < min < max < 1!'
+            )
+
+        # a startup relock that never verifies in transition aborts
+        # the sweep. Set false only to record a deliberately out of
+        # transition diagnostic sweep
+        self._require_transition_at_startup = True
+        if config_has(config_dict, 'require_transition_at_startup'):
+            self._require_transition_at_startup = bool(
+                config_get(config_dict, 'require_transition_at_startup')
             )
 
         # signal generator square wave settings (optional keys)
@@ -1215,7 +1251,8 @@ class GabSweep(Sequencer):
         quality : dict
             Keys: r0, r0_err [Ohms], i0 [Amps], p0 [Watts],
             fit_cost, fit_params, cov, nb_traces, nb_traces_kept,
-            autocuts_ok, didv_fit_ok.
+            autocuts_ok, didv_fit_ok, didv_data (qetpy.didvinitfromdata
+            inputs, empty if trace processing failed).
         """
 
         if self._sg_current_amps_pp is None:
@@ -1254,6 +1291,7 @@ class GabSweep(Sequencer):
 
         fit = None
         didv_fit_ok = True
+        didv_data = dict()
 
         try:
             fit = fit_didv_r0(
@@ -1265,7 +1303,8 @@ class GabSweep(Sequencer):
                 rp=self._thermometer_rparasitic,
                 ibias=self._get_thermometer_bias_amps(),
                 guess_params=guess_params,
-                fcutoff=self._didv_fcutoff
+                fcutoff=self._didv_fcutoff,
+                didv_data=didv_data,
             )
         except Exception as err:
             # at the ends of the bias vector the thermometer is fully
@@ -1293,6 +1332,7 @@ class GabSweep(Sequencer):
                 'nb_traces_kept': int(np.sum(cut)),
                 'autocuts_ok': autocuts_ok,
                 'didv_fit_ok': False,
+                'didv_data': didv_data,
             }
             return quality
 
@@ -1314,6 +1354,7 @@ class GabSweep(Sequencer):
             'nb_traces_kept': int(np.sum(cut)),
             'autocuts_ok': autocuts_ok,
             'didv_fit_ok': True,
+            'didv_data': didv_data,
         }
 
         return quality
@@ -1485,6 +1526,48 @@ class GabSweep(Sequencer):
                 return False, history
 
             time.sleep(10)
+
+    def _check_startup_transition(self, startup_relock=None):
+        """
+        Abort the sweep when the startup relock never verified the
+        thermometer in its transition.
+
+        Parameters
+        ----------
+        startup_relock : dict
+            Result of relock_and_verify at startup.
+
+        Returns
+        -------
+        None
+        """
+
+        if not self._require_transition_at_startup:
+            return
+
+        if startup_relock['relock_ok']:
+            return
+
+        r0 = startup_relock['r0']
+        percent_rn = r0 / self._thermometer_rn * 100.0
+        bias_ua = self._get_thermometer_bias_amps() * 1.0e6
+
+        # R0 blind to the absorber temperature makes every point the
+        # sweep would go on to record empty
+        raise ValueError(
+            'GabSweep: the thermometer TES did not verify in its '
+            'transition at startup, so R0 carries no information '
+            'about the absorber temperature and the sweep would '
+            f'record nothing. Measured R0 = {r0 * 1000.0:.6g} mOhms '
+            f'({percent_rn:.3g} percent of Rn) at a thermometer TES '
+            f'bias of {bias_ua:.6g} uA on channel '
+            f'{self._thermometer_tes_channel}. An R0 near Rn means '
+            'the thermometer is biased normal: check the bias, and '
+            'check that "thermometer_tes_channel" and '
+            '"heater_tes_channel" are not the wrong way round. Set '
+            '"require_transition_at_startup = false" to record a '
+            'sweep regardless.'
+        )
 
     def run_drift_check(self):
         """
@@ -1770,9 +1853,10 @@ class GabSweep(Sequencer):
             # startup matches the conditions every later relock runs
             # under
             self._set_heater_bias(bias_ua=self._bias_list[0])
-            self._diagnostics['startup_relock'] = (
-                self.relock_and_verify()
-            )
+            startup_relock = self.relock_and_verify()
+            self._diagnostics['startup_relock'] = startup_relock
+
+            self._check_startup_transition(startup_relock=startup_relock)
 
             # the heater TES goes to its lowest normal state before
             # the startup check and the drift check, so both are taken
@@ -2157,6 +2241,7 @@ class GabSweep(Sequencer):
 
         point_diagnostics = {
             'bias_index': bias_index,
+            'didv_data': quality['didv_data'],
             'fit_params': quality['fit_params'],
             'cov': quality['cov'],
             'stability_history': stability_history,

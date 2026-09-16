@@ -1,5 +1,6 @@
 import csv
 import os
+import pickle
 
 import numpy as np
 import pytest
@@ -210,6 +211,7 @@ def test_fit_didv_r0_recovers_known_r0():
     sweep = _make_dry_sweep()
     r0_true = 0.150
     traces, sgamp = _make_synthetic_didv_traces(sweep, r0_true)
+    didv_data = dict()
 
     result = fit_didv_r0(
         traces=traces,
@@ -221,11 +223,22 @@ def test_fit_didv_r0_recovers_known_r0():
         ibias=1.0e-4,
         guess_params=None,
         fcutoff=sweep._didv_fcutoff,
+        didv_data=didv_data,
     )
 
     assert result['r0'] == pytest.approx(r0_true, rel=0.05)
     assert result['r0_err'] >= 0.0
     assert np.isfinite(result['fit_cost'])
+
+    restored = qp.didvinitfromdata(**pickle.loads(pickle.dumps(didv_data)))
+    restored.dofit(poles=3, fcutoff=sweep._didv_fcutoff)
+    assert restored.fitresult(poles=3)['cost'] == pytest.approx(
+        result['fit_cost'], rel=1.0e-3,
+    )
+    params = restored.fitresult(poles=3)['params']
+    restored_r0 = (abs(params['A'] + params['B'] / (1.0 - params['C']))
+                   + sweep._thermometer_rshunt + sweep._thermometer_rparasitic)
+    assert restored_r0 == pytest.approx(result['r0'], rel=1.0e-3)
 
 
 def test_measure_r0_quality_reports_metrics():
@@ -1284,7 +1297,47 @@ def test_relock_config_parses_from_example():
     assert sweep._relock_nb_cycles == 2
     assert sweep._relock_max_attempts == 3
     assert sweep._transition_check_frac_rn_min == pytest.approx(0.05)
-    assert sweep._transition_check_frac_rn_max == pytest.approx(0.95)
+    assert sweep._transition_check_frac_rn_max == pytest.approx(0.6)
+    assert sweep._require_transition_at_startup is True
+
+
+def test_startup_aborts_when_the_thermometer_is_not_in_transition():
+    # a thermometer left biased normal makes R0 blind to the absorber,
+    # so the sweep must refuse to record 
+    sweep = _make_dry_sweep()
+    sweep._thermometer_bias_amps = 30.0e-6
+    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
+
+    with pytest.raises(ValueError, match='did not verify in its transition'):
+        sweep._check_startup_transition(startup_relock=startup_relock)
+
+
+def test_startup_transition_abort_reports_r0_and_bias():
+    sweep = _make_dry_sweep()
+    sweep._thermometer_bias_amps = 30.0e-6
+    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
+
+    with pytest.raises(ValueError) as error:
+        sweep._check_startup_transition(startup_relock=startup_relock)
+
+    message = str(error.value)
+    assert '1008' in message
+    assert '30' in message
+
+
+def test_startup_transition_check_passes_when_in_transition():
+    sweep = _make_dry_sweep()
+    startup_relock = {'relock_ok': True, 'nb_attempts': 1, 'r0': 0.113}
+
+    sweep._check_startup_transition(startup_relock=startup_relock)
+
+
+def test_startup_transition_check_can_be_disabled():
+    sweep = _make_dry_sweep()
+    sweep._require_transition_at_startup = False
+    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
+
+    sweep._check_startup_transition(startup_relock=startup_relock)
 
 
 class _FakeTemperatureSweep:
@@ -1320,6 +1373,7 @@ def _make_bias_sweep_sweep(device):
             'p0': 1.0e-15,
             'fit_cost': 1.0,
             'fit_params': {'A': 1.0},
+            'didv_data': {},
             'cov': [[1.0]],
             'nb_traces': 10,
             'nb_traces_kept': 10,
@@ -1349,6 +1403,58 @@ def test_one_row_per_bias_point_in_descending_order(tmp_path):
     applied = [row['heater_tes_bias_requested_ua'] for row in rows]
     for index in range(1, len(applied)):
         assert applied[index] < applied[index - 1]
+
+
+@pytest.mark.parametrize('fail_fit', [False, True])
+def test_bias_point_saves_didv_averages(tmp_path, monkeypatch, fail_fit):
+    device = {'bias': 38.0, 'log': list()}
+    sweep = _make_bias_sweep_sweep(device)
+    traces, sgamp = _make_synthetic_didv_traces(sweep, r0_true=0.15)
+    cut = np.arange(len(traces)) % 2 == 0
+    sweep._close_loop_norm = 2.0
+    sweep._sg_current_amps_pp = sgamp
+    sweep._daq = _make_fake_daq(traces * sweep._close_loop_norm)
+    sweep.measure_r0_quality = (
+        gab_sweep_module.GabSweep.measure_r0_quality.__get__(sweep)
+    )
+    monkeypatch.setattr(qp, 'autocuts_didv', lambda traces, fs: cut)
+
+    if fail_fit:
+        def failing_fit(self, **kwargs):
+            raise RuntimeError('fit did not converge')
+
+        monkeypatch.setattr(qp.DIDV, 'dofit', failing_fit)
+
+    row, point = sweep.measure_bias_point(
+        step_index=0, bias_index=0, bias_ua=300.0,
+        temperature_mk=42.0, temperature_ok=True,
+    )
+    sweep._output_path = str(tmp_path)
+    sweep._diagnostics['steps'] = [{'points': [point]}]
+    sweep._save_diagnostics()
+
+    with open(tmp_path / 'gab_sweep_diagnostics.p', 'rb') as file:
+        saved = pickle.load(file)['steps'][0]['points'][0]
+    data = saved['didv_data']
+    expected = qp.DIDV(
+        rawtraces=traces[cut],
+        fs=sweep._sample_rate, sgfreq=sweep._signal_gen_frequency,
+        sgamp=sgamp, rsh=sweep._thermometer_rshunt,
+        rp=sweep._thermometer_rparasitic,
+    )
+    expected.processtraces()
+    np.testing.assert_allclose(data['tmean'], expected._tmean)
+    np.testing.assert_allclose(data['didvmean'], expected._didvmean)
+    np.testing.assert_allclose(data['didvstd'], expected._didvstd)
+    assert data['offset'] == pytest.approx(expected._offset)
+    assert data['offset_err'] == pytest.approx(expected._offset_err)
+    assert data['sgamp'] == sgamp
+    assert saved['row']['didv_fit_ok'] is (not fail_fit)
+    assert row['nb_traces_kept'] == int(cut.sum())
+    assert set(row) == set(sweep.CSV_COLUMNS)
+    restored = qp.didvinitfromdata(**data)
+    np.testing.assert_allclose(restored._freq, expected._freq)
+    np.testing.assert_allclose(restored._time, expected._time)
 
 
 def test_step_ends_at_bias_min_and_next_starts_at_bias_max():
@@ -1453,6 +1559,7 @@ def test_dead_temperature_warns_loudly(capsys):
             'fit_params': None,
             'cov': None,
             'nb_traces': 10,
+            'didv_data': {},
             'nb_traces_kept': 10,
             'autocuts_ok': True,
             'didv_fit_ok': False,
