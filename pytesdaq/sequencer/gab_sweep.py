@@ -5,13 +5,16 @@ Automates the thermal conductance (Gab) measurement: sweep the MC
 stage temperature downward and, at each temperature, walk the heater
 TES bias down a fixed vector while measuring the thermometer TES bias
 point R0 at every step. R0 is extracted online from a square wave
-dIdV fit (3-pole fit, infinite loop gain approximation).
+dIdV fit (didv_fit_poles, infinite loop gain approximation).
 
-The sequencer holds no target R0 and takes no decision from R0. It
+The sequencer holds no target R0 and takes no decision from R0, and
+nothing checks where the thermometer sits in its transition. It
 records a curve of R0 against heater bias at every temperature, and
 the operating point is chosen offline by interpolating that curve.
-Making sure the bias vector reaches a usable R0 at every temperature
-is the operator's job, established with short test sweeps.
+A sweep is free to cover heater power and bath temperature ranges
+that drive the thermometer normal, with those points cut offline.
+Making sure the bias vector reaches a usable R0 where it matters is
+the operator's job, established with short test sweeps.
 
 The heater TES bias is never taken below bias_min_uA so it stays
 normal. No raw TES data is saved. Each bias point's diagnostics holds
@@ -24,6 +27,7 @@ Gab_planning/Gab_bias_sweep_design.md for the full design.
 
 import copy
 import csv
+import os
 import pickle
 import shutil
 import time
@@ -213,12 +217,12 @@ def heater_power_watts(bias_ua=None, rshunt=None,
 def fit_didv_r0(traces=None, sample_rate=None,
                 sgfreq=None, sgamp=None,
                 rsh=None, rp=None, ibias=None,
-                guess_params=None, fcutoff=50000.0, didv_data=None):
+                guess_params=None, fcutoff=50000.0, didv_data=None, poles=3):
     """
     Fit square wave dIdV traces and extract the TES bias point R0
     using the infinite loop gain approximation.
 
-    The traces are averaged and fit with the qetpy 3-pole dIdV model
+    The traces are averaged and fit with a qetpy 2- or 3-pole dIdV model
     (frequencies above fcutoff are excluded from the fit, acting as a
     lowpass filter), then R0 is computed from the zero frequency dVdI
     with the known shunt and parasitic resistances.
@@ -242,7 +246,7 @@ def fit_didv_r0(traces=None, sample_rate=None,
         Thermometer TES bias current [Amps], used for the derived
         bias parameters (i0, p0).
     guess_params : tuple or None
-        Starting parameters (A, B, C, tau1, tau2, tau3, dt) for the
+        Starting parameters (A, B, C, tau1, tau2, tau3, dt) for a
         3-pole fit, normally the result of the last good fit at this
         bias point. None lets qetpy guess them from sgamp and rsh.
     fcutoff : float
@@ -250,6 +254,9 @@ def fit_didv_r0(traces=None, sample_rate=None,
     didv_data : dict or None
         Optional output dictionary populated before fitting with inputs
         for qetpy.didvinitfromdata, including complex standard errors.
+    poles : int
+        Number of fit poles, either 2 or 3. Defaults to 3. Two-pole
+        starting parameters have order (A, B, tau1, tau2, dt).
 
     Returns
     -------
@@ -257,6 +264,9 @@ def fit_didv_r0(traces=None, sample_rate=None,
         Keys: r0, r0_err, i0, p0 [SI units], fit_cost, fit_params,
         fit_params_tuple, cov.
     """
+
+    if poles not in (2, 3):
+        raise ValueError('GabSweep: didv_fit_poles must be 2 or 3')
 
     didv = qp.DIDV(
         traces,
@@ -287,11 +297,20 @@ def fit_didv_r0(traces=None, sample_rate=None,
             'add180phase': didv._add180phase,
         })
 
-    didv.dofit(poles=3, fcutoff=fcutoff, guess_params=guess_params)
-    fit = didv.fitresult(poles=3)
+    didv.dofit(poles=poles, fcutoff=fcutoff, guess_params=guess_params)
+    fit = didv.fitresult(poles=poles)
+    if poles == 2:
+        param_order = ['A', 'B', 'tau1', 'tau2', 'dt']
+    else:
+        param_order = ['A', 'B', 'C', 'tau1', 'tau2', 'tau3', 'dt']
+    # QETpy versions may pad a two-pole covariance with fixed C/tau3.
+    if fit['cov'].shape[0] == 5:
+        covariance_order = ['A', 'B', 'tau1', 'tau2', 'dt']
+    else:
+        covariance_order = ['A', 'B', 'C', 'tau1', 'tau2', 'tau3', 'dt']
 
     biasparams = get_biasparams_ilg(
-        fit['params'],
+        {name: fit['params'][name] for name in covariance_order},
         fit['cov'],
         ibias,
         0.0,
@@ -324,7 +343,6 @@ def fit_didv_r0(traces=None, sample_rate=None,
     # so a good fit at one bias point can seed the same point at the
     # next temperature
     fit_params_tuple = None
-    param_order = ['A', 'B', 'C', 'tau1', 'tau2', 'tau3', 'dt']
     if all(name in fit['params'] for name in param_order):
         fit_params_tuple = tuple(
             float(fit['params'][name]) for name in param_order
@@ -495,7 +513,7 @@ class GabSweep(Sequencer):
         # config and Ohms internally. The thermometer shunt and
         # parasitic feed the dIdV fit; the heater triplet turns its
         # bias current into a Joule power. The thermometer normal
-        # resistance is recorded and used by the transition check.
+        # resistance is recorded for the offline analysis.
         self._thermometer_rshunt = (
             float(require('thermometer_rshunt_mOhm')) / 1000.0
         )
@@ -535,6 +553,15 @@ class GabSweep(Sequencer):
                     f'GabSweep: "{key}" must not be negative!'
                 )
 
+        # thermometer TES operating bias, held for the whole sweep
+        self._thermometer_bias_ua = float(
+            require('thermometer_tes_bias_uA')
+        )
+        if self._thermometer_bias_ua <= 0:
+            raise ValueError(
+                'GabSweep: "thermometer_tes_bias_uA" must be positive!'
+            )
+
         # thermometer TES relock, run with the heater at bias_max_uA
         self._relock_bias_ua = float(require('relock_bias_uA'))
         if self._relock_bias_ua <= 0:
@@ -548,47 +575,9 @@ class GabSweep(Sequencer):
                 float(config_get(config_dict, 'relock_nb_cycles'))
             )
 
-        self._relock_max_attempts = 3
-        if config_has(config_dict, 'relock_max_attempts'):
-            self._relock_max_attempts = int(
-                float(config_get(config_dict, 'relock_max_attempts'))
-            )
-
         if self._relock_nb_cycles < 1:
             raise ValueError(
                 'GabSweep: "relock_nb_cycles" must be at least 1!'
-            )
-        if self._relock_max_attempts < 1:
-            raise ValueError(
-                'GabSweep: "relock_max_attempts" must be at least 1!'
-            )
-
-        # what counts as back in transition, as a fraction of the
-        # thermometer normal resistance. This is a readout health
-        # check on the lock, not an operating point: it never selects
-        # a bias and never enters the science dataset
-        self._transition_check_frac_rn_min = float(
-            require('transition_check_frac_rn_min')
-        )
-        self._transition_check_frac_rn_max = float(
-            require('transition_check_frac_rn_max')
-        )
-
-        if not (0.0 < self._transition_check_frac_rn_min
-                < self._transition_check_frac_rn_max < 1.0):
-            raise ValueError(
-                'GabSweep: "transition_check_frac_rn_min" and '
-                '"transition_check_frac_rn_max" must satisfy '
-                '0 < min < max < 1!'
-            )
-
-        # a startup relock that never verifies in transition aborts
-        # the sweep. Set false only to record a deliberately out of
-        # transition diagnostic sweep
-        self._require_transition_at_startup = True
-        if config_has(config_dict, 'require_transition_at_startup'):
-            self._require_transition_at_startup = bool(
-                config_get(config_dict, 'require_transition_at_startup')
             )
 
         # signal generator square wave settings (optional keys)
@@ -636,6 +625,12 @@ class GabSweep(Sequencer):
         self._didv_fcutoff = 50000.0
         if config_has(config_dict, 'didv_fcutoff_Hz'):
             self._didv_fcutoff = float(config_get(config_dict, 'didv_fcutoff_Hz'))
+        fit_poles = 3
+        if config_has(config_dict, 'didv_fit_poles'):
+            fit_poles = float(config_get(config_dict, 'didv_fit_poles'))
+        if fit_poles not in (2, 3):
+            raise ValueError('GabSweep: didv_fit_poles must be 2 or 3')
+        self._didv_fit_poles = int(fit_poles)
 
         if self._signal_gen_frequency <= 0:
             raise ValueError(
@@ -1030,8 +1025,12 @@ class GabSweep(Sequencer):
 
     def _get_thermometer_bias_amps(self):
         """
-        Thermometer TES bias current, read from the instrument once
-        and cached (the script never changes it).
+        Thermometer TES bias current, read back from the instrument
+        once and cached.
+
+        The board snaps a request to the nearest bias it supports, so
+        this is the applied value rather than the requested one, and
+        it is the ibias every R0 is derived from.
 
         Returns
         -------
@@ -1048,21 +1047,47 @@ class GabSweep(Sequencer):
 
         return self._thermometer_bias_amps
 
+    def _set_thermometer_bias(self, bias_ua=None):
+        """
+        Set the thermometer TES bias, wait for it to settle, and
+        refresh the cached read-back.
+
+        Parameters
+        ----------
+        bias_ua : float
+            Requested thermometer TES bias [uA].
+
+        Returns
+        -------
+        None
+        """
+
+        success = self._instrument.set_tes_bias(
+            bias=bias_ua,
+            unit='uA',
+            detector_channel=self._thermometer_tes_channel
+        )
+
+        if not success:
+            print('ERROR: the instrument refused to set the '
+                  f'thermometer TES bias to {bias_ua:.6g} uA!')
+
+        if self._post_bias_wait > 0:
+            time.sleep(self._post_bias_wait)
+
+        self._thermometer_bias_amps = None
+        self._get_thermometer_bias_amps()
+
     def relock_thermometer(self):
         """
         Relock the thermometer SQUID through a hard normal bias.
 
         Drives the thermometer TES well above its critical current so
         the SQUID has a well behaved state to lock against, relocks,
-        returns the bias to the value captured at preflight, and
-        relocks again. The second relock is what lands the lock with
-        the thermometer back in its transition; the first only gives
-        it a clean starting point.
-
-        The applied bias is read back afterwards and the cached value
-        refreshed, because the front end board snaps the request to
-        the nearest bias it supports and that value is the ibias every
-        R0 is derived from.
+        returns the bias to thermometer_tes_bias_uA, and relocks
+        again. The second relock is what lands the lock at the
+        operating bias; the first only gives it a clean starting
+        point.
 
         Parameters
         ----------
@@ -1073,21 +1098,14 @@ class GabSweep(Sequencer):
         None
         """
 
-        if self._thermometer_initial_bias_ua is None:
-            raise ValueError(
-                'GabSweep: the pre-run thermometer TES bias is '
-                'unknown, so the relock cannot put it back! Run the '
-                'preflight first.'
-            )
-
         if self._verbose:
             print('INFO: Relocking the thermometer through '
                   f'{self._relock_bias_ua:.6g} uA, back to '
-                  f'{self._thermometer_initial_bias_ua:.6g} uA')
+                  f'{self._thermometer_bias_ua:.6g} uA')
 
         relock_sequence = [
             self._relock_bias_ua,
-            self._thermometer_initial_bias_ua,
+            self._thermometer_bias_ua,
         ]
 
         for bias_ua in relock_sequence:
@@ -1116,102 +1134,6 @@ class GabSweep(Sequencer):
         self._thermometer_bias_amps = None
         self._get_thermometer_bias_amps()
 
-    def check_thermometer_in_transition(self):
-        """
-        Check that the thermometer came back locked in its transition.
-
-        A readout health check, not a measurement: it decides only
-        whether the relock worked. R0 is required to be a usable fit
-        and to sit between transition_check_frac_rn_min and
-        transition_check_frac_rn_max of the thermometer normal
-        resistance.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        in_transition : bool
-            True when the thermometer is usably in its transition.
-        quality : dict
-            The R0 measurement the decision was taken on.
-        """
-
-        quality = self.measure_r0_quality()
-
-        if not quality['didv_fit_ok']:
-            return False, quality
-
-        fraction = quality['r0'] / self._thermometer_rn
-
-        in_transition = (
-            self._transition_check_frac_rn_min
-            < fraction
-            < self._transition_check_frac_rn_max
-        )
-
-        if self._verbose:
-            print(f'INFO: Transition check: R0 = '
-                  f'{quality["r0"] * 1000.0:.6g} mOhms, '
-                  f'{fraction * 100.0:.3g} percent of Rn, '
-                  f'in transition = {in_transition}')
-
-        return in_transition, quality
-
-    def relock_and_verify(self):
-        """
-        Relock the thermometer until it verifies back in transition.
-
-        Repeats relock_thermometer and the transition check up to
-        relock_max_attempts times. Exhausting the attempts warns
-        loudly and returns rather than raising, so that one bad
-        temperature does not throw away every colder one; the failure
-        is recorded in the diagnostics for offline analysis to drop.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        result : dict
-            Keys: relock_ok, nb_attempts, r0.
-        """
-
-        in_transition = False
-        quality = None
-        attempt = 0
-
-        while (not in_transition
-               and attempt < self._relock_max_attempts):
-
-            attempt = attempt + 1
-            self.relock_thermometer()
-            in_transition, quality = (
-                self.check_thermometer_in_transition()
-            )
-
-        if not in_transition:
-            print('WARNING: the thermometer TES did not verify back '
-                  f'in transition after {attempt} relock attempts! '
-                  'This temperature is recorded but its R0 values '
-                  'cannot be trusted. Check that the thermometer is '
-                  'still biased in transition and that the heater '
-                  'TES has not gone superconducting.')
-
-        r0 = float('nan')
-        if quality is not None:
-            r0 = quality['r0']
-
-        result = {
-            'relock_ok': in_transition,
-            'nb_attempts': attempt,
-            'r0': r0,
-        }
-
-        return result
-
     def measure_mc_temperature(self):
         """
         Measure the MC temperature with its uncertainty.
@@ -1225,12 +1147,32 @@ class GabSweep(Sequencer):
 
         return self._synced_temperature_sweep().measure_temperature()
 
+    def _read_didv_traces(self, nb_events=None):
+        """
+        Read dIdV traces and return them in amps.
+
+        Parameters
+        ----------
+        nb_events : int
+            Number of traces to read.
+
+        Returns
+        -------
+        traces : ndarray
+            Shape (nb_events, nb_samples), in amps.
+        """
+
+        # single readout channel: (nb_events, 1, nb_samples)
+        traces = self._daq.read_many_events(nb_events, adctovolt=True)
+
+        return traces[:, 0, :] / self._get_close_loop_norm()
+
     def measure_r0_quality(self, nb_events=None, bias_index=None):
         """
         Measure the thermometer TES bias point R0: read signal
         generator triggered dIdV traces, apply qetpy dIdV autocuts,
-        fit the average with the 3-pole model, and extract R0 with
-        the infinite loop gain approximation.
+        fit the average with the didv_fit_poles model, and extract R0
+        with the infinite loop gain approximation.
 
         A failed fit is normal at the ends of the heater bias vector,
         where the thermometer is fully normal or fully
@@ -1264,13 +1206,7 @@ class GabSweep(Sequencer):
         if nb_events is None:
             nb_events = self._nb_events_didv
 
-        traces = self._daq.read_many_events(nb_events, adctovolt=True)
-
-        # single readout channel: (nb_events, 1, nb_samples)
-        traces = traces[:, 0, :]
-
-        # volts to amps
-        traces = traces / self._get_close_loop_norm()
+        traces = self._read_didv_traces(nb_events=nb_events)
 
         cut = qp.autocuts_didv(traces, fs=self._sample_rate)
 
@@ -1304,11 +1240,12 @@ class GabSweep(Sequencer):
                 ibias=self._get_thermometer_bias_amps(),
                 guess_params=guess_params,
                 fcutoff=self._didv_fcutoff,
+                poles=self._didv_fit_poles,
                 didv_data=didv_data,
             )
         except Exception as err:
             # at the ends of the bias vector the thermometer is fully
-            # normal or fully superconducting and the 3-pole fit has
+            # normal or fully superconducting and the fit has
             # nothing to fit. That is expected data, not a run ending
             # error, so it is recorded and the sweep continues
             didv_fit_ok = False
@@ -1527,48 +1464,6 @@ class GabSweep(Sequencer):
 
             time.sleep(10)
 
-    def _check_startup_transition(self, startup_relock=None):
-        """
-        Abort the sweep when the startup relock never verified the
-        thermometer in its transition.
-
-        Parameters
-        ----------
-        startup_relock : dict
-            Result of relock_and_verify at startup.
-
-        Returns
-        -------
-        None
-        """
-
-        if not self._require_transition_at_startup:
-            return
-
-        if startup_relock['relock_ok']:
-            return
-
-        r0 = startup_relock['r0']
-        percent_rn = r0 / self._thermometer_rn * 100.0
-        bias_ua = self._get_thermometer_bias_amps() * 1.0e6
-
-        # R0 blind to the absorber temperature makes every point the
-        # sweep would go on to record empty
-        raise ValueError(
-            'GabSweep: the thermometer TES did not verify in its '
-            'transition at startup, so R0 carries no information '
-            'about the absorber temperature and the sweep would '
-            f'record nothing. Measured R0 = {r0 * 1000.0:.6g} mOhms '
-            f'({percent_rn:.3g} percent of Rn) at a thermometer TES '
-            f'bias of {bias_ua:.6g} uA on channel '
-            f'{self._thermometer_tes_channel}. An R0 near Rn means '
-            'the thermometer is biased normal: check the bias, and '
-            'check that "thermometer_tes_channel" and '
-            '"heater_tes_channel" are not the wrong way round. Set '
-            '"require_transition_at_startup = false" to record a '
-            'sweep regardless.'
-        )
-
     def run_drift_check(self):
         """
         Characterize the R0 drift: repeat the R0 measurement at fixed
@@ -1689,6 +1584,7 @@ class GabSweep(Sequencer):
         print(f'dIdV traces: {self._nb_events_didv} events of '
               f'{self._trace_length_ms_actual:.6g} ms '
               f'({self._nb_cycles} signal generator periods), fit '
+              f'poles = {self._didv_fit_poles}, '
               f'lowpass cutoff = {self._didv_fcutoff:.6g} Hz')
         print(f'\nThermometer TES circuit: rshunt = '
               f'{self._thermometer_rshunt * 1000.0:.6g} mOhms, '
@@ -1700,6 +1596,11 @@ class GabSweep(Sequencer):
               f'rparasitic = '
               f'{self._heater_rparasitic * 1000.0:.6g} mOhms, '
               f'rn = {self._heater_rn * 1000.0:.6g} mOhms')
+
+        print(f'\nThermometer TES bias: {self._thermometer_bias_ua:.6g} '
+              'uA, held for the whole sweep. Relock through '
+              f'{self._relock_bias_ua:.6g} uA, '
+              f'{self._relock_nb_cycles} cycles')
 
         nb_points = len(self._temperature_list_mk)
         print(f'\nTemperature setpoints [mK] ({nb_points} points):')
@@ -1821,11 +1722,13 @@ class GabSweep(Sequencer):
                 if self._comment and self._comment != 'No comment':
                     print(f'  ({self._comment})')
                 print('=====================================')
-                print('REMINDER: thermometer TES must be biased in '
-                      'transition, PID pre-set. The heater TES bias '
-                      f'will be set to bias_min_uA = {self._bias_min:.6g} '
-                      'uA (must keep it normal) and set back to its '
-                      'original value at shutdown.')
+                print('REMINDER: PID pre-set. The thermometer TES '
+                      'bias will be set to thermometer_tes_bias_uA = '
+                      f'{self._thermometer_bias_ua:.6g} uA and the '
+                      'heater TES bias to bias_min_uA = '
+                      f'{self._bias_min:.6g} uA (must keep the heater '
+                      'normal). Both are set back to their original '
+                      'values at shutdown.')
 
             # dIdV square wave on the thermometer TES, on for the
             # whole sweep so every R0 measurement is taken under the
@@ -1834,8 +1737,8 @@ class GabSweep(Sequencer):
 
             # everything needed to recompute R0 offline under
             # different circuit assumptions. The thermometer bias is
-            # deliberately not here: a relock can shift it, so it is a
-            # per row CSV column instead
+            # deliberately not here: the board snaps the request, so
+            # the applied value is a per row CSV column instead
             self._diagnostics['circuit'] = {
                 'sg_current_amps_pp': self._sg_current_amps_pp,
                 'close_loop_norm': self._get_close_loop_norm(),
@@ -1849,14 +1752,15 @@ class GabSweep(Sequencer):
                 'heater_rn_ohms': self._heater_rn,
             }
 
+            self._set_thermometer_bias(
+                bias_ua=self._thermometer_bias_ua
+            )
+
             # the relock runs at the top of the bias vector so that
             # startup matches the conditions every later relock runs
             # under
             self._set_heater_bias(bias_ua=self._bias_list[0])
-            startup_relock = self.relock_and_verify()
-            self._diagnostics['startup_relock'] = startup_relock
-
-            self._check_startup_transition(startup_relock=startup_relock)
+            self.relock_thermometer()
 
             # the heater TES goes to its lowest normal state before
             # the startup check and the drift check, so both are taken
@@ -2087,6 +1991,7 @@ class GabSweep(Sequencer):
                             'temperature_ok': temperature_ok,
                             'temperature_history': temperature_history,
                             'points': list()}
+        self._diagnostics['steps'].append(step_diagnostics)
 
         # the relock runs at the top of the vector, where the absorber
         # is warmest and the thermometer sits highest in its
@@ -2094,8 +1999,7 @@ class GabSweep(Sequencer):
         # shifts the readout offset, which would split this
         # temperature's R0 curve across two different footings
         self._set_heater_bias(bias_ua=self._bias_list[0])
-        relock_result = self.relock_and_verify()
-        step_diagnostics['relock'] = relock_result
+        self.relock_thermometer()
 
         rows = list()
         nb_failed_fits = 0
@@ -2116,8 +2020,7 @@ class GabSweep(Sequencer):
             rows.append(row_dict)
             step_diagnostics['points'].append(point_diagnostics)
             self._append_datapoint(row_dict=row_dict)
-
-        self._diagnostics['steps'].append(step_diagnostics)
+            self._save_diagnostics()
 
         if nb_failed_fits == len(self._bias_list):
             print(f'WARNING: Step {step_index} '
@@ -2269,5 +2172,7 @@ class GabSweep(Sequencer):
             return
 
         diagnostics_path = self._output_path + '/gab_sweep_diagnostics.p'
-        with open(diagnostics_path, 'wb') as f:
+        temporary_path = diagnostics_path + '.tmp'
+        with open(temporary_path, 'wb') as f:
             pickle.dump(self._diagnostics, f)
+        os.replace(temporary_path, diagnostics_path)

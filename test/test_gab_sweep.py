@@ -31,6 +31,24 @@ def _make_dry_sweep():
     return sweep
 
 
+@pytest.mark.parametrize('poles', [2, 3, 1, 2.5, 4])
+def test_didv_fit_poles_config(tmp_path, poles):
+    from pytesdaq.sequencer import GabSweep
+    with open('pytesdaq/config/gab_sweep.ini.example') as file:
+        config_text = file.read()
+    config_file = tmp_path / 'gab_poles.ini'
+    config_file.write_text(config_text.replace(
+        'didv_fit_poles = 3', f'didv_fit_poles = {poles}'))
+    if poles in (2, 3):
+        sweep = GabSweep(sequencer_file=str(config_file),
+                         setup_file=SETUP_FILE, dry_run=True)
+        assert sweep._didv_fit_poles == poles
+    else:
+        with pytest.raises(ValueError, match='didv_fit_poles'):
+            GabSweep(sequencer_file=str(config_file),
+                     setup_file=SETUP_FILE, dry_run=True)
+
+
 def test_rejects_same_thermometer_and_heater_channel(tmp_path):
     # one TES cannot be both the thermometer and the heater
     from pytesdaq.sequencer import GabSweep
@@ -205,7 +223,8 @@ def _make_synthetic_didv_traces(sweep, r0_true, nb_traces=10,
     return traces, sgamp
 
 
-def test_fit_didv_r0_recovers_known_r0():
+@pytest.mark.parametrize('poles', [2, 3])
+def test_fit_didv_r0_recovers_known_r0(poles):
     # the module level fit helper must recover the R0 baked into a
     # synthetic 2-pole square wave response
     sweep = _make_dry_sweep()
@@ -224,6 +243,7 @@ def test_fit_didv_r0_recovers_known_r0():
         guess_params=None,
         fcutoff=sweep._didv_fcutoff,
         didv_data=didv_data,
+        poles=poles,
     )
 
     assert result['r0'] == pytest.approx(r0_true, rel=0.05)
@@ -231,12 +251,13 @@ def test_fit_didv_r0_recovers_known_r0():
     assert np.isfinite(result['fit_cost'])
 
     restored = qp.didvinitfromdata(**pickle.loads(pickle.dumps(didv_data)))
-    restored.dofit(poles=3, fcutoff=sweep._didv_fcutoff)
-    assert restored.fitresult(poles=3)['cost'] == pytest.approx(
+    assert len(result['fit_params_tuple']) == (5 if poles == 2 else 7)
+    restored.dofit(poles=poles, fcutoff=sweep._didv_fcutoff)
+    assert restored.fitresult(poles=poles)['cost'] == pytest.approx(
         result['fit_cost'], rel=1.0e-3,
     )
-    params = restored.fitresult(poles=3)['params']
-    restored_r0 = (abs(params['A'] + params['B'] / (1.0 - params['C']))
+    params = restored.fitresult(poles=poles)['params']
+    restored_r0 = (abs(params['A'] + params['B'] / (1.0 - params.get('C', 0)))
                    + sweep._thermometer_rshunt + sweep._thermometer_rparasitic)
     assert restored_r0 == pytest.approx(result['r0'], rel=1.0e-3)
 
@@ -1150,7 +1171,7 @@ def test_relock_drives_normal_then_returns_and_relocks_twice():
     device = {'bias': 20.0, 'log': list()}
     sweep._instrument = _make_relock_instrument(device)
     sweep._post_bias_wait = 0.0
-    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._thermometer_bias_ua = 20.0
     sweep._relock_bias_ua = 100.0
     sweep._relock_nb_cycles = 2
 
@@ -1179,7 +1200,7 @@ def test_relock_refreshes_the_cached_thermometer_bias():
     instrument.set_tes_bias = quantizing_set_bias
     sweep._instrument = instrument
     sweep._post_bias_wait = 0.0
-    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._thermometer_bias_ua = 20.0
     sweep._relock_bias_ua = 100.0
     sweep._relock_nb_cycles = 2
     sweep._thermometer_bias_amps = 20.0e-6
@@ -1191,87 +1212,87 @@ def test_relock_refreshes_the_cached_thermometer_bias():
     )
 
 
-def test_transition_check_passes_inside_the_window():
-    sweep = _make_dry_sweep()
-    sweep._thermometer_rn = 1.0
-    sweep._transition_check_frac_rn_min = 0.05
-    sweep._transition_check_frac_rn_max = 0.95
-    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
-        'r0': 0.5, 'didv_fit_ok': True,
-    }
+def test_thermometer_bias_is_required(tmp_path):
+    from pytesdaq.sequencer import GabSweep
 
-    in_transition, quality = sweep.check_thermometer_in_transition()
+    with open('pytesdaq/config/gab_sweep.ini.example', 'r') as f:
+        config_text = f.read()
 
-    assert in_transition is True
+    config_text = config_text.replace(
+        'thermometer_tes_bias_uA = ', '#removed = '
+    )
+    config_file = tmp_path / 'gab_sweep_no_thermometer_bias.ini'
+    config_file.write_text(config_text)
 
-
-@pytest.mark.parametrize('r0_value', [0.01, 0.99])
-def test_transition_check_fails_outside_the_window(r0_value):
-    sweep = _make_dry_sweep()
-    sweep._thermometer_rn = 1.0
-    sweep._transition_check_frac_rn_min = 0.05
-    sweep._transition_check_frac_rn_max = 0.95
-    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
-        'r0': r0_value, 'didv_fit_ok': True,
-    }
-
-    in_transition, quality = sweep.check_thermometer_in_transition()
-
-    assert in_transition is False
+    with pytest.raises(ValueError, match='thermometer_tes_bias_uA'):
+        GabSweep(
+            sequencer_file=str(config_file),
+            setup_file=SETUP_FILE,
+            dry_run=True,
+        )
 
 
-def test_transition_check_fails_on_a_failed_fit():
-    sweep = _make_dry_sweep()
-    sweep._thermometer_rn = 1.0
-    sweep._transition_check_frac_rn_min = 0.05
-    sweep._transition_check_frac_rn_max = 0.95
-    sweep.measure_r0_quality = lambda nb_events=None, bias_index=None: {
-        'r0': float('nan'), 'didv_fit_ok': False,
-    }
+@pytest.mark.parametrize('bias_ua', [0, -3.8])
+def test_thermometer_bias_must_be_positive(tmp_path, bias_ua):
+    from pytesdaq.sequencer import GabSweep
 
-    in_transition, quality = sweep.check_thermometer_in_transition()
+    with open('pytesdaq/config/gab_sweep.ini.example', 'r') as f:
+        config_text = f.read()
 
-    assert in_transition is False
+    config_text = config_text.replace(
+        'thermometer_tes_bias_uA = 3.8',
+        f'thermometer_tes_bias_uA = {bias_ua}'
+    )
+    config_file = tmp_path / 'gab_sweep_bad_thermometer_bias.ini'
+    config_file.write_text(config_text)
+
+    with pytest.raises(ValueError, match='thermometer_tes_bias_uA'):
+        GabSweep(
+            sequencer_file=str(config_file),
+            setup_file=SETUP_FILE,
+            dry_run=True,
+        )
 
 
-def test_relock_and_verify_retries_then_continues(capsys):
-    # exhausting the attempts warns loudly and keeps the sweep going
+def test_set_thermometer_bias_refreshes_the_cached_read_back():
+    # the board quantizes, so ibias is the applied value and not the
+    # configured one
     sweep = _make_dry_sweep()
     device = {'bias': 20.0, 'log': list()}
-    sweep._instrument = _make_relock_instrument(device)
+    instrument = _make_relock_instrument(device)
+
+    def quantizing_set_bias(bias=None, unit=None, detector_channel=None):
+        device['bias'] = float(bias) - 0.001
+        device['log'].append(('bias', float(bias)))
+        return True
+
+    instrument.set_tes_bias = quantizing_set_bias
+    sweep._instrument = instrument
     sweep._post_bias_wait = 0.0
-    sweep._thermometer_initial_bias_ua = 20.0
-    sweep._relock_bias_ua = 100.0
-    sweep._relock_nb_cycles = 2
-    sweep._relock_max_attempts = 3
-    sweep.check_thermometer_in_transition = lambda: (
-        False, {'r0': 0.001, 'didv_fit_ok': True}
-    )
+    sweep._thermometer_bias_amps = 20.0e-6
 
-    result = sweep.relock_and_verify()
+    sweep._set_thermometer_bias(bias_ua=3.8)
 
-    assert result['relock_ok'] is False
-    assert result['nb_attempts'] == 3
-    assert 'WARNING' in capsys.readouterr().out
+    assert device['log'] == [('bias', 3.8)]
+    assert sweep._get_thermometer_bias_amps() == pytest.approx(3.799e-6)
 
 
-def test_relock_and_verify_stops_at_the_first_success():
+def test_thermometer_bias_is_not_read_from_the_pre_run_setting():
+    # the sweep holds the configured bias whatever the thermometer was
+    # left at before it started
     sweep = _make_dry_sweep()
-    device = {'bias': 20.0, 'log': list()}
+    device = {'bias': 47.0, 'log': list()}
     sweep._instrument = _make_relock_instrument(device)
     sweep._post_bias_wait = 0.0
-    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._thermometer_initial_bias_ua = 47.0
+    sweep._thermometer_bias_ua = 3.8
     sweep._relock_bias_ua = 100.0
     sweep._relock_nb_cycles = 2
-    sweep._relock_max_attempts = 3
-    sweep.check_thermometer_in_transition = lambda: (
-        True, {'r0': 0.5, 'didv_fit_ok': True}
-    )
 
-    result = sweep.relock_and_verify()
+    sweep.relock_thermometer()
 
-    assert result['relock_ok'] is True
-    assert result['nb_attempts'] == 1
+    assert device['bias'] == pytest.approx(3.8)
+    assert sweep._get_thermometer_bias_amps() == pytest.approx(3.8e-6)
 
 
 def test_shutdown_restores_the_thermometer_bias():
@@ -1295,49 +1316,7 @@ def test_relock_config_parses_from_example():
 
     assert sweep._relock_bias_ua == pytest.approx(100.0)
     assert sweep._relock_nb_cycles == 2
-    assert sweep._relock_max_attempts == 3
-    assert sweep._transition_check_frac_rn_min == pytest.approx(0.05)
-    assert sweep._transition_check_frac_rn_max == pytest.approx(0.6)
-    assert sweep._require_transition_at_startup is True
-
-
-def test_startup_aborts_when_the_thermometer_is_not_in_transition():
-    # a thermometer left biased normal makes R0 blind to the absorber,
-    # so the sweep must refuse to record 
-    sweep = _make_dry_sweep()
-    sweep._thermometer_bias_amps = 30.0e-6
-    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
-
-    with pytest.raises(ValueError, match='did not verify in its transition'):
-        sweep._check_startup_transition(startup_relock=startup_relock)
-
-
-def test_startup_transition_abort_reports_r0_and_bias():
-    sweep = _make_dry_sweep()
-    sweep._thermometer_bias_amps = 30.0e-6
-    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
-
-    with pytest.raises(ValueError) as error:
-        sweep._check_startup_transition(startup_relock=startup_relock)
-
-    message = str(error.value)
-    assert '1008' in message
-    assert '30' in message
-
-
-def test_startup_transition_check_passes_when_in_transition():
-    sweep = _make_dry_sweep()
-    startup_relock = {'relock_ok': True, 'nb_attempts': 1, 'r0': 0.113}
-
-    sweep._check_startup_transition(startup_relock=startup_relock)
-
-
-def test_startup_transition_check_can_be_disabled():
-    sweep = _make_dry_sweep()
-    sweep._require_transition_at_startup = False
-    startup_relock = {'relock_ok': False, 'nb_attempts': 3, 'r0': 1.008}
-
-    sweep._check_startup_transition(startup_relock=startup_relock)
+    assert sweep._thermometer_bias_ua == pytest.approx(3.8)
 
 
 class _FakeTemperatureSweep:
@@ -1351,13 +1330,11 @@ def _make_bias_sweep_sweep(device):
     sweep = _make_dry_sweep()
     sweep._instrument = _make_relock_instrument(device)
     sweep._post_bias_wait = 0.0
-    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._thermometer_bias_ua = 20.0
     sweep._bias_list = [300.0, 150.0, 38.0]
     sweep._guess_params = [None, None, None]
     sweep.wait_for_settled_r0 = lambda: (True, [])
-    sweep.relock_and_verify = lambda: {
-        'relock_ok': True, 'nb_attempts': 1, 'r0': 0.5,
-    }
+    sweep.relock_thermometer = lambda: None
     sweep.measure_mc_temperature = lambda: {
         'temperature_k': 0.042,
         'temperature_err_k': 0.0001,
@@ -1403,6 +1380,43 @@ def test_one_row_per_bias_point_in_descending_order(tmp_path):
     applied = [row['heater_tes_bias_requested_ua'] for row in rows]
     for index in range(1, len(applied)):
         assert applied[index] < applied[index - 1]
+
+
+def test_completed_point_is_saved_before_interruption(tmp_path):
+    sweep = _make_bias_sweep_sweep({'bias': 38.0, 'log': []})
+    sweep._output_path = str(tmp_path)
+    sweep._append_datapoint = lambda row_dict=None: None
+    measure_point = sweep.measure_bias_point
+
+    def interrupted_point(**kwargs):
+        if kwargs['bias_index'] == 1:
+            raise KeyboardInterrupt()
+        return measure_point(**kwargs)
+
+    sweep.measure_bias_point = interrupted_point
+    with pytest.raises(KeyboardInterrupt):
+        sweep.run_single_step(temperature_mk=42.0, step_index=0)
+    with open(tmp_path / 'gab_sweep_diagnostics.p', 'rb') as file:
+        saved = pickle.load(file)
+    assert len(saved['steps']) == 1
+    assert len(saved['steps'][0]['points']) == 1
+    assert saved['steps'][0]['points'][0]['bias_index'] == 0
+
+
+def test_failed_checkpoint_preserves_previous_diagnostics(tmp_path, monkeypatch):
+    sweep = _make_dry_sweep()
+    sweep._output_path = str(tmp_path)
+    sweep._save_diagnostics()
+    before = (tmp_path / 'gab_sweep_diagnostics.p').read_bytes()
+
+    def failed_dump(obj, file):
+        file.write(b'incomplete')
+        raise OSError('simulated disk error')
+
+    monkeypatch.setattr(gab_sweep_module.pickle, 'dump', failed_dump)
+    with pytest.raises(OSError, match='simulated disk error'):
+        sweep._save_diagnostics()
+    assert (tmp_path / 'gab_sweep_diagnostics.p').read_bytes() == before
 
 
 @pytest.mark.parametrize('fail_fit', [False, True])
@@ -1516,9 +1530,8 @@ def test_no_relock_between_bias_points_of_one_temperature():
 
     def counting_relock():
         relock_calls['count'] = relock_calls['count'] + 1
-        return {'relock_ok': True, 'nb_attempts': 1, 'r0': 0.5}
 
-    sweep.relock_and_verify = counting_relock
+    sweep.relock_thermometer = counting_relock
 
     sweep.run_single_step(temperature_mk=42.0, step_index=0)
 
@@ -1583,3 +1596,19 @@ def test_dry_run_prints_the_bias_vector_and_point_count(capsys):
     assert str(nb_points) in output
     assert f'{sweep._bias_list[0]:.6g}' in output
     assert f'{sweep._bias_list[-1]:.6g}' in output
+    assert f'{sweep._thermometer_bias_ua:.6g}' in output
+
+
+def test_read_didv_traces_applies_close_loop_norm():
+    sweep = _make_dry_sweep()
+    sweep._get_close_loop_norm = lambda: 4.0
+
+    class _Daq:
+        def read_many_events(self, nevents, adctovolt=False):
+            return np.full((nevents, 1, 8), 2.0)
+
+    sweep._daq = _Daq()
+    traces = sweep._read_didv_traces(nb_events=6)
+
+    assert traces.shape == (6, 8)
+    assert np.allclose(traces, 0.5)
