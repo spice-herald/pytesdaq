@@ -38,5 +38,6 @@ AGENTS.md
 /Gab_planning/
 /Gta_planning/
 
-# machine local facility configuration.
-/pytesdaq/config/setup.ini
+# machine local facility configuration. The tracked templates all carry an
+# example suffix, so nothing ending in .ini here belongs in the repo.
+/pytesdaq/config/*.ini
