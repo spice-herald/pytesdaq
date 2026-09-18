@@ -313,6 +313,24 @@ class TemperatureSweep:
                 'not be negative!'
             )
 
+        # optional: spacing between readings inside that window. The
+        # MMR3 converts at about 1 Hz, so an unpaced loop repeats each
+        # value tens of times and buries the crate in queries for no
+        # extra information
+        self._sampling_interval_s = 0.5
+        if config_has(config_dict, 'temperature_sampling_interval_s'):
+            self._sampling_interval_s = float(
+                config_get(config_dict,
+                           'temperature_sampling_interval_s')
+            )
+
+        if self._sampling_interval_s < 0:
+            raise ValueError(
+                'TemperatureSweep: '
+                '"temperature_sampling_interval_s" must not be '
+                'negative!'
+            )
+
     @property
     def instrument(self):
         """
@@ -467,7 +485,8 @@ class TemperatureSweep:
     @property
     def stable_time_s(self):
         """
-        How long the reading must hold within tolerance.
+        How long to settle after the reading first comes within
+        tolerance.
 
         Parameters
         ----------
@@ -531,6 +550,22 @@ class TemperatureSweep:
         """
         return self._sampling_time_s
 
+    @property
+    def sampling_interval_s(self):
+        """
+        Spacing between readings inside the sampling window.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        sampling_interval_s : float
+            Spacing between readings [s].
+        """
+        return self._sampling_interval_s
+
     def set_setpoint(self, temperature_mk=None):
         """
         Apply an MC temperature setpoint without blocking.
@@ -559,15 +594,15 @@ class TemperatureSweep:
 
     def wait_for_temperature(self, temperature_mk=None):
         """
-        Wait until the MC temperature reaches a setpoint and holds it.
+        Wait until the MC temperature reaches a setpoint and settles.
 
-        The thermometer is polled every temperature_poll_interval_s
-        and the reading must stay within temperature_tolerance_frac
-        of the setpoint for temperature_stable_time_s before the
-        setpoint counts as reached. How fast the fridge cools is set
-        by its cooling power and the thermal conductance, so a large
-        temperature step can take much longer than a small one and a
-        fixed wait cannot cover both.
+        The thermometer is polled every temperature_poll_interval_s.
+        The setpoint counts as reached once the reading is within
+        temperature_tolerance_frac and temperature_stable_time_s has
+        passed since it first came within tolerance. How fast the
+        fridge cools is set by its cooling power and the thermal
+        conductance, so a large temperature step can take much longer
+        than a small one and a fixed wait cannot cover both.
 
         Parameters
         ----------
@@ -605,12 +640,18 @@ class TemperatureSweep:
             offset = abs(reading_mk - target_mk) / abs(target_mk)
             now = time.time()
 
+            # the clock starts at the first reading within tolerance
+            # and never restarts. A fridge oscillating across the
+            # tolerance edge would otherwise reset it on every
+            # excursion and never settle. The return still requires a
+            # reading within tolerance, so the wait cannot end on an
+            # excursion
             if offset <= self._tolerance_frac:
                 if time_in_tolerance is None:
                     time_in_tolerance = now
                     if self._verbose:
                         print(f'INFO: MC temperature within tolerance '
-                              f'at {reading_mk:.6g} mK, holding for '
+                              f'at {reading_mk:.6g} mK, settling for '
                               f'{self._stable_time_s:.6g} s')
                 if ((now - time_in_tolerance)
                         >= self._stable_time_s):
@@ -619,9 +660,6 @@ class TemperatureSweep:
                               f'mK reached after {now - start_time:.6g} '
                               's')
                     return True, history
-            else:
-                # drifted back out, the hold time restarts
-                time_in_tolerance = None
 
             if (now - start_time) > self._max_wait_time_s:
                 print('WARNING: MC temperature timeout '
@@ -637,10 +675,11 @@ class TemperatureSweep:
     def measure_temperature(self):
         """
         Measure the MC temperature with its uncertainty: sample the
-        thermometer repeatedly for temperature_sampling_time_s, then
-        fit a Gaussian to the histogram of samples. The Gaussian mean
-        is the temperature, its sigma the uncertainty (sample mean
-        and standard deviation when the fit is not possible).
+        thermometer every temperature_sampling_interval_s for
+        temperature_sampling_time_s, then fit a Gaussian to the
+        histogram of samples. The Gaussian mean is the temperature,
+        its sigma the uncertainty (sample mean and standard deviation
+        when the fit is not possible).
 
         Parameters
         ----------
@@ -656,8 +695,9 @@ class TemperatureSweep:
         samples = list()
         start_time = time.time()
 
-        # always at least one sample, then keep reading as fast as
-        # the instrument responds until the window closes
+        # always at least one sample, then one per interval until the
+        # window closes. The pacing is what keeps the query rate off
+        # the temperature controller sharing the crate
         while True:
 
             value = float(self._instrument.get_temperature(
@@ -669,6 +709,10 @@ class TemperatureSweep:
             elapsed = time.time() - start_time
             if elapsed >= self._sampling_time_s:
                 break
+
+            if self._sampling_interval_s > 0:
+                remaining = self._sampling_time_s - elapsed
+                time.sleep(min(self._sampling_interval_s, remaining))
 
         fit = fit_temperature_gaussian(samples=samples)
 

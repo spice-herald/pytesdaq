@@ -24,21 +24,27 @@ temperature_vect_mK = 42, 40, 38, 36, 34
 
 # MC temperature settling: the script polls the thermometer itself and waits
 # for the setpoint to actually be reached, so a large temperature step simply
-# takes longer than a small one. The reading must stay within
-# temperature_tolerance_frac (fractional, 0.02 means 2 percent) of the
-# setpoint for temperature_stable_time_s before the IV sweep starts. On
-# timeout the sweep continues but flags the datapoint with
-# temperature_ok = False
+# takes longer than a small one. The IV sweep starts once the reading is
+# within temperature_tolerance_frac (fractional, 0.02 means 2 percent) of the
+# setpoint and temperature_stable_time_s has passed since it first came
+# within tolerance. A fridge oscillating across the tolerance edge still
+# settles, since the clock does not restart on an excursion. On timeout the
+# sweep continues but flags the datapoint with temperature_ok = False
 temperature_poll_interval_s = 5
 temperature_stable_time_s = 120
 temperature_max_wait_time_s = 7200
 temperature_tolerance_frac = 0.02
 
-# MC temperature per datapoint: sampled repeatedly over this window, then a
-# Gaussian is fit to the histogram of samples; the fit mean is the recorded
-# temperature and its sigma the uncertainty. Sampled once before and once
-# after the IV sweep, so drift over the sweep is visible
+# MC temperature per datapoint: sampled every temperature_sampling_interval_s
+# over this window, then a Gaussian is fit to the histogram of samples; the fit
+# mean is the recorded temperature and its sigma the uncertainty. Sampled once
+# before and once after the IV sweep, so drift over the sweep is visible.
+#
+# The MMR3 converts at about 1 Hz, so a shorter interval buys no extra
+# information and only adds queries to the crate the temperature controller
+# shares. An unpaced loop reaches about 40 Hz and disturbs the PID.
 temperature_sampling_time_s = 5
+temperature_sampling_interval_s = 0.5
 
 # extra dwell after the setpoint is reached, before starting the IV sweep
 post_temperature_settle_wait_s = 0

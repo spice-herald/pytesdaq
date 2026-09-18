@@ -451,11 +451,12 @@ def test_wait_for_temperature_waits_out_a_slow_approach(monkeypatch):
     assert history[-1] == pytest.approx(40.1)
 
 
-def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
+def test_wait_for_temperature_does_not_restart_hold_on_excursion(
+        monkeypatch):
     """
-    Restart the hold timer on a temperature excursion: a reading that
-    drifts back out of tolerance restarts the hold, so a brief touch
-    of the setpoint is not enough.
+    Keep the settle clock running through a temperature excursion: a
+    fridge oscillating across the tolerance edge must still settle,
+    rather than having the clock reset on every excursion.
 
     Parameters
     ----------
@@ -477,14 +478,41 @@ def test_wait_for_temperature_restarts_hold_on_excursion(monkeypatch):
 
     assert temperature_ok is True
     assert pytest.approx(50.0) in history
-    assert history.index(pytest.approx(50.0)) < len(history) - 1
 
-    # the excursion must restart the 3 s hold rather than let the
-    # earlier in-tolerance reading count toward it. With a 1 s poll
-    # that is 6 readings: one in tolerance, the excursion, then a full
-    # 3 s hold re-counted from scratch. A timer that did not restart
-    # would return after 4.
-    assert len(history) == 6
+    # the 3 s settle runs from the first in-tolerance reading, so with
+    # a 1 s poll that is 4 readings even though one of them is an
+    # excursion. A timer that restarted on the excursion would take 6.
+    assert len(history) == 4
+
+
+def test_wait_for_temperature_cannot_end_on_an_excursion(monkeypatch):
+    """
+    Return only on a reading within tolerance: the settle clock
+    expiring while the fridge is outside tolerance must not end the
+    wait.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used indirectly, through _make_sweep, to patch time.time and
+        time.sleep with a fake clock.
+
+    Returns
+    -------
+    None
+    """
+
+    # in tolerance once, then far out for longer than the 3 s settle,
+    # and back in
+    readings = [0.0401, 0.050, 0.050, 0.050, 0.050, 0.0401]
+    sweep = _make_sweep(readings, monkeypatch)
+
+    temperature_ok, history = sweep.wait_for_temperature(
+        temperature_mk=40.0
+    )
+
+    assert temperature_ok is True
+    assert history[-1] == pytest.approx(40.1)
 
 
 def test_wait_for_temperature_times_out_when_setpoint_unreachable(
@@ -525,8 +553,8 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     Parameters
     ----------
     monkeypatch : pytest fixture
-        Used to patch temperature_sweep_module.time.time with a fake
-        clock that advances 10 ms per call.
+        Used to patch temperature_sweep_module.time with a fake clock
+        that only moves when sleep is called.
 
     Returns
     -------
@@ -534,7 +562,8 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     """
 
     sweep = TemperatureSweep(
-        config_dict=_make_config(temperature_sampling_time_s=1.0),
+        config_dict=_make_config(temperature_sampling_time_s=1.0,
+                                 temperature_sampling_interval_s=0.01),
         verbose=False
     )
 
@@ -563,14 +592,13 @@ def test_measure_temperature_samples_over_window(monkeypatch):
 
     sweep.instrument = FakeInstrument()
 
-    # fake clock: each call advances 10 ms, so a 1 s window takes
-    # 100 samples deterministically
+    # fake clock moved only by the pacing sleep, so a 1 s window at a
+    # 10 ms interval takes 100 samples deterministically
     clock = {'now': 0.0}
 
     def fake_time():
         """
-        Advance the fake clock by 10 ms on every call, so a sampling
-        window closes after a deterministic number of samples.
+        Report the fake clock, which only moves when sleep is called.
 
         Parameters
         ----------
@@ -581,10 +609,25 @@ def test_measure_temperature_samples_over_window(monkeypatch):
         now : float
             Current fake time [s].
         """
-        clock['now'] = clock['now'] + 0.010
         return clock['now']
 
+    def fake_sleep(seconds):
+        """
+        Advance the fake clock instead of really sleeping.
+
+        Parameters
+        ----------
+        seconds : float
+            How far to advance the clock [s].
+
+        Returns
+        -------
+        None
+        """
+        clock['now'] = clock['now'] + seconds
+
     monkeypatch.setattr(temperature_sweep_module.time, 'time', fake_time)
+    monkeypatch.setattr(temperature_sweep_module.time, 'sleep', fake_sleep)
 
     measurement = sweep.measure_temperature()
 
@@ -598,6 +641,93 @@ def test_measure_temperature_samples_over_window(monkeypatch):
     assert measurement['temperature_err_k'] == pytest.approx(
         0.0002, rel=0.5
     )
+
+
+def test_measure_temperature_paces_its_queries(monkeypatch):
+    """
+    Pace the sampling loop: an unpaced loop floods the MACRT crate
+    with tens of queries per reading, which disturbs the temperature
+    controller sharing it. The query count must follow the configured
+    interval, not the speed of the network.
+
+    Parameters
+    ----------
+    monkeypatch : pytest fixture
+        Used indirectly, through _make_sweep, to patch time.time and
+        time.sleep with a fake clock.
+
+    Returns
+    -------
+    None
+    """
+
+    sweep = _make_sweep([0.040], monkeypatch,
+                        temperature_sampling_time_s=60.0,
+                        temperature_sampling_interval_s=0.5)
+
+    calls = {'n': 0}
+    inner = sweep.instrument.get_temperature
+
+    def counting_get(channel_name=None, instrument_name=None):
+        """
+        Count the queries the sampling loop issues.
+
+        Parameters
+        ----------
+        channel_name : str or None
+            Thermometer channel name, forwarded to the fake.
+        instrument_name : str or None
+            Thermometer instrument name, forwarded to the fake.
+
+        Returns
+        -------
+        reading : float
+            The fake thermometer reading [K].
+        """
+        calls['n'] = calls['n'] + 1
+        return inner(channel_name=channel_name,
+                     instrument_name=instrument_name)
+
+    sweep.instrument.get_temperature = counting_get
+
+    measurement = sweep.measure_temperature()
+
+    # 60 s at 0.5 s spacing, not the thousands an unpaced loop takes
+    assert calls['n'] == 121
+    assert measurement['nb_samples'] == 121
+
+
+def test_measure_temperature_interval_defaults_and_validates():
+    """
+    Default the sampling interval and reject a negative one: the
+    default has to pace an existing config that never set the key.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+
+    assert TemperatureSweep(
+        config_dict=_make_config(), verbose=False
+    ).sampling_interval_s == pytest.approx(0.5)
+
+    assert TemperatureSweep(
+        config_dict=_make_config(temperature_sampling_interval_s=2.0),
+        verbose=False
+    ).sampling_interval_s == pytest.approx(2.0)
+
+    with pytest.raises(ValueError,
+                       match='temperature_sampling_interval_s'):
+        TemperatureSweep(
+            config_dict=_make_config(
+                temperature_sampling_interval_s=-1.0
+            ),
+            verbose=False
+        )
 
 
 def test_measure_temperature_zero_window_takes_one_sample():
