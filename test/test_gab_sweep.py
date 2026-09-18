@@ -1311,6 +1311,64 @@ def test_shutdown_restores_the_thermometer_bias():
     assert device['bias'] == pytest.approx(20.0)
 
 
+def test_shutdown_prints_the_dataset_directory_last(tmp_path, capsys):
+    # the path is what gets handed to the analyzer, so it must not be
+    # buried under the teardown messages
+    sweep = _make_dry_sweep()
+    device = {'bias': 100.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._heater_initial_bias_ua = 38.0
+    sweep._daq = None
+    sweep._output_path = str(tmp_path)
+
+    sweep.shutdown()
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if line]
+    assert lines[-1] == f'INFO: Dataset directory: {tmp_path}'
+
+
+def test_shutdown_prints_the_directory_even_when_interrupted(
+        tmp_path, capsys):
+    # an interrupted sweep still wrote rows, so the path is still
+    # wanted before the interrupt propagates
+    sweep = _make_dry_sweep()
+    device = {'bias': 100.0, 'log': list()}
+    instrument = _make_relock_instrument(device)
+
+    def interrupting_set_bias(bias=None, unit=None, detector_channel=None):
+        raise KeyboardInterrupt()
+
+    instrument.set_tes_bias = interrupting_set_bias
+    sweep._instrument = instrument
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._heater_initial_bias_ua = 38.0
+    sweep._daq = None
+    sweep._output_path = str(tmp_path)
+
+    with pytest.raises(KeyboardInterrupt):
+        sweep.shutdown()
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if line]
+    assert lines[-1] == f'INFO: Dataset directory: {tmp_path}'
+
+
+def test_shutdown_omits_the_directory_when_there_is_none(capsys):
+    # a run that died before the output directory existed has no path
+    # to advertise
+    sweep = _make_dry_sweep()
+    device = {'bias': 100.0, 'log': list()}
+    sweep._instrument = _make_relock_instrument(device)
+    sweep._thermometer_initial_bias_ua = 20.0
+    sweep._heater_initial_bias_ua = 38.0
+    sweep._daq = None
+    sweep._output_path = None
+
+    sweep.shutdown()
+
+    assert 'Dataset directory' not in capsys.readouterr().out
+
+
 def test_relock_config_parses_from_example():
     sweep = _make_dry_sweep()
 

@@ -1806,7 +1806,7 @@ class GabSweep(Sequencer):
         Safe shutdown: signal generator off and disconnected, MC
         heater setpoint to 0, both TES biases restored to their
         pre-run values (left untouched if unknown), diagnostics
-        flushed.
+        flushed, and the dataset directory printed last.
 
         The thermometer TES bias is restored as well as the heater's,
         because the relock drives the thermometer hard normal and an
@@ -1900,6 +1900,12 @@ class GabSweep(Sequencer):
                 self._daq.clear()
             except Exception as err:
                 print(f'ERROR clearing DAQ: {err}')
+
+        # last line of the run, after every teardown message, so the
+        # path to hand the analyzer is not buried in the log above. An
+        # interrupted sweep still leaves the rows it took
+        if self._output_path is not None:
+            print(f'\nINFO: Dataset directory: {self._output_path}')
 
         if pending_interrupt is not None:
             raise pending_interrupt
