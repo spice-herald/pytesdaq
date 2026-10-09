@@ -1,11 +1,13 @@
 import numpy as np
 import time
 import copy
+import csv
 
 from pytesdaq.daq import daq
 import pytesdaq.config.settings as settings
 import pytesdaq.instruments.control as instrument
 from pytesdaq.sequencer.sequencer import Sequencer
+from pytesdaq.sequencer.iv_didv import IV_dIdV
 from pytesdaq.utils import connection_utils
 from pytesdaq.utils import arg_utils
 
@@ -17,6 +19,13 @@ class TransducerSweep(Sequencer):
                  comment='No comment',
                  data_purpose='test',
                  filename_override=None,
+                 enable_iv=False, enable_didv=False,
+                 iv_didv_channels=None,
+                 tes_setup_file=None,
+                 iv_sequencer_file=None,
+                 didv_sequencer_file=None,
+                 online_iv=True,
+                 do_relock=False, do_zero=False,
                  dry_run=False, verbose=True):
         """
         Transducer frequency/amplitude sweep measurement.
@@ -39,6 +48,26 @@ class TransducerSweep(Sequencer):
             <data_path>/run<fridge_run>/... . Useful for
             separating accelerometer data from regular
             fridge run data.
+        enable_iv : bool
+            If True, take an IV sweep at every transducer step.
+        enable_didv : bool
+            If True, take a dIdV sweep at every transducer step.
+        iv_didv_channels : list or None
+            TES sweep channels for IV/dIdV (detector or TES names
+            from tes_setup_file).
+        tes_setup_file : str or None
+            Setup file for the TES readout and dIdV signal generator.
+        iv_sequencer_file : str or None
+            iv_didv-style config file used for the IV sweeps.
+        didv_sequencer_file : str or None
+            iv_didv-style config file used for the dIdV sweeps.
+        online_iv : bool
+            If True, run the online IV fit during IV sweeps.
+        do_relock : bool
+            If True, relock at every IV/dIdV bias point.
+        do_zero : bool
+            If True, zero offsets at the first bias point of
+            each IV/dIdV sweep.
         dry_run : bool
             If True, only print the sweep plan without
             any hardware interaction or data taking.
@@ -55,6 +84,23 @@ class TransducerSweep(Sequencer):
         self._filename_override = filename_override
         self._dry_run = dry_run
 
+        self._enable_iv = enable_iv
+        self._enable_didv = enable_didv
+        self._iv_didv_channels = iv_didv_channels
+        self._tes_setup_file = tes_setup_file
+        self._iv_sequencer_file = iv_sequencer_file
+        self._didv_sequencer_file = didv_sequencer_file
+        self._online_iv = online_iv
+        self._do_relock = do_relock
+        self._do_zero = do_zero
+        self._tes_instrument = None
+        self._continuous_tes_bias_ua = dict()
+        self._continuous_tes_bias_wait_s = 10.0
+        self._iv_didv_plan = dict()
+        self._step_map_file = None
+        self._transducer_signal_gen_num = 1
+        self._is_didv_signal_gen_shared = False
+
         # Call the Sequencer class constructor.
         super().__init__(
             'transducer_sweep',
@@ -66,6 +112,7 @@ class TransducerSweep(Sequencer):
         )
 
         self._configure()
+        self._configure_iv_didv()
 
     def run(self):
         """
@@ -117,6 +164,13 @@ class TransducerSweep(Sequencer):
         # enable DAQ process lock
         self._daq.lock_daq = True
 
+        if self._enable_iv or self._enable_didv:
+            self._tes_instrument = instrument.Control(
+                setup_file=self._tes_setup_file,
+                dummy_mode=self._dummy_mode
+            )
+            self._init_step_map_file()
+
         if self._verbose:
             print('\n=====================================')
             print(f'INFO: Starting transducer sweep')
@@ -128,71 +182,92 @@ class TransducerSweep(Sequencer):
         for chan in self._detector_channels:
             self._instrument.set_signal_gen_onoff(
                 'on',
+                signal_gen_num=self._transducer_signal_gen_num,
                 detector_channel=chan
             )
 
-        # ------------------
-        # Frequency sweep
-        # ------------------
+        step_list = list()
         if freq_config['enabled']:
-            frequency_list = freq_config['frequencies_hz']
-            amplitude_vpp = freq_config['amplitude_vpp']
-            hold_time_s = freq_config['hold_time_s']
-            run_time_s = freq_config['run_time_s']
+            for frequency_hz in freq_config['frequencies_hz']:
+                step_list.append({
+                    'sweep_type': 'frequency',
+                    'frequency_hz': frequency_hz,
+                    'amplitude_vpp': freq_config['amplitude_vpp'],
+                    'hold_time_s': freq_config['hold_time_s'],
+                    'run_time_s': freq_config['run_time_s']
+                })
+        if amp_config['enabled']:
+            for amplitude_vpp in amp_config['amplitudes_vpp']:
+                step_list.append({
+                    'sweep_type': 'amplitude',
+                    'frequency_hz': amp_config['frequency_hz'],
+                    'amplitude_vpp': amplitude_vpp,
+                    'hold_time_s': amp_config['hold_time_s'],
+                    'run_time_s': amp_config['run_time_s']
+                })
 
-            if self._verbose:
+        if self._verbose:
+            if freq_config['enabled']:
+                frequency_list = freq_config['frequencies_hz']
                 print(f'\nINFO: Frequency sweep: '
                       f'{len(frequency_list)} points, '
                       f'{frequency_list[0]:.6g} - '
                       f'{frequency_list[-1]:.6g} Hz')
-
-            for frequency_hz in frequency_list:
-                self._set_signal_generator(
-                    detector_channels=self._detector_channels,
-                    amplitude_vpp=amplitude_vpp,
-                    frequency_hz=frequency_hz
-                )
-
-                if hold_time_s > 0:
-                    time.sleep(hold_time_s)
-
-                self._run_sweep_step(
-                    config_dict=config_dict,
-                    frequency_hz=frequency_hz,
-                    amplitude_vpp=amplitude_vpp,
-                    run_time_s=run_time_s
-                )
-
-        # ------------------
-        # Amplitude sweep
-        # ------------------
-        if amp_config['enabled']:
-            amplitude_list = amp_config['amplitudes_vpp']
-            frequency_hz = amp_config['frequency_hz']
-            hold_time_s = amp_config['hold_time_s']
-            run_time_s = amp_config['run_time_s']
-
-            if self._verbose:
+            if amp_config['enabled']:
+                amplitude_list = amp_config['amplitudes_vpp']
                 print(f'\nINFO: Amplitude sweep: '
                       f'{len(amplitude_list)} points, '
                       f'{amplitude_list[0]:.6g} - '
                       f'{amplitude_list[-1]:.6g} Vpp')
 
-            for amplitude_vpp in amplitude_list:
-                self._set_signal_generator(
-                    detector_channels=self._detector_channels,
-                    amplitude_vpp=amplitude_vpp,
-                    frequency_hz=frequency_hz
+        nb_steps = len(step_list)
+        for istep, step in enumerate(step_list):
+
+            if self._verbose:
+                print(f'\nINFO: Transducer step {istep+1}/{nb_steps} '
+                      f'({step["sweep_type"]} sweep)')
+
+            if self._continuous_tes_bias_ua:
+                self._set_continuous_tes_bias()
+
+            self._set_signal_generator(
+                detector_channels=self._detector_channels,
+                amplitude_vpp=step['amplitude_vpp'],
+                frequency_hz=step['frequency_hz']
+            )
+
+            if step['hold_time_s'] > 0:
+                time.sleep(step['hold_time_s'])
+
+            # rear Sync is the DAQ trigger, so it must follow the transducer channel
+            if self._transducer_signal_gen_num != 1:
+                self._set_sync_source(
+                    instrument_control=self._instrument,
+                    signal_gen_num=self._transducer_signal_gen_num
                 )
 
-                if hold_time_s > 0:
-                    time.sleep(hold_time_s)
+            success = self._run_sweep_step(
+                config_dict=config_dict,
+                frequency_hz=step['frequency_hz'],
+                amplitude_vpp=step['amplitude_vpp'],
+                run_time_s=step['run_time_s']
+            )
+            if not success:
+                break
 
-                self._run_sweep_step(
-                    config_dict=config_dict,
-                    frequency_hz=frequency_hz,
-                    amplitude_vpp=amplitude_vpp,
-                    run_time_s=run_time_s
+            if self._enable_iv or self._enable_didv:
+                group_dict = self._run_iv_didv_step(
+                    frequency_hz=step['frequency_hz'],
+                    amplitude_vpp=step['amplitude_vpp']
+                )
+                if group_dict is None:
+                    break
+                self._write_step_map_row(
+                    step_number=istep+1,
+                    sweep_type=step['sweep_type'],
+                    frequency_hz=step['frequency_hz'],
+                    amplitude_vpp=step['amplitude_vpp'],
+                    group_dict=group_dict
                 )
 
         # turn off signal generators when finished
@@ -200,13 +275,353 @@ class TransducerSweep(Sequencer):
             for chan in self._detector_channels:
                 self._instrument.set_signal_gen_onoff(
                     'off',
+                    signal_gen_num=self._transducer_signal_gen_num,
                     detector_channel=chan
                 )
+
+        # other DAQ scripts assume the Sync output follows channel 1
+        if self._transducer_signal_gen_num != 1:
+            self._set_sync_source(
+                instrument_control=self._instrument,
+                signal_gen_num=1
+            )
+
+        if self._continuous_tes_bias_ua:
+            self._set_continuous_tes_bias()
 
         time.sleep(2)
 
         if self._verbose:
             print('\nINFO: Transducer sweep complete!')
+            print(f'INFO: Transducer data: {self._raw_data_path}')
+            if self._step_map_file is not None:
+                print(f'INFO: IV/dIdV step map: {self._step_map_file}')
+
+    def _configure_iv_didv(self):
+        """
+        Validate IV/dIdV configs and resolve continuous TES biases.
+        """
+
+        config_dict = self._measurement_config[self._measurement_name]
+
+        if not (self._enable_iv or self._enable_didv):
+            if 'continuous_tes_bias_ua' in config_dict:
+                print('WARNING: "continuous_tes_bias_ua" ignored '
+                      'because IV and dIdV are disabled!')
+            return
+
+        if self._iv_didv_channels is None and 'iv_didv_channels' in config_dict:
+            channels = config_dict['iv_didv_channels']
+            if isinstance(channels, str):
+                channels = [channels]
+            self._iv_didv_channels = channels
+
+        if self._iv_didv_channels is None:
+            raise ValueError(
+                'TransducerSweep: IV/dIdV channels required! '
+                'Provide via argument or "iv_didv_channels" in config.'
+            )
+
+        if 'continuous_tes_bias_wait_time' in config_dict:
+            self._continuous_tes_bias_wait_s = arg_utils.convert_to_seconds(
+                config_dict['continuous_tes_bias_wait_time']
+            )
+
+        # build each sequencer once so config errors show up before any hardware is touched
+        sequencer = None
+        for measurement in self._get_iv_didv_measurements():
+            sequencer = self._build_iv_didv_sequencer(
+                measurement=measurement,
+                comment=self._comment
+            )
+            sequencer_config = sequencer._measurement_config
+            plan = dict()
+            plan['tes_bias_vect'] = sequencer_config['iv_didv']['tes_bias_vect']
+            plan['sleep_time_s'] = 5.0
+            if 'tes_bias_change_sleep_time' in sequencer_config['iv_didv']:
+                plan['sleep_time_s'] = float(
+                    sequencer_config['iv_didv']['tes_bias_change_sleep_time']
+                )
+            plan['run_time_s'] = float(sequencer_config[measurement]['run_time'])
+            plan['loop_channels'] = False
+            if 'loop_channels' in sequencer_config[measurement]:
+                plan['loop_channels'] = bool(sequencer_config[measurement]['loop_channels'])
+            plan['channels'] = sequencer._detector_channels
+            self._iv_didv_plan[measurement] = plan
+
+        # continuous TES bias, one entry per channel as "name:bias_uA"
+        if 'continuous_tes_bias_ua' not in config_dict:
+            raise ValueError(
+                'TransducerSweep: "continuous_tes_bias_ua" required '
+                'when IV or dIdV is enabled (e.g. "A:20, B:15")!'
+            )
+
+        bias_entries = config_dict['continuous_tes_bias_ua']
+        if isinstance(bias_entries, str):
+            bias_entries = [bias_entries]
+
+        for entry in bias_entries:
+            entry_parts = str(entry).split(':')
+            if len(entry_parts) != 2:
+                raise ValueError(
+                    f'TransducerSweep: unable to parse continuous TES bias '
+                    f'"{entry}"! Expected "channel:bias_uA".'
+                )
+            channel = sequencer._extract_detector_channels(
+                [entry_parts[0].strip()]
+            )[0]
+            self._continuous_tes_bias_ua[channel] = float(entry_parts[1])
+
+        missing_channels = list()
+        for channel in sequencer._detector_channels:
+            if channel not in self._continuous_tes_bias_ua:
+                missing_channels.append(channel)
+        if missing_channels:
+            raise ValueError(
+                f'TransducerSweep: "continuous_tes_bias_ua" missing for '
+                f'channel(s) {missing_channels}!'
+            )
+
+        # IV_dIdV always drives the dIdV on channel 1 of the TES setup's generator
+        if self._enable_didv:
+            transducer_address = self._get_signal_gen_address(self._config)
+            didv_address = self._get_signal_gen_address(sequencer._config)
+            self._is_didv_signal_gen_shared = (
+                transducer_address is not None
+                and transducer_address == didv_address
+            )
+            if self._is_didv_signal_gen_shared and self._transducer_signal_gen_num == 1:
+                raise ValueError(
+                    'TransducerSweep: transducer and dIdV use the same signal '
+                    'generator, so "transducer_signal_gen_num" must be 2 '
+                    '(dIdV is always on channel 1)!'
+                )
+            if (not self._is_didv_signal_gen_shared) and self._transducer_signal_gen_num != 1:
+                print('WARNING: transducer on channel 2 but dIdV uses a different '
+                      'signal generator. The DAQ trigger can only follow one of '
+                      'them, so check the Sync/TTL cabling!')
+
+    def _get_signal_gen_address(self, config=None):
+        """Signal generator VISA address from a settings.Config, or None."""
+
+        if config.get_signal_generator() != 'agilent33500B':
+            return None
+        address = config.get_device_visa_address('agilent33500B')
+        if address is None:
+            return None
+        return address.replace(' ', '').upper()
+
+    def _set_sync_source(self, instrument_control=None, signal_gen_num=1):
+        """Route the signal generator rear Sync (DAQ trigger) to an output channel."""
+
+        if instrument_control.signal_generator_name != 'agilent33500B':
+            raise ValueError(
+                'TransducerSweep: Sync source switching requires an '
+                'agilent33500B signal generator!'
+            )
+
+        signal_gen_controller = instrument_control.get_signal_gen_controller()
+        signal_gen_controller.set_sync_source(source=signal_gen_num)
+
+        if self._verbose:
+            print(f'INFO: Signal generator Sync output set to channel '
+                  f'{signal_gen_num}')
+
+    def _get_iv_didv_measurements(self):
+        """Enabled IV/dIdV measurements, in acquisition order."""
+
+        measurement_list = list()
+        if self._enable_iv:
+            measurement_list.append('iv')
+        if self._enable_didv:
+            measurement_list.append('didv')
+        return measurement_list
+
+    def _build_iv_didv_sequencer(self, measurement=None, comment=None):
+        """Single-measurement IV_dIdV sequencer for the TES setup."""
+
+        if measurement == 'iv':
+            sequencer_file = self._iv_sequencer_file
+            online_iv = self._online_iv
+        else:
+            sequencer_file = self._didv_sequencer_file
+            online_iv = False
+
+        sequencer = IV_dIdV(
+            iv=(measurement == 'iv'),
+            didv=(measurement == 'didv'),
+            online_iv=online_iv,
+            comment=comment,
+            sweep_channels=self._iv_didv_channels,
+            sequencer_file=sequencer_file,
+            setup_file=self._tes_setup_file,
+            do_relock=self._do_relock,
+            do_zero=self._do_zero,
+            verbose=self._verbose
+        )
+
+        return sequencer
+
+    def _set_continuous_tes_bias(self):
+        """Set every channel to its continuous-data TES bias."""
+
+        for channel, bias in self._continuous_tes_bias_ua.items():
+            if self._verbose:
+                print(f'INFO: Setting {channel} TES bias to {bias} uA '
+                      f'for continuous data')
+            self._tes_instrument.set_tes_bias(
+                bias,
+                unit='uA',
+                detector_channel=channel
+            )
+
+        time.sleep(self._continuous_tes_bias_wait_s)
+
+    def _run_iv_didv_step(self, frequency_hz=None, amplitude_vpp=None):
+        """
+        Take IV and/or dIdV sweeps with the transducer running.
+
+        Parameters
+        ----------
+        frequency_hz : float
+            Transducer frequency in Hz.
+        amplitude_vpp : float
+            Transducer amplitude in Vpp.
+
+        Returns
+        -------
+        group_dict : dict or None
+            {measurement: {'group': name, 'path': raw data path}},
+            None if data taking failed.
+        """
+
+        comment_parts = list()
+        if self._comment and self._comment != 'No comment':
+            comment_parts.append(self._comment)
+        comment_parts.append(
+            f'transducer freq={float(frequency_hz):.6g} Hz, '
+            f'amp={float(amplitude_vpp):.6g} Vpp'
+        )
+        step_comment = ' | '.join(comment_parts)
+
+        group_dict = dict()
+        for measurement in self._get_iv_didv_measurements():
+
+            sequencer = self._build_iv_didv_sequencer(
+                measurement=measurement,
+                comment=step_comment
+            )
+            sequencer._instruments_inst = self._tes_instrument
+
+            if measurement == 'didv' and self._is_didv_signal_gen_shared:
+                self._set_sync_source(
+                    instrument_control=self._tes_instrument,
+                    signal_gen_num=1
+                )
+
+            # _run_iv_didv returns False on failure, None otherwise
+            success = sequencer._run_iv_didv()
+            if success is False:
+                print(f'ERROR: {measurement} sweep failed. Exiting!')
+                return None
+
+            group_dict[measurement] = {
+                'group': sequencer._group_name,
+                'path': sequencer._raw_data_path
+            }
+
+            # IV_dIdV leaves the dIdV generator connected when loop_channels is false
+            if measurement == 'didv':
+                for channel in sequencer._detector_channels:
+                    self._tes_instrument.set_signal_gen_onoff(
+                        'off',
+                        detector_channel=channel
+                    )
+                    self._tes_instrument.connect_signal_gen_to_tes(
+                        False,
+                        detector_channel=channel
+                    )
+
+        return group_dict
+
+    def _init_step_map_file(self):
+        """Create the CSV mapping each transducer step to its IV/dIdV groups."""
+
+        arg_utils.make_directories(self._raw_data_path)
+        self._step_map_file = self._raw_data_path + '/iv_didv_step_map.csv'
+
+        with open(self._step_map_file, 'w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow([
+                'step', 'sweep_type', 'frequency_hz', 'amplitude_vpp',
+                'iv_group', 'iv_path', 'didv_group', 'didv_path'
+            ])
+
+    def _write_step_map_row(self, step_number=None, sweep_type=None,
+                            frequency_hz=None, amplitude_vpp=None,
+                            group_dict=None):
+        """Append one transducer step to the step map CSV."""
+
+        row = [step_number, sweep_type, frequency_hz, amplitude_vpp]
+        for measurement in ['iv', 'didv']:
+            if measurement in group_dict:
+                row.append(group_dict[measurement]['group'])
+                row.append(group_dict[measurement]['path'])
+            else:
+                row.append('')
+                row.append('')
+
+        with open(self._step_map_file, 'a', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(row)
+
+    def _print_iv_didv_dry_run(self):
+        """
+        Print the per-step IV/dIdV plan.
+
+        Returns
+        -------
+        step_time_s : float
+            Estimated IV/dIdV time per transducer step in seconds.
+        """
+
+        # fixed 5 s waits inside IV_dIdV before each acquisition
+        settle_time_s = 5.0
+
+        print(f'\nTransducer on signal generator channel '
+              f'{self._transducer_signal_gen_num}')
+        if self._is_didv_signal_gen_shared:
+            print('dIdV on channel 1 of the same generator, '
+                  'Sync output switched per acquisition')
+
+        print('\nPer transducer step (transducer on):')
+        step_time_s = 0.0
+        if self._continuous_tes_bias_ua:
+            bias_text_list = list()
+            for channel, bias in self._continuous_tes_bias_ua.items():
+                bias_text_list.append(f'{channel}={bias:.6g} uA')
+            print(f'  Continuous data TES bias: {", ".join(bias_text_list)}')
+            step_time_s += self._continuous_tes_bias_wait_s
+
+        for measurement, plan in self._iv_didv_plan.items():
+            nb_bias = len(plan['tes_bias_vect'])
+            nb_channels = len(plan['channels'])
+            if measurement == 'didv' and plan['loop_channels']:
+                point_time_s = nb_channels * (settle_time_s + plan['run_time_s'])
+            elif measurement == 'didv':
+                point_time_s = (nb_channels * settle_time_s) + plan['run_time_s']
+            else:
+                point_time_s = settle_time_s + plan['run_time_s']
+            sweep_time_s = nb_bias * (plan['sleep_time_s'] + point_time_s)
+            step_time_s += sweep_time_s
+
+            bias_text = ', '.join([f'{bias:.6g}' for bias in plan['tes_bias_vect']])
+            print(f'  {measurement} sweep on {plan["channels"]}: '
+                  f'{nb_bias} biases [{bias_text}], '
+                  f'run_time={plan["run_time_s"]:.6g} s, '
+                  f'~{sweep_time_s / 60.0:.4g} min')
+
+        return step_time_s
 
     def _print_dry_run(self, freq_config, amp_config):
         """
@@ -259,6 +674,10 @@ class TransducerSweep(Sequencer):
 
             total_steps += n
             total_time_s += n * (run_time + hold)
+
+        if self._enable_iv or self._enable_didv:
+            iv_didv_time_s = self._print_iv_didv_dry_run()
+            total_time_s += total_steps * iv_didv_time_s
 
         # totals
         total_min = total_time_s / 60.0
@@ -330,6 +749,15 @@ class TransducerSweep(Sequencer):
         """
 
         config_dict = self._measurement_config[self._measurement_name]
+
+        if 'transducer_signal_gen_num' in config_dict:
+            self._transducer_signal_gen_num = int(
+                config_dict['transducer_signal_gen_num']
+            )
+        if self._transducer_signal_gen_num not in [1, 2]:
+            raise ValueError(
+                'TransducerSweep: "transducer_signal_gen_num" must be 1 or 2!'
+            )
 
         # in dry-run mode, skip channel resolution, ADC config,
         # and directory creation — only the config dict is needed
@@ -444,6 +872,11 @@ class TransducerSweep(Sequencer):
             Signal generator amplitude in Vpp.
         run_time_s : float
             Run time for the sweep step in seconds.
+
+        Returns
+        -------
+        success : bool
+            False if data taking failed.
         """
 
         if run_time_s is None:
@@ -516,7 +949,9 @@ class TransducerSweep(Sequencer):
         if not success:
             self._daq.clear()
             print('ERROR: Problem with data taking. Exiting!')
-            return
+            return False
+
+        return True
 
     def _set_signal_generator(self, detector_channels=None,
                               amplitude_vpp=None,
@@ -539,11 +974,15 @@ class TransducerSweep(Sequencer):
         # silent failures when the current fixed range is too small.
         signal_gen_controller = self._instrument.get_signal_gen_controller()
         if signal_gen_controller is not None:
-            signal_gen_controller.set_auto_range('on')
+            signal_gen_controller.set_auto_range(
+                'on',
+                source=self._transducer_signal_gen_num
+            )
 
         for chan in detector_channels:
             self._instrument.set_signal_gen_params(
                 detector_channel=chan,
+                signal_gen_num=self._transducer_signal_gen_num,
                 voltage=amplitude_vpp,
                 voltage_unit='Vpp',
                 frequency=frequency_hz,
@@ -557,7 +996,10 @@ class TransducerSweep(Sequencer):
         # Disable auto-range after voltage is set to prevent unintended
         # range changes during the measurement.
         if signal_gen_controller is not None:
-            signal_gen_controller.set_auto_range('off')
+            signal_gen_controller.set_auto_range(
+                'off',
+                source=self._transducer_signal_gen_num
+            )
 
     def _get_adc_config_for_step(self, config_dict=None,
                                  frequency_hz=None):

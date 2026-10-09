@@ -30,6 +30,12 @@ trace_length = 5s
 voltage_min = -5
 voltage_max = 5
 
+# signal generator output channel driving the transducer (1 or 2, default 1)
+# Use 2 when the dIdV shares the generator: dIdV is always on channel 1,
+# and the rear Sync output (DAQ trigger) is switched to whichever channel
+# is acquiring.
+#transducer_signal_gen_num = 2
+
 # run time per sweep step (can override with frequency_run_time or amplitude_run_time)
 sweep_run_time = 5s
 
@@ -68,3 +74,22 @@ amplitude_hold_time = 0s
 
 # optional override for run time per amplitude step
 #amplitude_run_time = 5s
+
+# ------------------------
+# IV / dIdV at every step
+# ------------------------
+# Enabled with --enable-iv and/or --enable-didv. At each step, with the
+# transducer on: continuous data, then an IV sweep, then a dIdV sweep.
+# Each sweep is its own iv_* or didv_* group, configured by a regular
+# iv_didv.ini file (--iv_config_file, --didv_config_file) and run on the
+# TES setup file (--tes_setup_file). The dIdV either uses a different
+# generator, or channel 1 of the transducer's generator with the
+# transducer on channel 2 (see transducer_signal_gen_num).
+# iv_didv_step_map.csv in the transducer group lists each step's groups.
+
+# IV/dIdV sweep channels (overridden by --iv_didv_channels)
+#iv_didv_channels = A, B
+
+# TES bias [uA] for the continuous data, required for every IV/dIdV channel
+#continuous_tes_bias_ua = A:20, B:15
+#continuous_tes_bias_wait_time = 10s

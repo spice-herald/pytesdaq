@@ -584,6 +584,43 @@ class Agilent33500B(InstrumentComm):
 
         
         
+    def set_sync_source(self, source=1):
+        """
+        Enable the rear Sync output and drive it from an output channel
+
+        Parameters
+        ----------
+        source: integer
+           signal generator output channel (1 or 2)
+
+        """
+
+        source = int(source)
+        if source != 1 and source != 2:
+            print('ERROR: Sync source should be 1 or 2')
+            if self._raise_errors:
+                raise ValueError('Sync source should be 1 or 2')
+            else:
+                return None
+
+        self.write('OUTP:SYNC ON')
+        self.write('OUTP:SYNC:SOUR CH' + str(source))
+
+
+    def get_sync_source(self):
+        """
+        Output channel driving the rear Sync output
+
+        Returns
+        -------
+        integer (1 or 2)
+
+        """
+
+        result = self.query('OUTP:SYNC:SOUR?').strip().upper()
+        return int(result.replace('CH', ''))
+
+
     def get_generator_onoff(self, source=1):
         """
         Is generator output on/off?
