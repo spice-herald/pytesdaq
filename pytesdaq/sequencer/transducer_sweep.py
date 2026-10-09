@@ -519,6 +519,15 @@ class TransducerSweep(Sequencer):
                     signal_gen_num=1
                 )
 
+            # the Agilent driver turns autorange off on connect, so a range left over
+            # from a larger waveform silently clips the dIdV amplitude
+            if (measurement == 'didv'
+                    and self._tes_instrument.signal_generator_name == 'agilent33500B'):
+                self._tes_instrument.get_signal_gen_controller().set_auto_range(
+                    'on',
+                    source=1
+                )
+
             # _run_iv_didv returns False on failure, None otherwise
             success = sequencer._run_iv_didv()
             if success is False:
